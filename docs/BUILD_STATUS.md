@@ -1,4 +1,4 @@
-# Microgroove v3 alpha build status
+# Mini Studio 16 alpha build status
 
 Published branch: `agent/v3-alpha-sd-streaming`
 
@@ -20,15 +20,21 @@ must pass before long-audio streaming is enabled.
   offsets.
 - `tests/run_host_tests.sh` completes without errors.
 
+## Verified in GitHub Actions
+
+- The pinned ESP32-S3 PlatformIO environment compiles and links successfully.
+- The merged 8 MB flash image is generated successfully.
+- The host-test and firmware jobs both pass for commit `b30e25a`.
+- Build artifact `microgroove-v3-alpha-cardputer-adv` contains the merged image,
+  application image, and ELF.
+
 ## Requires external verification
 
-- A real PlatformIO ESP32-S3 compile/link. The current sandbox cannot download
-  the pinned Espressif platform/toolchain packages.
 - Flashing and booting on a Cardputer-ADV.
 - SD throughput/stall results from the exact card using the on-device `SD TEST`
   page.
 - Full-duplex ES8311 input/output and every later long-audio milestone.
 
 Do not describe this checkpoint as hardware-verified or as implementing the six
-loop tracks. Continue with `CARDPUTER_TESTING.md` after CI produces a merged
+loop tracks. Continue with `CARDPUTER_TESTING.md` using the CI-produced merged
 binary.

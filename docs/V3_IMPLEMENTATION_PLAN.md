@@ -1,6 +1,6 @@
-# Microgroove v3 implementation and verification plan
+# Mini Studio 16 implementation and verification plan
 
-Status: implementation branch `codex/v3-alpha-sd-streaming`
+Status: implementation branch `agent/v3-alpha-sd-streaming`
 
 This plan keeps the current groovebox usable while proving the risky parts in
 the order that can invalidate later work. A feature is not called verified

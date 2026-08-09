@@ -1,120 +1,176 @@
-<p align="center">
-  <img src="docs/hero.jpg" alt="Microgroove — a pocket groovebox for the M5Stack Cardputer-ADV" width="640">
-</p>
+# Mini Studio 16
 
-# Microgroove
-
-**A wallet-sized groovebox that turns $30 of hardware and a 3D printer into a four-track acid powerhouse.**
-
-Firmware for the **M5Stack Cardputer-ADV**, by [lebiro.studio](https://lebiro.studio).
-
-**Print it. Flash it. Jam.**
+Experimental groovebox, sampler, looper, motion controller, and MIDI firmware
+for the **M5Stack Cardputer-ADV**.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
-[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/makarov87)
 
-## What it does
+> **Early hardware-validation alpha:** the current firmware builds and contains
+> the expanded sequencer plus SD-card diagnostics. The long-audio looper,
+> PO-style sampler, event looper, motion mappings, and BLE MIDI are product
+> targets, not finished features yet.
 
-- **3 synth tracks** — each switchable between a **mono 303-style voice**
-  (saw/square/tri/sine/wavetable → resonant SVF filter, **accent** and **slide**)
-  and **2–3-voice polyphony**. Overlapping notes record a *slide* in mono, a *chord* in poly.
-- **8 drum lanes** — each independently **808 synthesis**, **909 synthesis**, or
-  **SD sample playback**; per-lane volume, tune (±12 st), decay, and **choke groups**
-  (909 open/closed hats choke by default).
-- **Live mic sampling** — hold one key; the footer becomes a level meter. Release to
-  auto-trim, write to SD, and play it on a drum lane instantly (max ~2.6 s).
-- **Resampling** — hold SONG while playing to bounce ~1.9 s of the master mix onto any pad.
-- **Sequencer** — 16 patterns × 16 steps in A/B banks, hold-to-clone, bar-quantized pattern switching,
-  live record with quantize / step-write / hold-to-erase.
-- **Song mode** — 128-slot pattern chain with loop point.
-- **User wavetables** — drop single-cycle WAVs (AKWF) on the card; they appear as oscillators.
-- **8 project slots** on microSD; sampled sounds reload with projects by filename.
-- **One key = one function** — hold any orange-labeled key 0.5 s for its second function,
-  with a progress bar so nothing fires by accident. The note keys mirror a **real piano layout**,
-  E–F and B–C gaps included.
+Mini Studio 16 starts from the excellent
+[Microgroove](https://github.com/matoslav/MicroGroove) firmware and grows it
+toward a more ambitious SD-backed portable studio. It is an independent fork,
+not an official Microgroove or lebiro.studio release.
 
-Full feature tour and guides: **[docs/USER_MANUAL.md](docs/USER_MANUAL.md)**
+## The instrument we are building
 
-## Get it running
+| System | Target | Current state |
+| --- | --- | --- |
+| Audio looper | Six independent mono tracks, up to 20 seconds each | SD transport and hardware tests in progress |
+| Sampler | 16 slots sharing a 40-second project quota; melodic and sliced modes | Existing short RAM sampler only |
+| Step sequencer | 16 patterns × 16 steps and a 128-entry chain | Implemented in the alpha |
+| Event looper | Five tracks over 128 bars | Planned |
+| Motion | BMI270 tilt, gyro, shake, and recordable automation | Planned |
+| MIDI | BLE MIDI notes, CC, clock, and transport | Planned |
+| Built-in audio | Speaker, microphone, and headphone output | Existing Microgroove paths retained |
+| Expanded audio | Line input and conventional Bluetooth audio | Requires expansion hardware |
 
-Pick whichever flashing route suits you — all three are on the
-[Releases](../../releases) page.
+The engineering plan and the pass/fail gates for each stage are in
+[`docs/V3_IMPLEMENTATION_PLAN.md`](docs/V3_IMPLEMENTATION_PLAN.md).
 
-**Option 1 — pre-built binary:** grab `microgroove.bin` (a merged image) and
-flash it to offset `0x0` with esptool
-(`esptool.py write_flash 0x0 microgroove.bin`) or any ESP32-S3 flashing tool.
+## What works in this alpha
 
-**Option 2 — Arduino IDE (from the release zip):** download
-`Microgroove_source.zip`, unzip it (keep the folder named `Microgroove`), open
-`Microgroove.ino`, install the **M5Cardputer** library (pulls in M5Unified/M5GFX),
-select the *M5Cardputer* board (or ESP32S3 Dev Module with USB CDC on boot), and
-Upload. A `HOW_TO_FLASH.txt` is included in the zip.
+- Microgroove's three synth tracks with mono 303-style behavior or up to
+  three-voice polyphony.
+- Eight 808/909/sample drum lanes with tuning, decay, level, and choke groups.
+- Live microphone sampling and short master resampling using the existing
+  RAM-backed engine.
+- Sixteen 16-step patterns, selected through A/B banks.
+- A 128-entry song chain.
+- GBX v3 projects with GBX v1/v2 migration, temporary-file saves, and backup
+  recovery.
+- An on-device SD test measuring sequential writes, sequential reads,
+  six-file round-robin reads, maximum operation latency, and minimum free heap.
+- A host-tested single-producer/single-consumer ring for the future boundary
+  between real-time audio and SD storage.
+- Reproducible GitHub Actions and PlatformIO builds for ESP32-S3.
 
-**Option 3 — build from source (this repo):** clone it and open `Microgroove.ino`
-in the Arduino IDE, or use the pinned, checked-in PlatformIO environment with
-`pio run -e m5stack-cardputer-adv`.
+This checkpoint intentionally does **not** claim that six long audio streams or
+simultaneous recording/playback have been proven on physical hardware.
 
-**Then, for the demo + samples:** copy either the release's
-`Microgroove_SD_card.zip` contents or [`factory-sd/groovebox/`](factory-sd/) to
-the root of a FAT32 microSD. Power on → hold **LOAD** → tap **SONG** → **PLAY**.
-No card? Hold **LOAD+SAVE** together for a built-in demo.
+## Flash the current alpha
 
-## The shell
+The build attached to
+[GitHub Actions run 31311866811](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31311866811)
+passed the host suite, ESP32-S3 compilation/link, merged-image generation, and
+artifact upload.
 
-Print files, keycap label sheet (v6), and assembly guide:
-[**MakerWorld**](https://makerworld.com/en/models/3046012-microgroove-diy-pocketable-groovebox-sampler) · [`hardware/`](hardware/)
+Download the `microgroove-v3-alpha-cardputer-adv` artifact, extract
+`microgroove-v3-alpha.bin`, and flash it at offset `0x0`:
 
-## Keys at a glance
-
-<p align="center">
-  <img src="docs/keymap-v6.png" alt="Microgroove v6 keymap: one key = one function, hold for the orange second function" width="720">
-</p>
-
-`T1 T2 T3 TD` select tracks (hold = mute) · `TAB` selects pattern bank A/B ·
-`P1–P8` select patterns within that bank (hold = clone) ·
-the note keys are a piano (whites on the home row, sharps above, E–F/B–C gaps dead),
-and the first eight white keys become pads 1–8 when the drum track is selected.
-Orange = the hold (0.5 s) function; green = the sampling holds. `AUX` held samples
-the mic, `SONG` held while playing resamples the mix. The HELP page shows this map
-on the device; the [manual](docs/USER_MANUAL.md) explains every key.
-
-## Architecture
-
-```
-Microgroove.ino     setup / main loop (core 1: input, sequencer, UI)
-audio_engine.cpp    render task (core 0), dual buffer -> Speaker.playRaw
-pcm_ring.h          host-tested lock-free audio/storage task transport
-sd_diagnostics.cpp  non-blocking 4 KiB SD latency/throughput test
-synth_voice.h       303-style voice (osc + SVF + envelopes)
-sequencer.h/.cpp    SynthTrack (1-3 voice alloc), patterns, transport, live record
-drum_voice.h        808/909 synthesis + per-lane engine/choke logic
-sampler.cpp         WAV decode -> 192 KB RAM pool, playback voices
-mic_sampler.cpp     mic capture + engine resampling -> SD/pool
-wavetable.cpp       8 built-in tables + user single-cycle WAVs
-storage.cpp         GBX v3 project files (loads/migrates v1 and v2)
-input.cpp           keyboard snapshot diffing -> short/long-press dispatch
-ui.cpp              5 pages, sprite double-buffered
-keymap.h            every key assignment in one file
+```bash
+esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
 ```
 
-All firmware files live in the repo root next to `Microgroove.ino` (Arduino
-sketch layout) — open the folder in the Arduino IDE and it picks them all up.
+Merged-image SHA-256 for that run:
 
-22.05 kHz, 256-sample buffers, all voices rendered per-sample into a soft-clipped
-mix on core 0. Project files are versioned: v3 adds 16 patterns and a 128-entry
-chain; v1/v2 files load transparently (and become v3 on the next save).
+```text
+18fed23b856cdf34efbdd7faa7384a798c1ad1cdbdb141474300db25ab86a5ef
+```
 
-Development architecture and Cardputer test procedure:
-[`docs/V3_IMPLEMENTATION_PLAN.md`](docs/V3_IMPLEMENTATION_PLAN.md) ·
-[`docs/CARDPUTER_TESTING.md`](docs/CARDPUTER_TESTING.md) ·
-[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)
+Back up the SD card before using development firmware. The alpha test creates
+temporary files only under `/groovebox/diag`, but it is still pre-release code.
+Follow [`docs/CARDPUTER_TESTING.md`](docs/CARDPUTER_TESTING.md) and retain every
+`SDDIAG` result, including failures.
 
-## License & lineage
+## Build and test from source
 
-MIT — see [LICENSE](LICENSE). The synth voice, 808 drum synthesis, and audio task
-architecture are derived from
+The pinned environment targets the Cardputer-ADV's 8 MB ESP32-S3 configuration:
+
+```bash
+pio run -e m5stack-cardputer-adv
+```
+
+Upload directly over USB:
+
+```bash
+pio run -e m5stack-cardputer-adv -t upload --upload-port /dev/ttyACM0
+```
+
+Run the desktop regression suite:
+
+```bash
+./tests/run_host_tests.sh
+```
+
+The host suite uses GNU C++11 to match the pinned Arduino-ESP32 toolchain. It
+checks the PCM ring under concurrent load, serialized project layouts, the SD
+diagnostic source, the firmware modules, the top-level sketch, and merged-image
+command generation.
+
+## SD card layout
+
+Use a FAT32 microSD card. Existing Microgroove samples and projects remain
+compatible:
+
+```text
+/groovebox/
+├── projects/       GBX project files
+├── samples/        WAV samples
+├── wavetables/     optional single-cycle WAVs
+└── diag/           temporary SD-test files; removed after the test
+```
+
+The starter content remains under [`factory-sd/`](factory-sd/). The inherited
+instrument controls are documented in
+[`docs/USER_MANUAL.md`](docs/USER_MANUAL.md); alpha-specific controls are in the
+[Cardputer testing guide](docs/CARDPUTER_TESTING.md).
+
+## Architecture direction
+
+Long audio will not be loaded into the ESP32-S3's small internal RAM. The
+real-time renderer consumes deterministic RAM rings while a separate storage
+worker handles variable-latency SD operations:
+
+```text
+microSD ⇄ storage task ⇄ bounded RAM rings ⇄ audio render task ⇄ ES8311
+```
+
+The audio task is never allowed to open, seek, read, write, or close a file.
+Storage stalls become counted underruns or overruns instead of blocking the
+audio deadline. Buffer sizes will be chosen from physical Cardputer-ADV results,
+not SD-card labels or theoretical throughput.
+
+## Project status
+
+- **M0:** reproducible build — passed in GitHub Actions.
+- **M1:** SD diagnostics and transport primitive — implemented; physical test
+  results pending.
+- **M2:** six-track audio looper — pending M1 hardware data.
+- **M3:** complete 16-slot sampler and parameter automation — planned.
+- **M4:** five-track event looper, motion, and BLE MIDI — planned.
+- **M5:** full-duplex input and optional audio expansion — planned.
+
+See [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md) for the exact verification
+boundary. Please report bugs with the firmware commit, Cardputer-ADV revision,
+SD-card model/filesystem, and the complete serial output.
+
+## Upstream, attribution, and license
+
+Mini Studio 16 is a modified fork of
+[Microgroove](https://github.com/matoslav/MicroGroove), created by
+[lebiro.studio](https://lebiro.studio) and published by
+[matoslav](https://github.com/matoslav). Microgroove supplied the original
+synth, drum, sequencing, sampling, UI, hardware, and project-storage foundation
+used here. If you find that foundation useful, please visit the upstream project
+and [support its creator](https://ko-fi.com/makarov87).
+
+The upstream copyright and full MIT permission notice are retained unchanged in
+[`LICENSE`](LICENSE), as required when redistributing substantial portions of
+the software:
+
+> Copyright (c) 2026 lebiro.studio
+
+Microgroove itself credits parts of its synth voice, 808 drum synthesis, and
+audio-task architecture to
 [Cardputer-Adv-Tracker](https://github.com/qwertyuu/Cardputer-Adv-Tracker) by
-**qwertyuu** (MIT), substantially redesigned into a different instrument. The
-factory sample pack is **CC0** by lebiro.studio.
+**qwertyuu**, also under the MIT License. That attribution remains in the
+license file. The included factory sample pack is identified upstream as CC0 by
+lebiro.studio.
 
-If Microgroove earns a place on your desk: [Ko-fi](https://ko-fi.com/makarov87) ☕
+All modifications in this repository are distributed under the same MIT
+License. “Mini Studio 16” identifies this fork; “Microgroove” and the original
+project artwork belong to their respective upstream creators.
