@@ -1,5 +1,8 @@
 .pio/
 .vscode/
 build/
+tests/build/
+tests/__pycache__/
+tools/__pycache__/
 *.bin.tmp
 .DS_Store

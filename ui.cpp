@@ -1,6 +1,6 @@
 // ============================================================
 // Microgroove - ui.cpp
-// 240x135, sprite double-buffered. 5 pages.
+// 240x135, sprite double-buffered. 6 pages.
 // Drum grid drawn TR-style: kick (lane 1) at the bottom.
 // Footer doubles as long-press progress bar / mic level meter.
 // ============================================================
@@ -13,6 +13,7 @@
 #include "storage.h"
 #include "wavetable.h"
 #include "audio_engine.h"
+#include "sd_diagnostics.h"
 
 Page    g_curPage    = PAGE_PATTERN;
 bool    g_needRedraw = true;
@@ -77,7 +78,7 @@ static void drawHeader() {
     canvas.fillRect(0, 0, SCREEN_W, 11, COL_GRID);
     canvas.setTextColor(COL_TEXT);
     canvas.setCursor(2, 2);
-    static const char* pageNames[] = {"PATTERN","SOUND","SAMPLE","SONG","HELP"};
+    static const char* pageNames[] = {"PATTERN","SOUND","SAMPLE","SONG","SD TEST","HELP"};
     canvas.print(pageNames[g_curPage]);
 
     canvas.setCursor(60, 2);
@@ -88,8 +89,8 @@ static void drawHeader() {
     if (g_songMode) { canvas.setTextColor(COL_ACCENT); canvas.print(" SNG"); }
 
     canvas.setTextColor(COL_DIM);
-    canvas.setCursor(156, 2);
-    canvas.printf("P%u O%u", g_curProject + 1, g_curOctave);
+    canvas.setCursor(158, 2);
+    canvas.printf("%c P%u O%u", g_patternBank ? 'B' : 'A', g_curProject + 1, g_curOctave);
 
     // transport
     if (g_playing) { canvas.setTextColor(COL_SYNTH2); canvas.setCursor(206, 2); canvas.print(">"); }
@@ -318,16 +319,19 @@ static void drawSamplePage() {
 static void drawSongPage() {
     canvas.setTextColor(COL_TEXT);
     canvas.setCursor(2, 14);
-    canvas.printf("SONG %s", g_songMode ? "[ON]" : "[off]");
+    const uint8_t pageBase = (g_songCursor / 64) * 64;
+    canvas.printf("SONG %s %u-%u", g_songMode ? "[ON]" : "[off]",
+                  pageBase + 1, pageBase + 64);
     canvas.setTextColor(COL_DIM);
     canvas.setCursor(120, 14);
     canvas.printf("PROJECT P%u %s", g_curProject + 1,
                   storageProjectExists(g_curProject) ? "*" : "");
 
     const int gx = 8, gy = 28, cw = 14, ch = 16;
-    for (int i = 0; i < SONG_LENGTH; i++) {
-        int x = gx + (i % 16) * cw;
-        int y = gy + (i / 16) * ch;
+    for (int visible = 0; visible < 64; visible++) {
+        const int i = pageBase + visible;
+        int x = gx + (visible % 16) * cw;
+        int y = gy + (visible / 16) * ch;
         bool isCursor = (i == g_songCursor);
         bool isPlay   = (g_songMode && g_playing && i == g_songPos);
 
@@ -338,10 +342,39 @@ static void drawSongPage() {
         if (g_song[i] != SONG_EMPTY) {
             canvas.setTextColor(isPlay ? COL_TEXT : COL_SYNTH1);
             canvas.setCursor(x + 4, y + 4);
-            canvas.printf("%u", g_song[i] + 1);
+            static const char patternGlyphs[NUM_PATTERNS + 1] = "123456789ABCDEFG";
+            canvas.print(patternGlyphs[g_song[i]]);
         }
         if (isCursor) canvas.drawRect(x - 1, y - 1, cw + 1, ch, COL_CURSOR);
     }
+}
+
+// ---------- SD TEST page ----------
+static void drawDiagPage() {
+    const SdDiagSnapshot diag = sdDiagnosticsSnapshot();
+    const char* state = diag.state == SD_DIAG_IDLE ? "READY" :
+                        diag.state == SD_DIAG_RUNNING ? "RUNNING" :
+                        diag.state == SD_DIAG_PASS ? "PASS" : "FAIL";
+    const uint16_t stateColor = diag.state == SD_DIAG_PASS ? COL_SYNTH2 :
+                                diag.state == SD_DIAG_FAIL ? COL_REC : COL_ACCENT;
+
+    canvas.setTextColor(COL_TEXT);
+    canvas.setCursor(2, 16);
+    canvas.print("4 KiB CARDPUTER-ADV STORAGE TEST");
+    canvas.setTextColor(stateColor);
+    canvas.setCursor(2, 30);
+    canvas.printf("%s  %s", state, diag.step);
+
+    canvas.setTextColor(COL_DIM);
+    canvas.setCursor(2, 48); canvas.printf("WRITE       %5lu KB/s", (unsigned long)diag.writeKBs);
+    canvas.setCursor(2, 60); canvas.printf("SEQ READ    %5lu KB/s", (unsigned long)diag.readKBs);
+    canvas.setCursor(2, 72); canvas.printf("6-FILE READ %5lu KB/s", (unsigned long)diag.roundRobinKBs);
+    canvas.setCursor(2, 88); canvas.printf("MAX W/R %lu / %lu us",
+                                           (unsigned long)diag.maxWriteUs,
+                                           (unsigned long)diag.maxReadUs);
+    canvas.setCursor(2, 100); canvas.printf("MIN HEAP %lu  ERR %lu",
+                                            (unsigned long)diag.minFreeHeap,
+                                            (unsigned long)diag.errors);
 }
 
 // ---------- HELP page ----------
@@ -350,7 +383,7 @@ static void drawHelpPage() {
         "spc play/stop (hold=from top)",
         "ctl page  / rec  z clr  xcvb=arrows",
         "` 1 2 3 tracks (hold=mute)",
-        "4..- patterns (hold=clone)",
+        "4..- patterns; tab bank A/B",
         "= load  del save  (both=demo)",
         "opt/alt bpm-+ (hold=octave/prj)",
         "notes: home row + q w r t y ...",
@@ -376,6 +409,8 @@ void uiDraw() {
             drawFooter(".:preview  4..-:assign lane"); break;
         case PAGE_SONG:    drawSongPage();
             drawFooter("4..-:set z:clr .:loop n:mode"); break;
+        case PAGE_DIAG:    drawDiagPage();
+            drawFooter("/:run  keep music playing"); break;
         default:           drawHelpPage();
             drawFooter("MICROGROOVE"); break;
     }

@@ -47,7 +47,8 @@ struct SynthTrack {
     template <typename F> void forEach(F f) { for (int i = 0; i < MAX_POLY; i++) f(v[i]); }
 
     void setVoices(uint8_t n) {
-        if (n < 1) n = 1; if (n > MAX_POLY) n = MAX_POLY;
+        if (n < 1) n = 1;
+        if (n > MAX_POLY) n = MAX_POLY;
         voices = n;
         for (int i = n; i < MAX_POLY; i++) v[i].active = false;  // kill spares
         if (n > 1) rr %= n;
@@ -85,6 +86,7 @@ struct Pattern {
 extern Pattern    g_patterns[NUM_PATTERNS];
 extern uint8_t    g_song[SONG_LENGTH];      // pattern indices, SONG_EMPTY = empty
 extern uint8_t    g_songLoopStart;
+extern uint8_t    g_patternBank;          // 0 = patterns 1..8, 1 = 9..16
 
 extern SynthTrack g_synths[NUM_SYNTHS];
 extern DrumLane   g_drumLanes[NUM_DRUM_LANES];

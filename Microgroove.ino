@@ -23,6 +23,7 @@
 #include "storage.h"
 #include "audio_engine.h"
 #include "mic_sampler.h"
+#include "sd_diagnostics.h"
 #include "ui.h"
 
 void inputInit();
@@ -31,6 +32,7 @@ void inputUpdate();
 static bool s_sdOk = false;
 
 void setup() {
+    Serial.begin(115200);
     auto cfg = M5.config();
     M5Cardputer.begin(cfg, true);
 
@@ -49,6 +51,7 @@ void setup() {
     // SD (Cardputer-ADV pinout)
     SPI.begin(SD_SPI_CLK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
     s_sdOk = SD.begin(SD_SPI_CS_PIN, SPI, 25000000);
+    sdDiagnosticsInit(s_sdOk);
 
     // Modules
     micSamplerInit();                // scratch first, then sample pool
@@ -83,6 +86,14 @@ void loop() {
     if (g_needRedraw) {
         uiDraw();
         g_needRedraw = false;
+    }
+
+    if (g_curPage == PAGE_DIAG && sdDiagnosticsIsRunning()) {
+        static uint32_t lastDiagDraw = 0;
+        if (millis() - lastDiagDraw > 100) {
+            lastDiagDraw = millis();
+            g_needRedraw = true;
+        }
     }
 
     // keep the scope alive on the sound page

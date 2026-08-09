@@ -4,6 +4,7 @@
 #include "sampler.h"
 #include <SD.h>
 #include <string.h>
+#include <stdio.h>
 #include <esp_heap_caps.h>
 
 int16_t*   g_samplePool   = nullptr;

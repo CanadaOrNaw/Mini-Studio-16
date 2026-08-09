@@ -78,7 +78,7 @@ enum : uint8_t {
     ACT_PAT5, ACT_PAT6, ACT_PAT7, ACT_PAT8,
     ACT_LOAD, ACT_SAVE,
     ACT_BPM_DN, ACT_BPM_UP,
-    ACT_PAGE, ACT_PLAY, ACT_CLR,
+    ACT_PAGE, ACT_PLAY, ACT_CLR, ACT_BANK,
     ACT_SONG, ACT_AUX,
 };
 
@@ -96,6 +96,7 @@ static inline uint8_t keyAction(uint8_t kc) {
         case KC_CTRL:  return ACT_PAGE;
         case KC_OPT:   return ACT_BPM_DN;
         case KC_ALT:   return ACT_BPM_UP;
+        case KC_TAB:   return ACT_BANK;
         case 'z':      return ACT_CLR;
         case 'x': return ACT_LEFT;  case 'c': return ACT_DOWN;
         case 'v': return ACT_UP;    case 'b': return ACT_RIGHT;
@@ -111,7 +112,7 @@ static inline uint8_t keyAction(uint8_t kc) {
 static inline bool actImmediate(uint8_t act) {
     switch (act) {
         case ACT_LEFT: case ACT_RIGHT: case ACT_UP: case ACT_DOWN:
-        case ACT_SLIDE: case ACT_ACCENT: case ACT_REC:
+        case ACT_SLIDE: case ACT_ACCENT: case ACT_REC: case ACT_BANK:
             return true;
         default: return false;
     }

@@ -24,9 +24,9 @@ Firmware for the **M5Stack Cardputer-ADV**, by [lebiro.studio](https://lebiro.st
 - **Live mic sampling** — hold one key; the footer becomes a level meter. Release to
   auto-trim, write to SD, and play it on a drum lane instantly (max ~2.6 s).
 - **Resampling** — hold SONG while playing to bounce ~1.9 s of the master mix onto any pad.
-- **Sequencer** — 8 patterns × 16 steps, hold-to-clone, bar-quantized pattern switching,
+- **Sequencer** — 16 patterns × 16 steps in A/B banks, hold-to-clone, bar-quantized pattern switching,
   live record with quantize / step-write / hold-to-erase.
-- **Song mode** — 64-slot pattern chain with loop point.
+- **Song mode** — 128-slot pattern chain with loop point.
 - **User wavetables** — drop single-cycle WAVs (AKWF) on the card; they appear as oscillators.
 - **8 project slots** on microSD; sampled sounds reload with projects by filename.
 - **One key = one function** — hold any orange-labeled key 0.5 s for its second function,
@@ -51,16 +51,8 @@ select the *M5Cardputer* board (or ESP32S3 Dev Module with USB CDC on boot), and
 Upload. A `HOW_TO_FLASH.txt` is included in the zip.
 
 **Option 3 — build from source (this repo):** clone it and open `Microgroove.ino`
-in the Arduino IDE, or use PlatformIO:
-
-```ini
-[env:m5stack-cardputer]
-platform = espressif32@6.7.0
-board = esp32-s3-devkitc-1
-framework = arduino
-build_flags = -DESP32S3 -DARDUINO_USB_CDC_ON_BOOT=1 -DARDUINO_USB_MODE=1
-lib_deps = M5Cardputer=https://github.com/m5stack/M5Cardputer
-```
+in the Arduino IDE, or use the pinned, checked-in PlatformIO environment with
+`pio run -e m5stack-cardputer-adv`.
 
 **Then, for the demo + samples:** copy either the release's
 `Microgroove_SD_card.zip` contents or [`factory-sd/groovebox/`](factory-sd/) to
@@ -78,7 +70,8 @@ Print files, keycap label sheet (v6), and assembly guide:
   <img src="docs/keymap-v6.png" alt="Microgroove v6 keymap: one key = one function, hold for the orange second function" width="720">
 </p>
 
-`T1 T2 T3 TD` select tracks (hold = mute) · `P1–P8` select patterns (hold = clone) ·
+`T1 T2 T3 TD` select tracks (hold = mute) · `TAB` selects pattern bank A/B ·
+`P1–P8` select patterns within that bank (hold = clone) ·
 the note keys are a piano (whites on the home row, sharps above, E–F/B–C gaps dead),
 and the first eight white keys become pads 1–8 when the drum track is selected.
 Orange = the hold (0.5 s) function; green = the sampling holds. `AUX` held samples
@@ -90,13 +83,15 @@ on the device; the [manual](docs/USER_MANUAL.md) explains every key.
 ```
 Microgroove.ino     setup / main loop (core 1: input, sequencer, UI)
 audio_engine.cpp    render task (core 0), dual buffer -> Speaker.playRaw
+pcm_ring.h          host-tested lock-free audio/storage task transport
+sd_diagnostics.cpp  non-blocking 4 KiB SD latency/throughput test
 synth_voice.h       303-style voice (osc + SVF + envelopes)
 sequencer.h/.cpp    SynthTrack (1-3 voice alloc), patterns, transport, live record
 drum_voice.h        808/909 synthesis + per-lane engine/choke logic
 sampler.cpp         WAV decode -> 192 KB RAM pool, playback voices
 mic_sampler.cpp     mic capture + engine resampling -> SD/pool
 wavetable.cpp       8 built-in tables + user single-cycle WAVs
-storage.cpp         GBX v2 project files (loads v1 transparently)
+storage.cpp         GBX v3 project files (loads/migrates v1 and v2)
 input.cpp           keyboard snapshot diffing -> short/long-press dispatch
 ui.cpp              5 pages, sprite double-buffered
 keymap.h            every key assignment in one file
@@ -106,8 +101,13 @@ All firmware files live in the repo root next to `Microgroove.ino` (Arduino
 sketch layout) — open the folder in the Arduino IDE and it picks them all up.
 
 22.05 kHz, 256-sample buffers, all voices rendered per-sample into a soft-clipped
-mix on core 0. Project files are versioned: v2 stores chords and per-track VOICES;
-v1 files load transparently (and become v2 on the next save).
+mix on core 0. Project files are versioned: v3 adds 16 patterns and a 128-entry
+chain; v1/v2 files load transparently (and become v3 on the next save).
+
+Development architecture and Cardputer test procedure:
+[`docs/V3_IMPLEMENTATION_PLAN.md`](docs/V3_IMPLEMENTATION_PLAN.md) ·
+[`docs/CARDPUTER_TESTING.md`](docs/CARDPUTER_TESTING.md) ·
+[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)
 
 ## License & lineage
 

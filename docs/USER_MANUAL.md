@@ -79,7 +79,7 @@ Tap **PG** to cycle pages; hold it to jump straight back to PATTERN.
 
 **SAMPLE** is the SD browser for `/groovebox/samples/`. **AUX** previews the highlighted file; **P1–P8** assigns it directly to that drum lane. The RAM meter shows how much of the sample pool is in use.
 
-**SONG** is the 64-slot chain grid. Place patterns with **P1–P8**, set the loop start with **AUX**, and step through project slots by holding **BPM−/BPM+**.
+**SONG** is the 128-slot chain grid, shown 64 entries at a time. Place patterns with **P1–P8**, use **TAB** to choose pattern bank A/B, set the loop start with **AUX**, and step through project slots by holding **BPM−/BPM+**.
 
 **HELP** is the key map, on the device itself.
 
@@ -87,7 +87,7 @@ Tap **PG** to cycle pages; hold it to jump straight back to PATTERN.
 
 ## 5. Sequencing and recording
 
-Patterns are 16 steps, and there are 8 of them. Tap **P1–P8** to select; **hold to clone** the current pattern into that slot — the fastest way to build variations. While playing, pattern switches are quantized to the bar: tap the next pattern and it takes over cleanly at step 1.
+Patterns are 16 steps, and there are 16 of them. **TAB** selects bank A (patterns 1–8) or B (patterns 9–16); tap **P1–P8** to select within the bank. **Hold to clone** the current pattern into that slot — the fastest way to build variations. While playing, pattern switches are quantized to the bar: tap the next pattern and it takes over cleanly at step 1.
 
 Tap **REC** to arm live recording. **While playing**, everything you play quantizes to the nearest step. **While stopped**, you're in step-write mode: each entry lands at the cursor and the cursor advances.
 
@@ -97,7 +97,7 @@ On a poly synth track, overlapping is how you record **chords**: while playing, 
 
 Cleanup: tap **CLR** to clear the cell under the cursor, hold it to wipe the whole pattern, or hold it *while recording and playing* to erase whatever passes under the playhead — a live eraser.
 
-**Song mode:** lay patterns into the 64-slot chain on the SONG page, tap **SONG** to toggle chain playback, and set where the loop restarts with **AUX**.
+**Song mode:** lay patterns into the 128-slot chain on the SONG page, tap **SONG** to toggle chain playback, and set where the loop restarts with **AUX**.
 
 ---
 
@@ -142,7 +142,7 @@ Eight slots on the card (`P1.gbx`–`P8.gbx`) store everything: patterns, song c
 | Move | Keys |
 |---|---|
 | Drop / bring back a part | hold **T1 T2 T3 TD** |
-| Switch pattern on the bar | tap **P1–P8** while playing |
+| Switch pattern on the bar | choose bank with **TAB**, tap **P1–P8** while playing |
 | Restart the phrase | hold **PLAY** |
 | Live-erase a lane | REC on + hold **CLR** while playing |
 | Filter jam | SOUND page, **◀ ▶** on CUTOFF, hold **ACC** for fine |

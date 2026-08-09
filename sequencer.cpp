@@ -8,6 +8,7 @@
 Pattern    g_patterns[NUM_PATTERNS];
 uint8_t    g_song[SONG_LENGTH];
 uint8_t    g_songLoopStart = 0;
+uint8_t    g_patternBank = 0;
 
 SynthTrack g_synths[NUM_SYNTHS];
 DrumLane   g_drumLanes[NUM_DRUM_LANES];

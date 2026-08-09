@@ -17,6 +17,7 @@
 #include "wavetable.h"
 #include "ui.h"
 #include "mic_sampler.h"
+#include "sd_diagnostics.h"
 
 void inputInit();
 void inputUpdate();
@@ -182,8 +183,17 @@ static void doImmediate(uint8_t act, const KeySnap& now) {
             break;
 
         case ACT_REC:
-            g_recEnabled = !g_recEnabled;
-            uiStatus(g_recEnabled ? "REC ON" : "REC OFF");
+            if (g_curPage == PAGE_DIAG) {
+                uiStatus(sdDiagnosticsStart() ? "SD TEST STARTED" : "SD TEST BUSY");
+            } else {
+                g_recEnabled = !g_recEnabled;
+                uiStatus(g_recEnabled ? "REC ON" : "REC OFF");
+            }
+            g_needRedraw = true; break;
+
+        case ACT_BANK:
+            g_patternBank ^= 1;
+            uiStatus(g_patternBank ? "PATTERNS 9-16" : "PATTERNS 1-8");
             g_needRedraw = true; break;
 
         case ACT_ACCENT: break;   // pure modifier
@@ -200,22 +210,24 @@ static void doShort(uint8_t act) {
     }
     // pattern keys: context
     if (act >= ACT_PAT1 && act <= ACT_PAT8) {
-        uint8_t k = (uint8_t)(act - ACT_PAT1);
+        uint8_t keyIndex = (uint8_t)(act - ACT_PAT1);
         if (g_curPage == PAGE_SAMPLE) {
             if (g_fileCount) {
                 int slot = samplerLoad(g_fileList[g_fileSel]);
                 if (slot >= 0) {
-                    DrumLane& d = g_drumLanes[k];
+                    DrumLane& d = g_drumLanes[keyIndex];
                     d.engine = ENG_SMPL; d.sampleSlot = (int8_t)slot; d.smp.init();
                     uiStatus("ASSIGNED");
                 } else uiStatus("LOAD FAILED");
                 g_needRedraw = true;
             }
         } else if (g_curPage == PAGE_SONG) {
+            uint8_t k = (uint8_t)(g_patternBank * 8 + keyIndex);
             g_song[g_songCursor] = k;
             g_songCursor = (g_songCursor + 1) % SONG_LENGTH;
             g_needRedraw = true;
         } else {
+            uint8_t k = (uint8_t)(g_patternBank * 8 + keyIndex);
             g_curPattern = k;
             if (!g_playing && !g_songMode) g_playPattern = k;
             uiStatus("PATTERN"); g_needRedraw = true;
@@ -293,7 +305,7 @@ static void doLong(uint8_t act) {
     }
     if (act >= ACT_PAT1 && act <= ACT_PAT8) {
         if (g_curPage == PAGE_SAMPLE || g_curPage == PAGE_SONG) return;
-        uint8_t k = (uint8_t)(act - ACT_PAT1);
+        uint8_t k = (uint8_t)(g_patternBank * 8 + (act - ACT_PAT1));
         clonePatternTo(k);
         g_curPattern = k;
         if (!g_playing && !g_songMode) g_playPattern = k;
