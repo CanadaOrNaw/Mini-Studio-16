@@ -4,14 +4,15 @@
 #include "master_recorder.h"
 #include "sd_diagnostics.h"
 #include "sequencer.h"
+#include "midi_input.h"
+#include "serial_line_buffer.h"
+#include "stem_recorder.h"
 
 #include <Arduino.h>
 #include <string.h>
 
 namespace {
-char s_line[CONTROL_LINE_MAX];
-size_t s_length = 0;
-bool s_overflow = false;
+SerialLineBuffer<CONTROL_LINE_MAX> s_line;
 
 void replyError(const char* id, const char* error) {
     Serial.printf(CONTROL_PROTOCOL_PREFIX " %s ERR %s\n",
@@ -26,16 +27,26 @@ void dispatch(const ControlRequest& request) {
 
         case CONTROL_STATUS: {
             const MasterRecorderSnapshot recorder = masterRecorderSnapshot();
+            const StemRecorderSnapshot stems = stemRecorderSnapshot();
             Serial.printf(
                 CONTROL_PROTOCOL_PREFIX " %s OK playing=%u bpm=%u pattern=%u step=%u "
-                "song=%u master=%s frames=%lu dropped=%lu path=%s\n",
+                "song=%u master=%s frames=%lu dropped=%lu path=%s midiDropped=%lu "
+                "recoveredFrames=%lu recoveredPath=%s stems=%s stemFrames=%lu "
+                "stemDropped=%lu stemPath=%s\n",
                 request.id, g_playing ? 1u : 0u, static_cast<unsigned>(g_bpm),
                 static_cast<unsigned>(g_playPattern + 1),
                 static_cast<unsigned>(g_playStep + 1), g_songMode ? 1u : 0u,
                 masterRecorderStateName(recorder.state),
                 static_cast<unsigned long>(recorder.framesWritten),
                 static_cast<unsigned long>(recorder.droppedFrames),
-                recorder.path[0] ? recorder.path : "-");
+                recorder.path[0] ? recorder.path : "-",
+                static_cast<unsigned long>(midiInputDroppedEvents()),
+                static_cast<unsigned long>(recorder.recoveredFrames),
+                recorder.recoveredPath[0] ? recorder.recoveredPath : "-",
+                stemRecorderStateName(stems.state),
+                static_cast<unsigned long>(stems.framesWritten),
+                static_cast<unsigned long>(stems.droppedFrames),
+                stems.path[0] ? stems.path : "-");
             break;
         }
 
@@ -101,30 +112,39 @@ void dispatch(const ControlRequest& request) {
                 replyError(request.id, "master_not_recording");
             break;
 
+        case CONTROL_STEM_START:
+            if (stemRecorderStart()) {
+                const StemRecorderSnapshot stems = stemRecorderSnapshot();
+                Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK stems=starting path=%s\n",
+                              request.id, stems.path);
+            } else {
+                replyError(request.id, "stems_busy_or_unavailable");
+            }
+            break;
+
+        case CONTROL_STEM_STOP:
+            if (stemRecorderStop())
+                Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK stems=stopping\n", request.id);
+            else
+                replyError(request.id, "stems_not_recording");
+            break;
+
         default:
             replyError(request.id, "unsupported_command");
             break;
     }
 }
 
-void consumeLine() {
-    if (s_overflow) {
-        replyError("-", "line_too_long");
-    } else if (s_length > 0) {
-        s_line[s_length] = 0;
-        ControlRequest request = {};
-        const ControlParseStatus status = controlParseLine(s_line, request);
-        if (status == CONTROL_PARSE_OK) dispatch(request);
-        else replyError(request.id, controlParseStatusName(status));
-    }
-    s_length = 0;
-    s_overflow = false;
+void consumeLine(const char* line) {
+    ControlRequest request = {};
+    const ControlParseStatus status = controlParseLine(line, request);
+    if (status == CONTROL_PARSE_OK) dispatch(request);
+    else replyError(request.id, controlParseStatusName(status));
 }
 }  // namespace
 
 void serialControlInit() {
-    s_length = 0;
-    s_overflow = false;
+    s_line.consume();
     Serial.println(CONTROL_PROTOCOL_PREFIX " READY firmware=v3-alpha");
 }
 
@@ -133,15 +153,12 @@ void serialControlUpdate() {
     while (budget-- && Serial.available() > 0) {
         const int value = Serial.read();
         if (value < 0) break;
-        const char c = static_cast<char>(value);
-        if (c == '\n') {
-            consumeLine();
-        } else if (c != '\r') {
-            if (s_length + 1 < sizeof(s_line) && !s_overflow)
-                s_line[s_length++] = c;
-            else
-                s_overflow = true;
+        const SerialLineResult result = s_line.feed(static_cast<char>(value));
+        if (result == SERIAL_LINE_READY) {
+            consumeLine(s_line.line());
+            s_line.consume();
+        } else if (result == SERIAL_LINE_OVERFLOW) {
+            replyError("-", "line_too_long");
         }
     }
 }
-

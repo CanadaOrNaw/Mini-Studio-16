@@ -3,6 +3,7 @@
 // ============================================================
 #include "sampler.h"
 #include "master_recorder.h"
+#include "stem_recorder.h"
 #include <SD.h>
 #include <string.h>
 #include <stdio.h>
@@ -132,7 +133,7 @@ bool wavDecodeToMono16(File& f, int16_t* dst, uint32_t maxFrames,
 }
 
 int samplerLoad(const char* filename) {
-    if (masterRecorderIsBusy()) return -1;
+    if (masterRecorderIsBusy() || stemRecorderIsBusy()) return -1;
     int existing = samplerFindByName(filename);
     if (existing >= 0) return existing;
     if (g_numSamples >= MAX_SAMPLES) return -1;

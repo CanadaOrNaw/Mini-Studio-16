@@ -58,6 +58,52 @@ PASS currently means:
 These are starting gates, not marketing specifications. Save FAIL results too;
 the maximum stall and minimum heap are more useful than the label.
 
+## Master recording test
+
+With a pattern playing, use the CLI:
+
+```bash
+python tools/ministudio_cli.py --port /dev/ttyACM0 master start
+python tools/ministudio_cli.py --port /dev/ttyACM0 status
+python tools/ministudio_cli.py --port /dev/ttyACM0 master stop
+```
+
+Copy the reported `MASTERnnn.wav` from `/groovebox/recordings`. Confirm that its
+duration matches elapsed recording time, it opens without repair, and the final
+`MASTER` line and `status` both report `dropped=0` and `errors=0`. Repeat for 1,
+10, and 30 minutes.
+
+For recovery, begin another recording, wait at least five seconds, and remove
+power without sending `master stop`. On the next boot the firmware must report
+`MASTER_RECOVERY state=RECOVERED`, preserve `RECOVERnnn.wav`, and allow a new
+master recording. Use a disposable/test SD card for intentional power cuts.
+
+## Stem capture test
+
+Run `stems start`, play all three synth tracks and drums, then run `stems stop`.
+Copy the reported `.mss` file and split it:
+
+```bash
+python tools/split_stems.py STEM001.mss exported-stems
+```
+
+All five WAVs must have identical frame counts. Muting a source on the device
+must make its corresponding stem silent while leaving the other buses intact.
+The final `STEMS` line must report `dropped=0` and `errors=0`. Master and stem
+recording are intentionally mutually exclusive in this alpha.
+
+## USB serial soak
+
+Run at least 10,000 alternating `ping`, `status`, tempo and transport requests.
+Every `MS16/1` response must repeat the request ID. Keep audio playing and note
+any click, UI stall, missing response, reboot, or nonzero `midiDropped` value.
+
+The checked-in soak client performs the correlated request test:
+
+```bash
+python tools/protocol_soak.py --port /dev/ttyACM0 --count 10000
+```
+
 ## New sequencer controls
 
 - `tab` switches pattern bank A/B.
@@ -77,3 +123,5 @@ the maximum stall and minimum heap are more useful than the label.
 - Whether audio clicked, paused or rebooted during the six-file read.
 - Any screen freeze or keyboard lag.
 - Whether the card cold-boots and mounts reliably on ten consecutive starts.
+- Master/stem final metrics, file durations, and whether interrupted captures
+  recovered successfully.

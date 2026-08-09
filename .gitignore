@@ -5,4 +5,10 @@ tests/build/
 tests/__pycache__/
 tools/__pycache__/
 *.bin.tmp
+# GCC fallback temporaries when a minimal host has no system /tmp.
+/cc*.s
+/cc*.o
+/cc*.res
+/cc*.cdtor.c
+/cc*.cdtor.o
 .DS_Store

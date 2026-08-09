@@ -16,7 +16,18 @@ the inherited keyboard, microphone sampler or short resampling workflow.
 - The `MS16/1` parser rejects malformed prefixes, IDs, ranges, extra arguments
   and oversized input without dynamic allocation; valid transport, tempo,
   note, drum, diagnostic and recorder requests round-trip in host tests.
+- The protocol survives 100,000 deterministic malformed inputs without
+  corrupting request canaries, and the line framer completes a 10,000-command
+  overflow-recovery soak.
 - WAV header tests pin the finalized RIFF/data sizes for mono 16-bit output.
+- Recorder lifecycle tests cover start/record/drop/write/stop/complete/error and
+  preservation of a recovered take across later sessions.
+- MIDI tests cover running status, interleaved realtime clock, note-on velocity
+  zero, song position, 24-PPQN step emission, bounded-queue overflow and stop.
+- Loop tests pin Track-1 length establishment, next-boundary scheduling, forced
+  common frame length, mute transitions and exact wrap position.
+- Stem tests cover container headers, interleaving, chunked five-WAV splitting,
+  and truncated-payload rejection.
 - The desktop CLI request/response framing passes host tests without requiring
   `pyserial` or a connected device.
 - GBX v1, v2 and v3 serialized layouts are pinned by compile-time assertions.
@@ -49,6 +60,10 @@ the inherited keyboard, microphone sampler or short resampling workflow.
 - A duration-correct master WAV with zero dropped frames on the physical
   Cardputer-ADV. The writer is implemented but not hardware-verified.
 - USB serial soak testing and direct USB MIDI device/host testing.
+- Five-bus stem capture throughput and recovery on the physical SD card.
+- USB MIDI stack integration. The musical parser/queue/clock layer is complete,
+  but the pinned Arduino-ESP32 2.0.16 environment needs either explicit
+  TinyUSB composite integration or a tested framework migration.
 
 Do not describe this checkpoint as hardware-verified or as implementing the six
 loop tracks. Continue with `CARDPUTER_TESTING.md` using the CI-produced merged

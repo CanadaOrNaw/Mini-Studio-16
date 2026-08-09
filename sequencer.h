@@ -113,6 +113,10 @@ void sequencerInit();
 void sequencerStart(bool fromTop);
 void sequencerStop();
 void sequencerTick();               // call every loop(); handles step timing
+void sequencerExternalStart(bool fromTop);
+void sequencerExternalStop();
+void sequencerExternalStep();
+void sequencerExternalSongPosition(uint16_t position);
 
 // Live input -> sound + optional record
 void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent, bool legato);

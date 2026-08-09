@@ -4,8 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define FILE_READ 0
-#define FILE_WRITE 1
+#define FILE_READ "r"
+#define FILE_WRITE "w"
 
 class File {
 public:
@@ -32,7 +32,7 @@ public:
     bool rmdir(const char*) { return true; }
     bool remove(const char*) { return true; }
     bool rename(const char*, const char*) { return true; }
-    File open(const char*, uint8_t) { return File(); }
+    File open(const char*, const char*) { return File(); }
     File open(const char*) { return File(); }
 };
 static SDStub SD;

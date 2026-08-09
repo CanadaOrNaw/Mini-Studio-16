@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import time
@@ -47,6 +48,31 @@ def parse_response(line: str) -> Response:
     return Response(tokens[1], tokens[2] == "OK", values, " ".join(messages))
 
 
+def response_json(response: Response) -> str:
+    return json.dumps(
+        {
+            "protocol": PREFIX,
+            "request_id": response.request_id,
+            "ok": response.ok,
+            "values": response.values,
+            "message": response.message,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def resolve_port(explicit: str | None, candidates: Iterable[object]) -> str:
+    if explicit:
+        return explicit
+    devices = [str(getattr(candidate, "device")) for candidate in candidates]
+    if len(devices) == 1:
+        return devices[0]
+    if not devices:
+        raise ValueError("no serial ports found; pass --port")
+    raise ValueError("multiple serial ports found; pass --port: " + ", ".join(devices))
+
+
 def command_words(args: argparse.Namespace) -> List[object]:
     if args.command == "ping":
         return ["ping"]
@@ -64,15 +90,18 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["sd_test"]
     if args.command == "master":
         return ["master", args.action]
+    if args.command == "stems":
+        return ["stems", args.action]
     raise ValueError(f"unsupported command: {args.command}")
 
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument("--port", required=True, help="USB serial port, e.g. /dev/ttyACM0")
+    result.add_argument("--port", help="USB serial port; auto-selected when exactly one exists")
     result.add_argument("--baud", type=int, default=115200)
     result.add_argument("--timeout", type=float, default=3.0)
     result.add_argument("--id", dest="request_id", default=None)
+    result.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     sub = result.add_subparsers(dest="command", required=True)
     sub.add_parser("ping")
     sub.add_parser("status")
@@ -89,22 +118,58 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("sd-test")
     master = sub.add_parser("master")
     master.add_argument("action", choices=("start", "stop"))
+    stems = sub.add_parser("stems")
+    stems.add_argument("action", choices=("start", "stop"))
+    sub.add_parser("ports", help="list serial ports without opening one")
+    monitor = sub.add_parser("monitor", help="print asynchronous device output")
+    monitor.add_argument("--seconds", type=float, default=0.0, help="0 means run until interrupted")
     return result
 
 
 def main(argv: List[str] | None = None) -> int:
     args = parser().parse_args(argv)
-    request_id = args.request_id or f"cli{int(time.time() * 1000) % 1000000}"
-    payload = build_request(request_id, command_words(args))
 
     try:
         import serial  # type: ignore
+        from serial.tools import list_ports  # type: ignore
     except ImportError:
         print("pyserial is required: python -m pip install pyserial", file=sys.stderr)
         return 2
 
+    candidates = list(list_ports.comports())
+    if args.command == "ports":
+        for item in candidates:
+            record = {"device": item.device, "description": item.description, "hwid": item.hwid}
+            print(json.dumps(record, sort_keys=True) if args.json else
+                  f"{item.device}\t{item.description}\t{item.hwid}")
+        return 0
+
+    try:
+        port = resolve_port(args.port, candidates)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+
+    if args.command == "monitor":
+        deadline = time.monotonic() + args.seconds if args.seconds > 0 else None
+        try:
+            with serial.Serial(port, args.baud, timeout=0.1) as device:
+                while deadline is None or time.monotonic() < deadline:
+                    raw = device.readline()
+                    if not raw:
+                        continue
+                    line = raw.decode("utf-8", errors="replace").strip()
+                    print(json.dumps({"event": "serial", "line": line}, sort_keys=True)
+                          if args.json else line)
+        except KeyboardInterrupt:
+            pass
+        return 0
+
+    request_id = args.request_id or f"cli{int(time.time() * 1000) % 1000000}"
+    payload = build_request(request_id, command_words(args))
+
     deadline = time.monotonic() + args.timeout
-    with serial.Serial(args.port, args.baud, timeout=0.1) as device:
+    with serial.Serial(port, args.baud, timeout=0.1) as device:
         device.write(payload)
         device.flush()
         while time.monotonic() < deadline:
@@ -115,12 +180,14 @@ def main(argv: List[str] | None = None) -> int:
             try:
                 response = parse_response(line)
             except ValueError:
-                print(line)
+                print(json.dumps({"event": "async", "line": line}, sort_keys=True)
+                      if args.json else line)
                 continue
             if response.request_id != request_id:
-                print(line)
+                print(json.dumps({"event": "async", "line": line}, sort_keys=True)
+                      if args.json else line)
                 continue
-            print(line)
+            print(response_json(response) if args.json else line)
             return 0 if response.ok else 1
 
     print(f"timed out waiting for response {request_id}", file=sys.stderr)
@@ -129,4 +196,3 @@ def main(argv: List[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

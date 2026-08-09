@@ -21,6 +21,13 @@ int main() {
     assert(readU32(header + 24) == 22050);
     assert(readU32(header + 28) == 44100);
     assert(readU32(header + 40) == 88200);
+
+    WavRecoveryPlan recovery = wavPlanMono16Recovery(44 + 88201);
+    assert(recovery.recoverable);
+    assert(recovery.frames == 44100);
+    assert(recovery.dataBytes == 88200);
+    assert(recovery.ignoredTrailingBytes == 1);
+    assert(!wavPlanMono16Recovery(45).recoverable);
     std::cout << "wav_file: all tests passed\n";
     return 0;
 }

@@ -20,6 +20,8 @@ enum ControlCommand : uint8_t {
     CONTROL_SD_TEST,
     CONTROL_MASTER_START,
     CONTROL_MASTER_STOP,
+    CONTROL_STEM_START,
+    CONTROL_STEM_STOP,
 };
 
 enum ControlParseStatus : uint8_t {
@@ -42,4 +44,3 @@ struct ControlRequest {
 
 ControlParseStatus controlParseLine(const char* line, ControlRequest& request);
 const char* controlParseStatusName(ControlParseStatus status);
-

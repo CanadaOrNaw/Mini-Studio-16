@@ -2,6 +2,7 @@ import importlib.util
 import pathlib
 import sys
 import unittest
+from types import SimpleNamespace
 
 
 CLI_PATH = pathlib.Path(__file__).parents[1] / "tools" / "ministudio_cli.py"
@@ -40,6 +41,22 @@ class MiniStudioCliTests(unittest.TestCase):
     def test_reject_unframed_line(self):
         with self.assertRaises(ValueError):
             cli.parse_response("SDDIAG state=PASS")
+
+    def test_json_response(self):
+        response = cli.parse_response("MS16/1 x OK bpm=120")
+        self.assertEqual(
+            cli.response_json(response),
+            '{"message":"","ok":true,"protocol":"MS16/1","request_id":"x","values":{"bpm":"120"}}',
+        )
+
+    def test_port_resolution(self):
+        ports = [SimpleNamespace(device="/dev/ttyACM0")]
+        self.assertEqual(cli.resolve_port(None, ports), "/dev/ttyACM0")
+        self.assertEqual(cli.resolve_port("COM9", []), "COM9")
+        with self.assertRaises(ValueError):
+            cli.resolve_port(None, [])
+        with self.assertRaises(ValueError):
+            cli.resolve_port(None, ports + [SimpleNamespace(device="/dev/ttyUSB0")])
 
 
 if __name__ == "__main__":

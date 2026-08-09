@@ -21,6 +21,8 @@ struct MasterRecorderSnapshot {
     uint32_t ringHighWater;
     uint32_t maxWriteUs;
     uint32_t errors;
+    char recoveredPath[64];
+    uint32_t recoveredFrames;
 };
 
 void masterRecorderInit(bool sdMounted);
@@ -30,4 +32,3 @@ bool masterRecorderIsBusy();
 void masterRecorderPush(const int16_t* frames, size_t count);
 MasterRecorderSnapshot masterRecorderSnapshot();
 const char* masterRecorderStateName(MasterRecorderState state);
-

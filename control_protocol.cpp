@@ -110,6 +110,12 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
         if (sameWord(action, "start")) request.command = CONTROL_MASTER_START;
         else if (sameWord(action, "stop")) request.command = CONTROL_MASTER_STOP;
         else return CONTROL_PARSE_BAD_ARGUMENTS;
+    } else if (sameWord(verb, "stems")) {
+        char* action = nextToken(cursor);
+        if (!action || !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(action, "start")) request.command = CONTROL_STEM_START;
+        else if (sameWord(action, "stop")) request.command = CONTROL_STEM_STOP;
+        else return CONTROL_PARSE_BAD_ARGUMENTS;
     } else {
         return CONTROL_PARSE_UNKNOWN_COMMAND;
     }

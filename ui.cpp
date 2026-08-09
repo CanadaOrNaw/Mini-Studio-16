@@ -15,6 +15,7 @@
 #include "audio_engine.h"
 #include "sd_diagnostics.h"
 #include "master_recorder.h"
+#include "stem_recorder.h"
 
 Page    g_curPage    = PAGE_PATTERN;
 bool    g_needRedraw = true;
@@ -55,7 +56,7 @@ void uiStatus(const char* msg) {
 
 void uiScanSampleDir() {
     g_fileCount = 0;
-    if (masterRecorderIsBusy()) return;
+    if (masterRecorderIsBusy() || stemRecorderIsBusy()) return;
     File dir = SD.open(DIR_SAMPLES);
     if (!dir || !dir.isDirectory()) return;
     File f = dir.openNextFile();

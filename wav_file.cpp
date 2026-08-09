@@ -34,3 +34,13 @@ void wavBuildMono16Header(uint8_t header[WAV_PCM_HEADER_BYTES],
     putU32(header + 40, frames * 2u);
 }
 
+WavRecoveryPlan wavPlanMono16Recovery(uint32_t fileBytes) {
+    WavRecoveryPlan plan = {false, 0, 0, 0};
+    if (fileBytes <= WAV_PCM_HEADER_BYTES + 1u) return plan;
+    const uint32_t payload = fileBytes - WAV_PCM_HEADER_BYTES;
+    plan.frames = payload / 2u;
+    plan.dataBytes = plan.frames * 2u;
+    plan.ignoredTrailingBytes = static_cast<uint8_t>(payload & 1u);
+    plan.recoverable = plan.frames > 0;
+    return plan;
+}

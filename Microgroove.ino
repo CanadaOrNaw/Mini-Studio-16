@@ -26,6 +26,8 @@
 #include "sd_diagnostics.h"
 #include "master_recorder.h"
 #include "serial_control.h"
+#include "midi_input.h"
+#include "stem_recorder.h"
 #include "ui.h"
 
 void inputInit();
@@ -55,6 +57,7 @@ void setup() {
     s_sdOk = SD.begin(SD_SPI_CS_PIN, SPI, 25000000);
     sdDiagnosticsInit(s_sdOk);
     masterRecorderInit(s_sdOk);
+    stemRecorderInit(s_sdOk);
 
     // Modules
     micSamplerInit();                // scratch first, then sample pool
@@ -64,6 +67,7 @@ void setup() {
         wavetableLoadUserFromSD();
     }
     sequencerInit();
+    midiInputInit();
     loadDemoPattern();
 
     uiSplash();
@@ -84,6 +88,7 @@ void setup() {
 
 void loop() {
     serialControlUpdate();
+    midiInputUpdate();
     inputUpdate();
     micSamplerUpdate();
     sequencerTick();

@@ -85,6 +85,10 @@ Gate: malformed/oversized input cannot overflow buffers or stall the main
 loop; every request receives a correlated response; host parser/CLI tests and
 the target firmware build pass.
 
+Current pre-hardware status: parser fuzzing, line soak, correlated protocol,
+JSON CLI output, port discovery and monitoring are implemented. Device-side
+soak remains pending.
+
 ### M3 — long master recording and stem capture
 
 - Add a master-bus SPSC recording ring and a storage-owned WAV writer.
@@ -98,6 +102,10 @@ the target firmware build pass.
 Gate: a 30-minute master recording has a valid header, exact frame count and
 zero dropped frames; recovery and stem splitting survive interruption tests.
 
+Current pre-hardware status: master and five-bus sequential writers, temporary
+file recovery/quarantine, stem container, interleaving and desktop splitting
+are implemented. Physical zero-drop and power-cut tests remain pending.
+
 ### M4 — six-track loop engine
 
 - Add one storage worker, per-track playback rings and one recording ring.
@@ -108,6 +116,9 @@ zero dropped frames; recovery and stem splitting survive interruption tests.
 
 Gate: six generated 20-second tracks play for 30 minutes with zero underruns;
 recording a seventh input stream while six play is tested separately.
+
+Current pre-hardware status: six-track lifecycle and exact Track-1 boundary
+model are host-tested. SD-backed playback/recording waits on measured M1 data.
 
 ### M5 — sequencer and sampler model
 
@@ -130,6 +141,13 @@ metadata; 40 seconds of sample audio remains playable after reboot.
 Gate: event save/load round-trip; recorded automation returns to the same
 musical tick; BLE disconnect/reconnect and USB attach/detach never stall audio;
 external clock drives a repeatable transport without main-loop drift.
+
+Current pre-hardware status: MIDI running-status/realtime parsing, bounded
+queueing, note/drum routing, song position and external transport stepping are
+implemented. The pinned Arduino-ESP32 2.0.16 environment has no high-level
+`USBMIDI` class, so the device adapter requires a deliberate TinyUSB component
+integration or framework migration; see `USB_MIDI_TOOLCHAIN.md`. USB/BLE
+adapters and device validation remain pending.
 
 ### M7 — input and wireless-audio hardware validation
 

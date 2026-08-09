@@ -5,10 +5,11 @@ for the **M5Stack Cardputer-ADV**.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
-> **Early hardware-validation alpha:** the current firmware builds and contains
-> the expanded sequencer plus SD-card diagnostics. The long-audio looper,
-> PO-style sampler, event looper, motion mappings, and BLE MIDI are product
-> targets, not finished features yet.
+> **Early hardware-validation alpha:** the current firmware contains the
+> expanded sequencer, SD diagnostics, long master/stem writers, remote-control
+> CLI, and hardware-independent MIDI/loop foundations. The complete long-audio
+> looper, PO-style sampler, event looper, motion mappings, and wireless/USB MIDI
+> adapters are not finished features yet.
 
 Mini Studio 16 starts from the excellent
 [Microgroove](https://github.com/matoslav/MicroGroove) firmware and grows it
@@ -19,15 +20,15 @@ not an official Microgroove or lebiro.studio release.
 
 | System | Target | Current state |
 | --- | --- | --- |
-| Audio looper | Six independent mono tracks, up to 20 seconds each | SD transport and hardware tests in progress |
+| Audio looper | Six independent mono tracks, up to 20 seconds each | Sync/state model tested; SD playback pending |
 | Sampler | 16 slots sharing a 40-second project quota; melodic and sliced modes | Existing short RAM sampler only |
 | Step sequencer | 16 patterns × 16 steps and a 128-entry chain | Implemented in the alpha |
 | Event looper | Five tracks over 128 bars | Planned |
 | Motion | BMI270 tilt, gyro, shake, and recordable automation | Planned |
-| MIDI | BLE plus USB MIDI notes, CC, clock, and transport | Planned |
+| MIDI | BLE plus USB MIDI notes, CC, clock, and transport | Parser, queue, routing and external clock implemented; adapters pending |
 | Master recording | Long finished-song WAVs written directly to microSD | Writer implemented; hardware test pending |
 | Remote control | Versioned USB serial protocol and desktop CLI | Implemented in the alpha |
-| Stem export | Separate synth 1/2/3 and drum-bus WAVs | Planned |
+| Stem export | Separate synth 1/2/3 and drum-bus WAVs | Five-bus capture/split path implemented; hardware test pending |
 | Built-in audio | Speaker, microphone, and headphone output | Existing Microgroove paths retained |
 | Expanded audio | Line input and conventional Bluetooth audio | Requires expansion hardware |
 
@@ -53,16 +54,29 @@ The engineering plan and the pass/fail gates for each stage are in
   transport, tempo, note/drum triggers, SD tests, and master-recorder control.
 - A master-bus recording ring and storage task that writes unique 22.05 kHz
   mono WAVs, finalizes their headers, and reports dropped frames/write latency.
+- Boot-time repair of interrupted master WAV and stem temporary files; invalid
+  remnants are preserved as `.bad` rather than silently discarded.
+- A five-channel sequential stem recorder containing master, synth 1/2/3 and
+  drum buses, plus a desktop tool that splits the capture into mono WAV files.
+- A MIDI byte parser supporting running status and interleaved realtime bytes,
+  bounded event queue, note/drum routing, song position, and external
+  24-PPQN start/continue/stop clocking. USB/BLE adapters still need binding.
+- Host-tested six-track arm/wait/record/play/mute transitions and exact Track-1
+  boundary calculations for the future SD loop engine.
+- CLI JSON output, serial-port discovery, asynchronous monitoring, a 10,000-line
+  framing soak, and 100,000 malformed protocol-parser cases.
 - Reproducible GitHub Actions and PlatformIO builds for ESP32-S3.
 
 This checkpoint intentionally does **not** claim that six long audio streams or
 simultaneous recording/playback have been proven on physical hardware. The
-master writer is implemented, but a recording is only verified after the
-physical Cardputer reports zero dropped frames and produces a duration-correct
-WAV.
+master/stem writers are implemented, but a capture is only verified after the
+physical Cardputer reports zero dropped frames and produces duration-correct
+files.
 
 Remote-control framing, commands, and CLI examples are documented in
 [`docs/CONTROL_PROTOCOL.md`](docs/CONTROL_PROTOCOL.md).
+The exact USB device/host and pinned-toolchain boundary is documented in
+[`docs/USB_MIDI_TOOLCHAIN.md`](docs/USB_MIDI_TOOLCHAIN.md).
 
 ## Flash the current alpha
 
@@ -125,7 +139,7 @@ compatible:
 ├── projects/       GBX project files
 ├── samples/        WAV samples
 ├── wavetables/     optional single-cycle WAVs
-├── recordings/     finalized MASTERnnn.wav files
+├── recordings/     master WAVs, stem containers, and recovered takes
 └── diag/           temporary SD-test files; removed after the test
 ```
 
@@ -156,11 +170,14 @@ not SD-card labels or theoretical throughput.
   results pending.
 - **M2:** versioned USB serial control and CLI — implemented; device soak
   pending.
-- **M3:** long master recording and stem capture — master writer implemented;
-  physical recording and stems pending.
-- **M4:** six-track audio looper — pending M1 hardware data.
+- **M3:** long master recording and stem capture — both sequential writers,
+  recovery, and stem splitter implemented; physical capture pending.
+- **M4:** six-track audio looper — synchronization/state model implemented;
+  SD playback/recording pending M1 hardware data.
 - **M5:** complete 16-slot sampler and parameter automation — planned.
-- **M6:** five-track event looper, motion, BLE MIDI, and USB MIDI — planned.
+- **M6:** five-track event looper, motion, BLE MIDI, and USB MIDI — MIDI parser,
+  queue, routing and external transport implemented; adapters and other systems
+  pending.
 - **M7:** full-duplex input and optional audio expansion — planned.
 
 See [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md) for the exact verification

@@ -1,10 +1,12 @@
 #include "master_recorder.h"
+#include "master_recorder_session.h"
 
 #include "config.h"
 #include "pcm_ring.h"
 #include "sd_diagnostics.h"
 #include "mic_sampler.h"
 #include "wav_file.h"
+#include "stem_recorder.h"
 
 #include <Arduino.h>
 #include <SD.h>
@@ -17,49 +19,40 @@ constexpr const char* kTempPath = DIR_RECORDINGS "/.master.tmp";
 
 SpscRing<int16_t, kRingFrames> s_ring;
 portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
-MasterRecorderSnapshot s_snapshot = {MASTER_REC_UNAVAILABLE, "", 0, 0, 0, 0, 0};
+MasterRecorderSession s_session;
 TaskHandle_t s_task = nullptr;
 bool s_sdMounted = false;
 
-void setState(MasterRecorderState state) {
-    portENTER_CRITICAL(&s_mux);
-    s_snapshot.state = state;
-    portEXIT_CRITICAL(&s_mux);
-}
-
 MasterRecorderState getState() {
     portENTER_CRITICAL(&s_mux);
-    const MasterRecorderState state = s_snapshot.state;
+    const MasterRecorderState state = s_session.state();
     portEXIT_CRITICAL(&s_mux);
     return state;
 }
 
 void addError() {
     portENTER_CRITICAL(&s_mux);
-    ++s_snapshot.errors;
+    s_session.noteError();
     portEXIT_CRITICAL(&s_mux);
 }
 
 void noteWrite(size_t frames, uint32_t elapsedUs) {
     portENTER_CRITICAL(&s_mux);
-    s_snapshot.framesWritten += static_cast<uint32_t>(frames);
-    if (elapsedUs > s_snapshot.maxWriteUs) s_snapshot.maxWriteUs = elapsedUs;
+    s_session.noteWrite(static_cast<uint32_t>(frames), elapsedUs);
     portEXIT_CRITICAL(&s_mux);
 }
 
-bool selectOutputPath() {
+bool selectAvailablePath(const char* prefix, const char* extension, char* output, size_t length) {
     if (!SD.exists(DIR_ROOT) && !SD.mkdir(DIR_ROOT)) return false;
     if (!SD.exists(DIR_RECORDINGS) && !SD.mkdir(DIR_RECORDINGS)) return false;
 
     char candidate[64];
     for (uint16_t number = 1; number <= 999; ++number) {
-        snprintf(candidate, sizeof(candidate), DIR_RECORDINGS "/MASTER%03u.wav",
-                 static_cast<unsigned>(number));
+        snprintf(candidate, sizeof(candidate), "%s/%s%03u.%s", DIR_RECORDINGS, prefix,
+                 static_cast<unsigned>(number), extension);
         if (!SD.exists(candidate)) {
-            portENTER_CRITICAL(&s_mux);
-            strncpy(s_snapshot.path, candidate, sizeof(s_snapshot.path) - 1);
-            s_snapshot.path[sizeof(s_snapshot.path) - 1] = 0;
-            portEXIT_CRITICAL(&s_mux);
+            strncpy(output, candidate, length - 1);
+            output[length - 1] = 0;
             return true;
         }
     }
@@ -69,7 +62,39 @@ bool selectOutputPath() {
 void failRecorder(File& file) {
     addError();
     if (file) file.close();
-    setState(MASTER_REC_ERROR);
+    portENTER_CRITICAL(&s_mux);
+    s_session.fail();
+    portEXIT_CRITICAL(&s_mux);
+}
+
+void recoverInterruptedRecording() {
+    if (!SD.exists(kTempPath)) return;
+
+    File file = SD.open(kTempPath, "r+");
+    if (!file) { addError(); return; }
+    const WavRecoveryPlan plan = wavPlanMono16Recovery(static_cast<uint32_t>(file.size()));
+    char recovered[64];
+    const bool havePath = selectAvailablePath("RECOVER", plan.recoverable ? "wav" : "bad",
+                                               recovered, sizeof(recovered));
+    bool ok = havePath;
+    if (ok && plan.recoverable) {
+        uint8_t header[WAV_PCM_HEADER_BYTES];
+        wavBuildMono16Header(header, SAMPLE_RATE, plan.frames);
+        ok = file.seek(0) && file.write(header, sizeof(header)) == sizeof(header);
+        if (ok) file.flush();
+    }
+    file.close();
+    if (ok) ok = SD.rename(kTempPath, recovered);
+
+    portENTER_CRITICAL(&s_mux);
+    if (ok && plan.recoverable) s_session.noteRecovery(recovered, plan.frames);
+    else if (!ok) s_session.noteError();
+    portEXIT_CRITICAL(&s_mux);
+
+    Serial.printf("MASTER_RECOVERY state=%s path=%s frames=%lu trailing=%u\n",
+                  ok ? (plan.recoverable ? "RECOVERED" : "QUARANTINED") : "FAILED",
+                  havePath ? recovered : "-", static_cast<unsigned long>(plan.frames),
+                  static_cast<unsigned>(plan.ignoredTrailingBytes));
 }
 
 void recorderTask(void*) {
@@ -77,12 +102,13 @@ void recorderTask(void*) {
     uint8_t header[WAV_PCM_HEADER_BYTES];
     wavBuildMono16Header(header, SAMPLE_RATE, 0);
 
-    SD.remove(kTempPath);
     File file = SD.open(kTempPath, FILE_WRITE);
     if (!file || file.write(header, sizeof(header)) != sizeof(header)) {
         failRecorder(file);
     } else {
-        if (getState() == MASTER_REC_STARTING) setState(MASTER_REC_RECORDING);
+        portENTER_CRITICAL(&s_mux);
+        s_session.markRecording();
+        portEXIT_CRITICAL(&s_mux);
 
         bool ok = true;
         while (ok) {
@@ -124,7 +150,9 @@ void recorderTask(void*) {
                 ok = false;
             }
         }
-        setState(ok ? MASTER_REC_COMPLETE : MASTER_REC_ERROR);
+        portENTER_CRITICAL(&s_mux);
+        if (ok) s_session.complete(); else s_session.fail();
+        portEXIT_CRITICAL(&s_mux);
     }
 
     const MasterRecorderSnapshot done = masterRecorderSnapshot();
@@ -149,46 +177,43 @@ void masterRecorderInit(bool sdMounted) {
     s_sdMounted = sdMounted;
     s_ring.reset();
     portENTER_CRITICAL(&s_mux);
-    s_snapshot.state = sdMounted ? MASTER_REC_IDLE : MASTER_REC_UNAVAILABLE;
-    s_snapshot.path[0] = 0;
-    s_snapshot.framesWritten = 0;
-    s_snapshot.droppedFrames = 0;
-    s_snapshot.ringHighWater = 0;
-    s_snapshot.maxWriteUs = 0;
-    s_snapshot.errors = sdMounted ? 0 : 1;
+    s_session.initialize(sdMounted);
     s_task = nullptr;
     portEXIT_CRITICAL(&s_mux);
+    if (sdMounted) recoverInterruptedRecording();
 }
 
 bool masterRecorderStart() {
-    if (!s_sdMounted || masterRecorderIsBusy() || sdDiagnosticsIsRunning() || micRecActive())
+    if (!s_sdMounted || masterRecorderIsBusy() || stemRecorderIsBusy() ||
+        sdDiagnosticsIsRunning() || micRecActive())
         return false;
-    if (!selectOutputPath()) return false;
+    if (SD.exists(kTempPath)) return false;
+    char path[64];
+    if (!selectAvailablePath("MASTER", "wav", path, sizeof(path))) return false;
 
     s_ring.reset();
     portENTER_CRITICAL(&s_mux);
-    s_snapshot.state = MASTER_REC_STARTING;
-    s_snapshot.framesWritten = 0;
-    s_snapshot.droppedFrames = 0;
-    s_snapshot.ringHighWater = 0;
-    s_snapshot.maxWriteUs = 0;
-    s_snapshot.errors = 0;
+    s_session.begin(path);
     portEXIT_CRITICAL(&s_mux);
 
-    if (xTaskCreatePinnedToCore(recorderTask, "master_wav", 6144, nullptr, 1,
+    // The worker keeps a 4 KiB sequential-write block on its stack. Leave
+    // ample room for FatFS/File calls and formatted completion diagnostics.
+    if (xTaskCreatePinnedToCore(recorderTask, "master_wav", 8192, nullptr, 1,
                                 &s_task, 1) == pdPASS)
         return true;
 
     addError();
-    setState(MASTER_REC_ERROR);
+    portENTER_CRITICAL(&s_mux);
+    s_session.fail();
+    portEXIT_CRITICAL(&s_mux);
     return false;
 }
 
 bool masterRecorderStop() {
-    const MasterRecorderState state = getState();
-    if (state != MASTER_REC_STARTING && state != MASTER_REC_RECORDING) return false;
-    setState(MASTER_REC_STOPPING);
-    return true;
+    portENTER_CRITICAL(&s_mux);
+    const bool stopped = s_session.requestStop();
+    portEXIT_CRITICAL(&s_mux);
+    return stopped;
 }
 
 bool masterRecorderIsBusy() {
@@ -205,15 +230,14 @@ void masterRecorderPush(const int16_t* frames, size_t count) {
     const size_t pushed = s_ring.push(frames, count);
     const uint32_t highWater = s_ring.size();
     portENTER_CRITICAL(&s_mux);
-    if (pushed < count)
-        s_snapshot.droppedFrames += static_cast<uint32_t>(count - pushed);
-    if (highWater > s_snapshot.ringHighWater) s_snapshot.ringHighWater = highWater;
+    s_session.noteProduced(static_cast<uint32_t>(count), static_cast<uint32_t>(pushed),
+                           highWater);
     portEXIT_CRITICAL(&s_mux);
 }
 
 MasterRecorderSnapshot masterRecorderSnapshot() {
     portENTER_CRITICAL(&s_mux);
-    const MasterRecorderSnapshot copy = s_snapshot;
+    const MasterRecorderSnapshot copy = s_session.snapshot();
     portEXIT_CRITICAL(&s_mux);
     return copy;
 }

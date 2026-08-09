@@ -30,6 +30,8 @@ int main() {
 
     request = parseOk("MS16/1 6 master start");
     assert(request.command == CONTROL_MASTER_START);
+    request = parseOk("MS16/1 7 stems stop");
+    assert(request.command == CONTROL_STEM_STOP);
 
     ControlRequest invalid = {};
     assert(controlParseLine("", invalid) == CONTROL_PARSE_EMPTY);

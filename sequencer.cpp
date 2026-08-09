@@ -33,6 +33,7 @@ extern bool g_needRedraw;   // owned by ui.cpp
 
 static uint32_t s_stepUs      = 0;
 static uint32_t s_lastStepUs  = 0;
+static bool     s_externalClock = false;
 static uint32_t s_stepPeriod() { return 60000000UL / g_bpm / 4; }   // 16th notes
 
 void sequencerInit() {
@@ -95,7 +96,7 @@ static void triggerStep(uint8_t step) {
 }
 
 // ---------- transport ----------
-void sequencerStart(bool fromTop) {
+static void prepareStart(bool fromTop) {
     if (fromTop) {
         g_playStep = 0;
         if (g_songMode) {
@@ -104,11 +105,17 @@ void sequencerStart(bool fromTop) {
         }
     }
     if (!g_songMode) g_playPattern = g_curPattern;
-    s_lastStepUs = micros() - s_stepPeriod();   // fire step immediately
     g_playing = true;
 }
 
+void sequencerStart(bool fromTop) {
+    s_externalClock = false;
+    prepareStart(fromTop);
+    s_lastStepUs = micros() - s_stepPeriod();   // fire step immediately
+}
+
 void sequencerStop() {
+    s_externalClock = false;
     g_playing = false;
     g_playStep = 0;
 }
@@ -125,12 +132,7 @@ static void songAdvance() {
     // fallback: stay on current
 }
 
-void sequencerTick() {
-    if (!g_playing) return;
-    uint32_t now = micros();
-    if (now - s_lastStepUs < s_stepPeriod()) return;
-    s_lastStepUs += s_stepPeriod();                 // accumulate: no drift
-
+static void advanceOneStep() {
     triggerStep(g_playStep);
     g_playStep++;
     if (g_playStep >= NUM_STEPS) {
@@ -141,9 +143,39 @@ void sequencerTick() {
     g_needRedraw = true;
 }
 
+void sequencerTick() {
+    if (!g_playing || s_externalClock) return;
+    uint32_t now = micros();
+    if (now - s_lastStepUs < s_stepPeriod()) return;
+    s_lastStepUs += s_stepPeriod();                 // accumulate: no drift
+    advanceOneStep();
+}
+
+void sequencerExternalStart(bool fromTop) {
+    s_externalClock = true;
+    prepareStart(fromTop);
+}
+
+void sequencerExternalStop() { g_playing = false; }
+
+void sequencerExternalStep() {
+    if (s_externalClock && g_playing) advanceOneStep();
+}
+
+void sequencerExternalSongPosition(uint16_t position) {
+    g_playStep = static_cast<uint8_t>(position % NUM_STEPS);
+    if (g_songMode) {
+        g_songPos = static_cast<uint8_t>((position / NUM_STEPS) % SONG_LENGTH);
+        if (g_song[g_songPos] != SONG_EMPTY) g_playPattern = g_song[g_songPos];
+    }
+    g_needRedraw = true;
+}
+
 // ---------- live input ----------
 // quantize: current step if within first half, else next step
 static uint8_t quantizedStep() {
+    if (s_externalClock)
+        return g_playStep == 0 ? NUM_STEPS - 1 : g_playStep - 1;
     uint32_t elapsed = micros() - s_lastStepUs;
     uint8_t  step    = g_playStep == 0 ? NUM_STEPS - 1 : g_playStep - 1;  // step just triggered
     if (elapsed > s_stepPeriod() / 2) step = g_playStep;                   // round up
