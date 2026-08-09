@@ -7,4 +7,4 @@ public:
     void begin(uint8_t, uint8_t, uint8_t, uint8_t) {}
 };
 
-inline SPIClass SPI;
+static SPIClass SPI;

@@ -40,7 +40,7 @@ struct SerialStub {
     template <typename... Args>
     void printf(const char*, Args...) {}
 };
-inline SerialStub Serial;
+static SerialStub Serial;
 
 class String {
 public:

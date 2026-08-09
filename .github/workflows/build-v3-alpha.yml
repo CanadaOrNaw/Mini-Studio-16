@@ -2,7 +2,7 @@ name: Build v3 alpha
 
 on:
   push:
-    branches: ["codex/v3-alpha-sd-streaming"]
+    branches: ["agent/v3-alpha-sd-streaming"]
   pull_request:
   workflow_dispatch:
 

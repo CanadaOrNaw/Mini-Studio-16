@@ -1,6 +1,6 @@
 # Microgroove v3 alpha build status
 
-Branch: `codex/v3-alpha-sd-streaming`
+Published branch: `agent/v3-alpha-sd-streaming`
 
 This checkpoint is the hardware-validation alpha, not the completed six-loop
 instrument. It adds the lowest-risk product changes and the measurements that

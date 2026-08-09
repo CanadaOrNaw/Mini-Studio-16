@@ -35,4 +35,4 @@ public:
     File open(const char*, uint8_t) { return File(); }
     File open(const char*) { return File(); }
 };
-inline SDStub SD;
+static SDStub SD;

@@ -68,13 +68,13 @@ struct CardputerStub {
     void update() {}
 };
 
-inline CardputerStub M5Cardputer;
+static CardputerStub M5Cardputer;
 
 struct M5Stub {
     struct Config {};
     Config config() const { return {}; }
 };
-inline M5Stub M5;
+static M5Stub M5;
 
 class M5Canvas {
 public:

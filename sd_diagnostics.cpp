@@ -21,6 +21,19 @@ SdDiagSnapshot s_snapshot = {SD_DIAG_IDLE, "READY", 0, 0, 0, 0, 0, 0, 0};
 TaskHandle_t s_task = nullptr;
 bool s_sdMounted = false;
 
+void resetSnapshot(SdDiagState state, const char* step, uint32_t errors) {
+    s_snapshot.state = state;
+    strncpy(s_snapshot.step, step, sizeof(s_snapshot.step) - 1);
+    s_snapshot.step[sizeof(s_snapshot.step) - 1] = 0;
+    s_snapshot.writeKBs = 0;
+    s_snapshot.readKBs = 0;
+    s_snapshot.roundRobinKBs = 0;
+    s_snapshot.maxWriteUs = 0;
+    s_snapshot.maxReadUs = 0;
+    s_snapshot.minFreeHeap = 0;
+    s_snapshot.errors = errors;
+}
+
 void setStep(const char* step) {
     portENTER_CRITICAL(&s_mux);
     strncpy(s_snapshot.step, step, sizeof(s_snapshot.step) - 1);
@@ -256,15 +269,15 @@ void diagTask(void*) {
 void sdDiagnosticsInit(bool sdMounted) {
     s_sdMounted = sdMounted;
     portENTER_CRITICAL(&s_mux);
-    s_snapshot = {sdMounted ? SD_DIAG_IDLE : SD_DIAG_FAIL,
-                  "READY", 0, 0, 0, 0, 0, 0, sdMounted ? 0u : 1u};
+    resetSnapshot(sdMounted ? SD_DIAG_IDLE : SD_DIAG_FAIL,
+                  sdMounted ? "READY" : "NO SD", sdMounted ? 0u : 1u);
     portEXIT_CRITICAL(&s_mux);
 }
 
 bool sdDiagnosticsStart() {
     if (!s_sdMounted || sdDiagnosticsIsRunning()) return false;
     portENTER_CRITICAL(&s_mux);
-    s_snapshot = {SD_DIAG_RUNNING, "STARTING", 0, 0, 0, 0, 0, 0, 0};
+    resetSnapshot(SD_DIAG_RUNNING, "STARTING", 0);
     portEXIT_CRITICAL(&s_mux);
     if (xTaskCreatePinnedToCore(diagTask, "sd_diag", 6144, nullptr, 1, &s_task, 1) == pdPASS)
         return true;
