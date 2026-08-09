@@ -24,7 +24,10 @@ not an official Microgroove or lebiro.studio release.
 | Step sequencer | 16 patterns × 16 steps and a 128-entry chain | Implemented in the alpha |
 | Event looper | Five tracks over 128 bars | Planned |
 | Motion | BMI270 tilt, gyro, shake, and recordable automation | Planned |
-| MIDI | BLE MIDI notes, CC, clock, and transport | Planned |
+| MIDI | BLE plus USB MIDI notes, CC, clock, and transport | Planned |
+| Master recording | Long finished-song WAVs written directly to microSD | Writer implemented; hardware test pending |
+| Remote control | Versioned USB serial protocol and desktop CLI | Implemented in the alpha |
+| Stem export | Separate synth 1/2/3 and drum-bus WAVs | Planned |
 | Built-in audio | Speaker, microphone, and headphone output | Existing Microgroove paths retained |
 | Expanded audio | Line input and conventional Bluetooth audio | Requires expansion hardware |
 
@@ -46,10 +49,20 @@ The engineering plan and the pass/fail gates for each stage are in
   six-file round-robin reads, maximum operation latency, and minimum free heap.
 - A host-tested single-producer/single-consumer ring for the future boundary
   between real-time audio and SD storage.
+- A bounded `MS16/1` USB serial protocol and companion CLI for status,
+  transport, tempo, note/drum triggers, SD tests, and master-recorder control.
+- A master-bus recording ring and storage task that writes unique 22.05 kHz
+  mono WAVs, finalizes their headers, and reports dropped frames/write latency.
 - Reproducible GitHub Actions and PlatformIO builds for ESP32-S3.
 
 This checkpoint intentionally does **not** claim that six long audio streams or
-simultaneous recording/playback have been proven on physical hardware.
+simultaneous recording/playback have been proven on physical hardware. The
+master writer is implemented, but a recording is only verified after the
+physical Cardputer reports zero dropped frames and produces a duration-correct
+WAV.
+
+Remote-control framing, commands, and CLI examples are documented in
+[`docs/CONTROL_PROTOCOL.md`](docs/CONTROL_PROTOCOL.md).
 
 ## Flash the current alpha
 
@@ -111,6 +124,7 @@ compatible:
 ├── projects/       GBX project files
 ├── samples/        WAV samples
 ├── wavetables/     optional single-cycle WAVs
+├── recordings/     finalized MASTERnnn.wav files
 └── diag/           temporary SD-test files; removed after the test
 ```
 
@@ -139,10 +153,14 @@ not SD-card labels or theoretical throughput.
 - **M0:** reproducible build — passed in GitHub Actions.
 - **M1:** SD diagnostics and transport primitive — implemented; physical test
   results pending.
-- **M2:** six-track audio looper — pending M1 hardware data.
-- **M3:** complete 16-slot sampler and parameter automation — planned.
-- **M4:** five-track event looper, motion, and BLE MIDI — planned.
-- **M5:** full-duplex input and optional audio expansion — planned.
+- **M2:** versioned USB serial control and CLI — implemented; device soak
+  pending.
+- **M3:** long master recording and stem capture — master writer implemented;
+  physical recording and stems pending.
+- **M4:** six-track audio looper — pending M1 hardware data.
+- **M5:** complete 16-slot sampler and parameter automation — planned.
+- **M6:** five-track event looper, motion, BLE MIDI, and USB MIDI — planned.
+- **M7:** full-duplex input and optional audio expansion — planned.
 
 See [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md) for the exact verification
 boundary. Please report bugs with the firmware commit, Cardputer-ADV revision,

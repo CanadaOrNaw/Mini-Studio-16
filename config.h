@@ -35,6 +35,7 @@
 #define DIR_SAMPLES      "/groovebox/samples"
 #define DIR_WAVETABLES   "/groovebox/wavetables"
 #define DIR_PROJECTS     "/groovebox/projects"
+#define DIR_RECORDINGS   "/groovebox/recordings"
 
 // ---------- Sample memory ----------
 #define SAMPLE_POOL_BYTES (192 * 1024)   // ~4.3 s of mono 16-bit @ 22.05 kHz

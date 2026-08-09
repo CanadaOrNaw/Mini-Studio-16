@@ -3,8 +3,9 @@
 Published branch: `agent/v3-alpha-sd-streaming`
 
 This checkpoint is the hardware-validation alpha, not the completed six-loop
-instrument. It adds the lowest-risk product changes and the measurements that
-must pass before long-audio streaming is enabled.
+instrument. It adds the lowest-risk product changes, a versioned remote-control
+plane, and the first long master-recording path. It does not remove or replace
+the inherited keyboard, microphone sampler or short resampling workflow.
 
 ## Verified in the local sandbox
 
@@ -12,6 +13,12 @@ must pass before long-audio streaming is enabled.
   sequencer, sampler, storage, UI/input and SD diagnostics.
 - The single-producer/single-consumer PCM ring preserves one million ordered
   values across concurrent producer/consumer threads.
+- The `MS16/1` parser rejects malformed prefixes, IDs, ranges, extra arguments
+  and oversized input without dynamic allocation; valid transport, tempo,
+  note, drum, diagnostic and recorder requests round-trip in host tests.
+- WAV header tests pin the finalized RIFF/data sizes for mono 16-bit output.
+- The desktop CLI request/response framing passes host tests without requiring
+  `pyserial` or a connected device.
 - GBX v1, v2 and v3 serialized layouts are pinned by compile-time assertions.
 - The v3 loader compiles with fixed v1/v2 layouts, migration paths and backup
   fallback for an absent, truncated or corrupt primary. Functional project-I/O
@@ -34,6 +41,9 @@ must pass before long-audio streaming is enabled.
 - SD throughput/stall results from the exact card using the on-device `SD TEST`
   page.
 - Full-duplex ES8311 input/output and every later long-audio milestone.
+- A duration-correct master WAV with zero dropped frames on the physical
+  Cardputer-ADV. The writer is implemented but not hardware-verified.
+- USB serial soak testing and direct USB MIDI device/host testing.
 
 Do not describe this checkpoint as hardware-verified or as implementing the six
 loop tracks. Continue with `CARDPUTER_TESTING.md` using the CI-produced merged

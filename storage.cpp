@@ -5,6 +5,7 @@
 #include "sequencer.h"
 #include "sampler.h"
 #include "wavetable.h"
+#include "master_recorder.h"
 #include <SD.h>
 #include <string.h>
 
@@ -115,6 +116,7 @@ static void slotPath(uint8_t slot, char* out, size_t n) {
 }
 
 bool storageProjectExists(uint8_t slot) {
+    if (masterRecorderIsBusy()) return false;
     char path[64]; slotPath(slot, path, sizeof(path));
     if (SD.exists(path)) return true;
     char backupPath[72];
@@ -123,6 +125,7 @@ bool storageProjectExists(uint8_t slot) {
 }
 
 bool storageSaveProject(uint8_t slot) {
+    if (masterRecorderIsBusy()) return false;
     static ProjectFileV3 pf;   // static: too big for stack
     memset(&pf, 0, sizeof(pf));
 
@@ -214,6 +217,7 @@ static void applyLane(int l, const SaveDrumLane& o) {
 }
 
 bool storageLoadProject(uint8_t slot) {
+    if (masterRecorderIsBusy()) return false;
     char path[64]; slotPath(slot, path, sizeof(path));
     static ProjectBuffer loaded;
     uint16_t version = 0;

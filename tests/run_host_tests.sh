@@ -10,6 +10,18 @@ g++ -std=gnu++11 -O2 -Wall -Wextra -Werror -pthread \
 
 "$build_dir/test_pcm_ring"
 
+g++ -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_control_protocol.cpp" "$test_dir/../control_protocol.cpp" \
+  -o "$build_dir/test_control_protocol"
+
+"$build_dir/test_control_protocol"
+
+g++ -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_wav_file.cpp" "$test_dir/../wav_file.cpp" \
+  -o "$build_dir/test_wav_file"
+
+"$build_dir/test_wav_file"
+
 g++ -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
   "$test_dir/../sd_diagnostics.cpp"
@@ -32,7 +44,9 @@ g++ -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
   "$test_dir/../sequencer.cpp" "$test_dir/../sampler.cpp" \
   "$test_dir/../mic_sampler.cpp" "$test_dir/../audio_engine.cpp" \
-  "$test_dir/../wavetable.cpp"
+  "$test_dir/../wavetable.cpp" "$test_dir/../master_recorder.cpp" \
+  "$test_dir/../serial_control.cpp" "$test_dir/../control_protocol.cpp" \
+  "$test_dir/../wav_file.cpp"
 
 echo "audio/sequencer/sampler: host syntax checks passed"
 
@@ -43,3 +57,4 @@ g++ -x c++ -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
 echo "sketch integration: host syntax check passed"
 
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_merge_firmware.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_ministudio_cli.py"

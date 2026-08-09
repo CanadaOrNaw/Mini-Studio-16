@@ -5,6 +5,7 @@
 #include "sampler.h"
 #include "sequencer.h"
 #include "ui.h"
+#include "master_recorder.h"
 #include <M5Cardputer.h>
 #include <SD.h>
 #include <esp_heap_caps.h>
@@ -47,6 +48,7 @@ static void trimScratch(uint32_t total, uint32_t rate,
 
 // ---------- WAV write + pool commit ----------
 static bool writeWav(const char* name, uint32_t start, uint32_t frames, uint32_t rate) {
+    if (masterRecorderIsBusy()) return false;
     char path[80];
     snprintf(path, sizeof(path), "%s/%s", DIR_SAMPLES, name);
     SD.remove(path);

@@ -24,6 +24,8 @@
 #include "audio_engine.h"
 #include "mic_sampler.h"
 #include "sd_diagnostics.h"
+#include "master_recorder.h"
+#include "serial_control.h"
 #include "ui.h"
 
 void inputInit();
@@ -52,6 +54,7 @@ void setup() {
     SPI.begin(SD_SPI_CLK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
     s_sdOk = SD.begin(SD_SPI_CS_PIN, SPI, 25000000);
     sdDiagnosticsInit(s_sdOk);
+    masterRecorderInit(s_sdOk);
 
     // Modules
     micSamplerInit();                // scratch first, then sample pool
@@ -73,12 +76,14 @@ void setup() {
 
     inputInit();
     audioEngineStart();              // render task on core 0
+    serialControlInit();
 
     if (!s_sdOk) uiStatus("NO SD CARD");
     g_needRedraw = true;
 }
 
 void loop() {
+    serialControlUpdate();
     inputUpdate();
     micSamplerUpdate();
     sequencerTick();

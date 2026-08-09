@@ -8,6 +8,7 @@
 #include "sampler.h"
 #include <M5Cardputer.h>
 #include "mic_sampler.h"
+#include "master_recorder.h"
 
 float g_scopeBuf[SCREEN_W];
 volatile int g_scopeIdx = 0;
@@ -47,6 +48,8 @@ static void audioTask(void*) {
             if ((i & 7) == 0 && g_scopeIdx < SCREEN_W)
                 g_scopeBuf[g_scopeIdx++] = mix;
         }
+
+        masterRecorderPush(buf, AUDIO_BUF_LEN);
 
         while (!M5Cardputer.Speaker.playRaw(buf, AUDIO_BUF_LEN, SAMPLE_RATE, false, 1, 0))
             vTaskDelay(1);
