@@ -67,7 +67,7 @@ Remote-control framing, commands, and CLI examples are documented in
 ## Flash the current alpha
 
 The build attached to
-[GitHub Actions run 31311866811](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31311866811)
+[GitHub Actions run 31339277597](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31339277597)
 passed the host suite, ESP32-S3 compilation/link, merged-image generation, and
 artifact upload.
 
@@ -81,11 +81,12 @@ esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
 Merged-image SHA-256 for that run:
 
 ```text
-18fed23b856cdf34efbdd7faa7384a798c1ad1cdbdb141474300db25ab86a5ef
+d72038405c901da59d1a88b0505ac68c1a1d385413c335bb99b7f65887dc0b52
 ```
 
-Back up the SD card before using development firmware. The alpha test creates
-temporary files only under `/groovebox/diag`, but it is still pre-release code.
+Back up the SD card before using development firmware. SD diagnostics create
+temporary files under `/groovebox/diag`, and master recording creates finalized
+WAVs under `/groovebox/recordings`; this is still pre-release code.
 Follow [`docs/CARDPUTER_TESTING.md`](docs/CARDPUTER_TESTING.md) and retain every
 `SDDIAG` result, including failures.
 
