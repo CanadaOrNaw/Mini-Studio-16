@@ -42,14 +42,18 @@ the inherited keyboard, microphone sampler or short resampling workflow.
 
 - The pinned ESP32-S3 PlatformIO environment compiles and links successfully.
 - The merged 8 MB flash image is generated successfully.
-- The host-test and firmware jobs both pass for published commit `00cc4c9` in
-  [Actions run 31339277597](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31339277597).
+- The host-test and firmware jobs both pass for published commit `5082cf1` in
+  [Actions run 31341532904](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31341532904).
+- The linked target reports 107,472 static RAM bytes (32.8% of the configured
+  327,680-byte data region) and 596,381 flash bytes (17.8% of the configured
+  application partition). Runtime heap and task-stack margins still require
+  physical measurement.
 - Build artifact `microgroove-v3-alpha-cardputer-adv` contains the merged image,
   application image, and ELF.
 - Artifact ZIP SHA-256:
-  `40b77f1a155a031397ef219027bce21bb6e3bcb7448b54eede37331e4526fab1`.
+  `116ba3d8b0fb3a2eb961e85a1cdcfba4b36728a291a8873bc41d4275bd1950db`.
 - Merged-image SHA-256:
-  `d72038405c901da59d1a88b0505ac68c1a1d385413c335bb99b7f65887dc0b52`.
+  `cc0b5d8dd5e3700713d38ffab820fdfb3aab363138b8d6b3a30702e6860a6a49`.
 
 ## Requires external verification
 

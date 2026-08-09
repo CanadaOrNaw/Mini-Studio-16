@@ -81,7 +81,7 @@ The exact USB device/host and pinned-toolchain boundary is documented in
 ## Flash the current alpha
 
 The build attached to
-[GitHub Actions run 31339277597](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31339277597)
+[GitHub Actions run 31341532904](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31341532904)
 passed the host suite, ESP32-S3 compilation/link, merged-image generation, and
 artifact upload.
 
@@ -95,7 +95,7 @@ esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
 Merged-image SHA-256 for that run:
 
 ```text
-d72038405c901da59d1a88b0505ac68c1a1d385413c335bb99b7f65887dc0b52
+cc0b5d8dd5e3700713d38ffab820fdfb3aab363138b8d6b3a30702e6860a6a49
 ```
 
 Back up the SD card before using development firmware. SD diagnostics create
