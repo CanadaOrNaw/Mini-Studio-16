@@ -171,6 +171,12 @@ audio-task architecture to
 license file. The included factory sample pack is identified upstream as CC0 by
 lebiro.studio.
 
+SD-card research was informed by
+[bmorcelli/Launcher](https://github.com/bmorcelli/Launcher), whose ESP32
+file-handling paths provided a useful reference for chunked I/O and SD failure
+behavior. No Launcher source code is included in Mini Studio 16; this is an
+acknowledgement of research influence rather than a code-derived license notice.
+
 All modifications in this repository are distributed under the same MIT
 License. “Mini Studio 16” identifies this fork; “Microgroove” and the original
 project artwork belong to their respective upstream creators.
