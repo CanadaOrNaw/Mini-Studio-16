@@ -1,161 +1,252 @@
-# Microgroove — User Manual
+# Mini Studio 16 user manual
 
-*A pocket groovebox & sampler for the M5Stack Cardputer-ADV · [lebiro.studio](https://lebiro.studio)*
+This manual covers the inherited Microgroove instrument plus Mini Studio 16's
+SD looper, streamed sampler, event/motion pages, recorders, and MIDI/control
+paths. Hardware-dependent behavior is still alpha until validated on a physical
+Cardputer-ADV.
 
-**Print it. Flash it. Jam.**
+## Interaction rule
 
-Microgroove turns the Cardputer-ADV into a four-track instrument: three synth tracks (each switchable between a mono 303-style voice and 2–3-voice polyphony for chords) and a drum track with eight lanes of 808/909 synthesis or sample playback. It records your mic, resamples its own output, and saves everything to microSD.
+Most labeled keys have a tap action and a 450 ms hold action. A footer progress
+bar appears before a hold fires. Arrow keys repeat. Tap `ctrl` to cycle pages;
+hold it to return to PATTERN.
 
-Every key name below matches the **printed v6 keycap labels**. Here is the full map — one key, one function, with the orange (hold) and green (sampling) second functions:
+## Global keys
 
-![Microgroove v6 keymap](keymap-v6.png)
+| Key | Tap | Hold |
+| --- | --- | --- |
+| `` ` 1 2 3 `` | Select synth 1/2/3 or drums | Mute/unmute that part |
+| `4 5 6 7 8 9 0 -` | Pattern 1–8 in current A/B bank; page-specific selection | Clone pattern on PATTERN/SOUND |
+| `tab` | Toggle pattern bank A/B | — |
+| `=` | Show load slot | Load project |
+| `del` | Show save slot | Save project |
+| `opt` / `alt` | BPM −/+ | Octave −/+; on SONG, project slot −/+ |
+| `z` | Clear current cell/page item | Clear pattern on PATTERN/SOUND |
+| `x c v b` | Left/down/up/right | Repeat while held |
+| `n` | Toggle song mode; page-specific action | Short master resample, streamed bus sample, or stems on SONG |
+| `m` | Accent/fine/step modifier | — |
+| `,` | Toggle slide or clear sampler step | — |
+| `.` | Preview/page action | Mic sample or master recorder on SONG |
+| `/` | REC or page action | — |
+| `space` | Play/stop | Restart from top |
 
-Running a stock, unlabeled Cardputer? Use this legend once, then read normally:
+Holding LOAD and SAVE together loads the built-in demo.
 
-| Printed label | Stock key | Printed label | Stock key |
-|---|---|---|---|
-| **T1 T2 T3 TD** | `` ` `` `1` `2` `3` | **PG** | `ctl` |
-| **P1 – P8** | `4` … `-` | **BPM− / BPM+** | `opt` / `alt` |
-| **LOAD / SAVE** | `=` / `del` | **CLR** | `z` |
-| **◀ ▼ ▲ ▶** | `x` `c` `v` `b` | **SONG / ACC / SLD** | `n` / `m` / `,` |
-| **AUX / REC / PLAY** | `.` / `/` / `space` | Piano **C D E F…** | home row from `fn` |
-| Sharps **C# D#…** | row above, one key right (`q` `w` `r` `t` `y` …) | Dead keys | `tab` `e` `u` `p` |
+## Synths and drums
 
-The first eight white keys (**C** through **C′**) double as **drum pads 1–8** whenever the drum track is selected.
+Synth tracks 1–3 provide saw, square, triangle, sine, and wavetable oscillators
+through a resonant envelope filter. Each track supports one to three voices.
+Mono mode provides 303-style slide/legato; poly mode records chords up to three
+notes.
 
----
+The drum track contains eight lanes. Each can use 808 synthesis, 909 synthesis,
+or the inherited RAM sample engine, with volume, tune, decay, and choke group.
 
-## 1. The one rule
+On PATTERN/SOUND, the home-row piano plays synths. With drums selected,
+`fn shift a s d f g h` trigger lanes 1–8. Hold `m` for accent; overlapping mono
+notes create slides, while overlapping poly notes create chords.
 
-**One key = one function. Hold any orange-labeled key for half a second to get its second function.** A progress bar appears in the footer and fills before the hold fires, so nothing ever triggers by surprise — release early and nothing happens. That's the whole interaction model; everything below is just what each key does.
+## PATTERN page
 
----
+- Sixteen patterns contain sixteen steps each.
+- `tab` selects bank A (1–8) or B (9–16); `4` through `-` select within it.
+- Pattern changes while playing are bar-quantized.
+- `/` arms live recording. Playing quantizes to the nearest step; while stopped,
+  notes/pads step-write and advance.
+- Arrows move the cursor; `z` clears a cell; hold `z` clears the pattern.
+- With REC on while playing, hold `z` for live erase.
+- Hold a pattern key to clone into that slot.
 
-## 2. The factory SD card
+## SOUND page
 
-Your card (or the `Microgroove_SD_card.zip` download, unzipped to the root of any FAT32 microSD) contains one folder:
+Synth rows: oscillator, wavetable, cutoff, resonance, envelope amount, filter
+decay, amp decay, volume, and voices. Drum rows: lane, engine, type/sample,
+volume, tune, decay, and choke. `v/c` chooses a row, `x/b` changes it, and hold
+`m` for fine changes. Piano/pads audition the current sound.
 
+## SAMPLE page
+
+This page combines the original RAM sample browser with the new 16-slot
+SD-streamed instrument.
+
+### Browser mode
+
+- `v/c` selects a WAV in `/groovebox/samples`.
+- `x/b` selects streamed slot 1–16.
+- Tap `n` toggles melodic/sliced mode and updates an occupied slot.
+- `/` assigns the highlighted file to the streamed slot.
+- Tap `.` previews the streamed slot or highlighted legacy file.
+- Tap pattern keys `4`–`-` to load the highlighted file into RAM drum lane 1–8
+  (the inherited workflow).
+- Hold `.` and keep holding to stream the built-in mic into the current slot;
+  release to stop/finalize.
+- Hold `n` to start/stop a streamed master-bus recording into the current slot.
+- `z` clears the current streamed slot and its sequence events.
+
+Slots share 40 seconds after normalization to the 22.05 kHz engine rate.
+Assignment rejects an asset that would exceed the remaining quota.
+
+### Performance
+
+Sixteen keys trigger the current slot:
+
+```text
+fn shift a s d f g h j k l ; ' enter q w
 ```
+
+In melodic mode they are chromatic keys; in sliced mode they trigger slices
+1–16. Up to four streamed voices overlap. With global REC armed, performance
+is recorded into the 16-step sampler sequence.
+
+### Sound and step-lock editing
+
+Tap `tab` to cycle BROWSER → SOUND → LOCK.
+
+- In SOUND/LOCK, `v/c` selects pitch, gain, cutoff, resonance, trim start, or
+  trim length.
+- `x/b` adjusts the value.
+- Hold `m` while pressing `x/b` to select pattern step 1–16.
+- LOCK changes write only the selected slot/pattern/step.
+- `/` clears the current lock.
+- `,` clears the sampler event at the current slot/pattern/step.
+
+Trim changes re-slice sliced slots. Locks are sparse and bounded; the UI reports
+when the lock table is full.
+
+## LOOPS page
+
+Six independent WAV tracks live at `/groovebox/loops/L1.wav`–`L6.wav`.
+
+- `v/c` or pattern keys 1–6 select a track.
+- `/` arms recording; press again to stop/finalize L1 early.
+- L1 is free length up to 20 seconds and establishes the exact timeline.
+- L2–L6 wait for the next L1 boundary and automatically stop at L1's frame
+  count.
+- `x/b` changes volume in 5% steps.
+- `.` mutes/unmutes without losing phase.
+- `z` clears a track. Clearing L1 clears the shared timeline/all loop tracks.
+
+An SD underrun is counted; the track stays silent and re-primes for a later
+boundary so delayed storage never shifts its phase.
+
+## EVENT page
+
+Five event tracks can each span 1–128 bars.
+
+- `v/c` or pattern keys 1–5 select a track.
+- `x/b` changes its bar length.
+- `/` arms/disarms recording.
+- `.` mutes/unmutes playback.
+- `z` clears that track.
+
+Live synth notes, drum hits, streamed sample triggers, and mapped motion/control
+values are timestamped into the armed track. Capacity is 2,048 events total;
+overflow is rejected and counted rather than overwriting data.
+
+## MOTION page
+
+Four mappings translate BMI270 motion into synth parameters and MIDI CC.
+
+- `v/c` selects mapping 1–4.
+- `x/b` cycles tilt X, tilt Y, acceleration, gyro, shake, and slap sources.
+- `.` cycles synth 1/2/3 cutoff/resonance targets.
+- `z` clears the mapping.
+
+Defaults map tilt X to synth-1 cutoff and tilt Y to synth-2 cutoff. Meaningful
+changes emit MIDI channel 16 CC 16–19. When an event track is armed, decimated
+control values are recorded and replayed at musical steps.
+
+## SONG page, projects, master, and stems
+
+The song chain contains 128 entries, displayed 64 at a time. Arrows move;
+pattern keys place the selected A/B-bank pattern; `z` clears; tap `.` sets the
+loop start; tap `n` toggles song/pattern mode. Hold `opt/alt` to select project
+P1–P8, then hold LOAD/SAVE.
+
+GBX v7 saves patterns, chain, synth/drums, legacy sample references, all 16
+streamed slots/parameters/slices/events/locks, five event tracks, motion
+mappings, and six-loop volume/mute state. GBX v1–v6 files still load.
+
+On SONG:
+
+- hold `.` to start/stop a long master WAV;
+- hold `n` to start/stop a five-bus stem container.
+
+Master and stem capture are mutually exclusive. Status shows elapsed seconds
+and dropped frames. Copy `.mss` to a computer and run:
+
+```bash
+python tools/split_stems.py STEM001.mss exported-stems
+```
+
+The original short resampler remains available by holding `n` while a pattern
+is playing on non-SONG/non-SAMPLE pages, then tapping a drum pad to commit.
+
+## SD TEST page
+
+Press `/` to run sequential write/read and six-file round-robin diagnostics
+while audio continues. Save the screen and serial `SDDIAG` line. The test is a
+screening tool; it does not replace the long validation in
+`CARDPUTER_TESTING.md`.
+
+## MIDI
+
+The normal image advertises BLE MIDI as `Mini Studio 16` and presents composite
+USB CDC+MIDI to a computer. Inputs handle notes, CC, clock, song position,
+start, continue, and stop. Keyboard/motion/transport events are mirrored out
+over connected BLE/USB device transports.
+
+Synth input mapping:
+
+- MIDI channels 1–3 play synth tracks 1–3; channel 10 notes 36–43 play drums.
+- On channels 1–3, CC74 controls cutoff, CC71 resonance, and CC7 volume.
+- On any channel, CC20–22 control synth 1–3 cutoff and CC23–25 control synth
+  1–3 resonance.
+- Cutoff/resonance CC changes are recordable into an armed event track.
+- Internal transport sends bounded 24-PPQN clock plus start/continue/stop; a
+  late main loop drops/counts excess catch-up pulses instead of flooding MIDI.
+- Cardputer synth-key releases emit note-off so a connected DAW does not retain
+  stuck notes.
+
+The separately flashed `usb-host` image accepts a direct class-compliant
+USB-MIDI controller and is input-only for its first hardware pass. It disables
+CDC because USB host and device roles cannot share the S3 PHY.
+
+## Serial CLI
+
+The normal image accepts bounded `MS16/1` commands for every major subsystem.
+Examples:
+
+```bash
+python tools/ministudio_cli.py ports
+python tools/ministudio_cli.py --port /dev/ttyACM0 status
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 sample-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 event-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 midi-status
+```
+
+See `CONTROL_PROTOCOL.md` for the full command table.
+
+## SD card layout
+
+```text
 /groovebox/
-  samples/      14 CC0 drum & texture sounds + LICENSE.txt
-  projects/     P1.gbx — the factory demo project
-  wavetables/   (empty — yours to fill)
+  projects/       P1.gbx–P8.gbx and backups
+  samples/        legacy and streamed WAV assets
+  wavetables/     optional single-cycle WAVs
+  loops/          L1.wav–L6.wav
+  recordings/     master WAVs and stem containers
+  diag/           temporary diagnostic files
 ```
 
-**To play the factory demo:** insert the card, power on, press any key past the splash, then **hold LOAD** until the bar fills — project P1 loads. Tap **SONG** to enable song mode, then **PLAY**. Five pre-chained patterns play as a full arranged track at 128 BPM: classic acid, an escalation with open hats, an 808 electro beat, a halftime groove, and an ambient wavetable outro with a polyphonic chord stab on track 3. It's a tour of every engine — mute tracks, sweep filters, and switch patterns while it runs. Nothing you do is permanent unless you **hold SAVE**.
+Use FAT32 for the first hardware-validation pass. Back up the card before
+intentional power-loss tests.
 
-**The samples folder** holds the factory sound pack (kicks, snares, hats, percussion, textures — all CC0, use them anywhere). They are not loaded automatically; browse them on the SAMPLE page and assign the ones you want to drum lanes. Add your own sounds by copying WAV files (8 or 16-bit PCM, mono or stereo — converted to mono on load) into this folder. Keep them short: the whole sample pool is ~192 KB of RAM, about 4 seconds of audio total.
+## License and credits
 
-**The wavetables folder** accepts single-cycle WAVs (AKWF files work perfectly). Up to 8 appear as extra oscillators alongside the 8 built-ins.
-
-**No card?** Everything still works — hold **LOAD+SAVE** together for a built-in demo pattern, and mic sampling falls back to RAM (samples just won't survive a power cycle).
-
-**A note on project files:** current firmware saves projects in the GBX v2 format (which stores chords). It happily loads older v1 files — like the factory demo — but once you re-save, the file becomes v2 and pre-polyphony firmware can no longer read it.
-
----
-
-## 3. The four tracks
-
-Select a track by tapping **T1 T2 T3 TD**. Hold the same key half a second to mute or unmute it — this is the core of live arrangement.
-
-**Tracks 1–3 are synths.** Each one is a 303-style voice: an oscillator (saw / square / triangle / sine / wavetable) into a resonant filter with envelope modulation, plus **accent** (louder + brighter at once — the classic 303 bark) and **slide** (a 50 ms glide with a re-squelched filter). Each track has a **VOICES** setting from 1 to 3:
-
-- **VOICES 1 (mono)** — the pure 303. Slide and legato playing work exactly as on the real thing.
-- **VOICES 2–3 (poly)** — the track plays chords. Slide is ignored (overlapping notes now mean *chord*, not glide).
-
-Track 3 ships set to 3 voices so chords work out of the box; tracks 1–2 ship mono. Change any of them on the SOUND page.
-
-**Track TD is the drum track:** 8 independent lanes, each set to **808 synthesis**, **909 synthesis**, or **sample playback**, with per-lane volume, tune (±12 semitones), decay, and choke group. The default kit is 808 kick/snare/closed-hat/clap on lanes 1–4 and 909 kick/snare/closed-hat/open-hat on lanes 5–8; the 909 hats share a choke group, so the closed hat cuts the open hat like real hardware.
-
----
-
-## 4. Pages
-
-Tap **PG** to cycle pages; hold it to jump straight back to PATTERN.
-
-**PATTERN** is the grid: three synth rows on top, eight drum lanes below in TR-style order (kick at the bottom, open sounds up top). Move the cursor with **◀ ▼ ▲ ▶**. Synth cells show the note name; chord cells add small dots at the top-right, one per extra note. A slide is a short orange underline; an accented step has a darker orange background.
-
-**SOUND** shows the selected track's parameters next to a live oscilloscope. Synth tracks: OSC, WTABLE, CUTOFF, RESO, ENV AMT, FLT DEC, AMP DEC, VOLUME, **VOICES**. Drum lanes: LANE, ENGINE, TYPE/SAMPLE, VOLUME, TUNE, DECAY, CHOKE. Pick a row with **▲ ▼**, adjust with **◀ ▶**, and **hold ACC for fine steps**. The piano keys audition the synth; the pads audition drum lanes.
-
-**SAMPLE** is the SD browser for `/groovebox/samples/`. **AUX** previews the highlighted file; **P1–P8** assigns it directly to that drum lane. The RAM meter shows how much of the sample pool is in use.
-
-**SONG** is the 128-slot chain grid, shown 64 entries at a time. Place patterns with **P1–P8**, use **TAB** to choose pattern bank A/B, set the loop start with **AUX**, and step through project slots by holding **BPM−/BPM+**.
-
-**HELP** is the key map, on the device itself.
-
----
-
-## 5. Sequencing and recording
-
-Patterns are 16 steps, and there are 16 of them. **TAB** selects bank A (patterns 1–8) or B (patterns 9–16); tap **P1–P8** to select within the bank. **Hold to clone** the current pattern into that slot — the fastest way to build variations. While playing, pattern switches are quantized to the bar: tap the next pattern and it takes over cleanly at step 1.
-
-Tap **REC** to arm live recording. **While playing**, everything you play quantizes to the nearest step. **While stopped**, you're in step-write mode: each entry lands at the cursor and the cursor advances.
-
-On a mono synth track, hold **ACC** while playing a note to record an accent, and roll from one note into the next — while both keys briefly overlap — to record a **slide**. That's real 303 fingering.
-
-On a poly synth track, overlapping is how you record **chords**: while playing, notes landing on the same step stack up to three deep; while stopped, press keys together and they step-write as a single chord. To edit a chord's slide flag you'll get a reminder that slide is mono-only.
-
-Cleanup: tap **CLR** to clear the cell under the cursor, hold it to wipe the whole pattern, or hold it *while recording and playing* to erase whatever passes under the playhead — a live eraser.
-
-**Song mode:** lay patterns into the 128-slot chain on the SONG page, tap **SONG** to toggle chain playback, and set where the loop restarts with **AUX**.
-
----
-
-## 6. Live sampling
-
-**Sample the mic:** select the drum track, put the cursor on a lane, and **hold AUX**. After half a second the transport pauses and the footer bar becomes a live level meter — keep holding and speak, beatbox, or hold the device up to anything (max ~2.6 s). Release: the recording is auto-trimmed, written to SD as `MICnn.wav`, loaded onto the lane, and played back immediately. Tune it, shorten it, sequence it like any drum.
-
-**Resample the machine:** with a groove playing, **hold SONG**. The firmware grabs ~1.9 s of the full engine mix, then asks you to *tap a pad* — the first pad you hit receives the capture as `RSMnn.wav`. Clear the pattern and build something new on top of your own bounce, or pitch it down 12 semitones for an instant halftime remix of yourself.
-
-Both write real WAV files, so sampled sounds reload with your projects by filename. Without an SD card they live in RAM until power-off.
-
----
-
-## 7. The keyboard is a piano
-
-White keys sit on the home row, labeled **C D E F G A B C′ D′ E′ F′ G′ A′ B′**. Sharps sit on the row above, shifted one key right so each sharp lands *between* its two white neighbors — and the four keys where a real piano has no black key (the E–F and B–C gaps) are intentionally dead. If you can find notes on a piano, you can find them here. Shift the octave by holding **BPM+** or **BPM−**.
-
----
-
-## 8. Projects
-
-Eight slots on the card (`P1.gbx`–`P8.gbx`) store everything: patterns, song chain, synth parameters (including VOICES), drum lane setups, and sample references. Tap **LOAD** or **SAVE** for info about the current slot; **hold to actually execute** — the progress bar means you'll never save over something by accident. Switch slots by holding **BPM−/BPM+** on the SONG page.
-
----
-
-## 9. Five-minute quick starts
-
-**First 60 seconds.** Power on → any key → hold **LOAD+SAVE** together → "DEMO" appears with an acid line and a beat. Tap **PLAY**. Hold **T1**: the bassline drops out. Hold it again: it's back. You're performing.
-
-**Build a groove from scratch.** Tap **TD**, tap **REC**, tap **PLAY**. Finger-drum a four-on-the-floor on **pad 5** (909 kick), offbeat hats on **pad 7**, claps on **pad 4**. Tap **T1** and play a bassline on the white keys — hold **ACC** on the hits that should bark, roll between notes for slides. Tap **T3** and lay a chord: press two or three keys together. Hold **P2** to clone everything, mutate the copy, and bounce between the two.
-
-**Make a voice kit.** Cursor onto a drum lane, hold **AUX**, say something short, release. Repeat on two more lanes. Write a beat using only your mouth.
-
-**Bounce and rebuild.** Get a groove going, hold **SONG**, tap **pad 1** when prompted. Hold **CLR** to wipe the pattern, put the bounce on step 1, and build a second layer over your first idea.
-
-**The 303 squelch.** On a mono synth track: OSC to SAW, CUTOFF ~30%, RESO ~70%, ENV AMT ~80%, FLT DEC short. Accent every third or fourth note of a 16th-note line and slide into the downbeat.
-
----
-
-## 10. Performance cheat sheet
-
-| Move | Keys |
-|---|---|
-| Drop / bring back a part | hold **T1 T2 T3 TD** |
-| Switch pattern on the bar | choose bank with **TAB**, tap **P1–P8** while playing |
-| Restart the phrase | hold **PLAY** |
-| Live-erase a lane | REC on + hold **CLR** while playing |
-| Filter jam | SOUND page, **◀ ▶** on CUTOFF, hold **ACC** for fine |
-| Chord stabs on the fly | poly track + REC + press keys together |
-| Punch-in fills | hold-clone to a spare pattern beforehand, bounce between them |
-| Tempo ride | **BPM− / BPM+** (±1 each tap) |
-
----
-
-## Build & flash
-
-Arduino IDE or PlatformIO: install ESP32 board support and the **M5Cardputer** library, select the M5Cardputer board (or ESP32-S3 Dev Module with USB CDC on boot), open `Microgroove.ino`, flash. A pre-built binary is on the Releases page for flashing without the Arduino IDE. Full details in the repo README.
-
----
-
-*Microgroove is open source (MIT). Synth voice, 808 drums, and the audio task architecture are derived from [Cardputer-Adv-Tracker](https://github.com/qwertyuu/Cardputer-Adv-Tracker) by qwertyuu (MIT). Factory sample pack released CC0 by lebiro.studio. If Microgroove earns a place on your desk, Ko-fi keeps the project moving.*
+Mini Studio 16 remains MIT licensed and retains the complete Microgroove
+copyright/permission notice. Microgroove is by lebiro.studio/matoslav and
+credits Cardputer-Adv-Tracker by qwertyuu. The factory sample pack is CC0 by
+lebiro.studio. Launcher by bmorcelli informed SD chunking/failure research; no
+Launcher code is included.

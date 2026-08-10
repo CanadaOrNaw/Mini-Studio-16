@@ -3,6 +3,9 @@
 #include "midi_event_queue.h"
 #include "midi_parser.h"
 #include "midi_transport.h"
+#include "midi_control_map.h"
+#include "event_looper.h"
+#include "motion.h"
 #include "sequencer.h"
 
 namespace {
@@ -20,6 +23,24 @@ void routeEvent(const MidiEvent& event) {
         case MIDI_TRANSPORT_STEP: sequencerExternalStep(); break;
         case MIDI_TRANSPORT_SEEK: sequencerExternalSongPosition(transport.songPosition); break;
         default: break;
+    }
+
+    if (event.type == MIDI_EVENT_CC) {
+        const MidiMappedControl mapped = midiMapControl(event.channel, event.data1);
+        if (mapped.kind == MIDI_MAPPED_NONE || mapped.synthTrack >= NUM_SYNTHS) return;
+        if (mapped.kind == MIDI_MAPPED_VOLUME) {
+            const float normalized = static_cast<float>(event.data2) / 127.0f;
+            g_synths[mapped.synthTrack].forEach(
+                [normalized](SynthVoice& voice) { voice.volume = normalized; });
+            return;
+        }
+        const uint8_t target = static_cast<uint8_t>(
+            (mapped.kind == MIDI_MAPPED_CUTOFF ? MOTION_TARGET_SYNTH1_CUTOFF
+                                                : MOTION_TARGET_SYNTH1_RESONANCE) +
+            mapped.synthTrack);
+        motionApplyRecordedControl(target, event.data2);
+        eventLooperRecordControl(sequencerEventRecordStep(), target, event.data2);
+        return;
     }
 
     if (event.type != MIDI_EVENT_NOTE_ON) return;

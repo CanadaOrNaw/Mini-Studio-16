@@ -17,13 +17,13 @@
 //                       (held while REC+playing = erase at playhead)
 // x c v b               arrows LEFT DOWN UP RIGHT (immediate, auto-repeat)
 // n   SONG              toggle song mode         RESAMPLE the mix (playing)
-//                                                -> then tap a pad to commit
+//                       SAMPLE: mode toggle       SAMPLE: stream bus to slot
+//                       SONG: song mode           SONG: stem recorder toggle
 // m   ACC               held = accent modifier   (none - pure modifier)
 // ,   SLD               toggle slide at cursor   (reserved)
-// .   AUX               SAMPLE pg: preview       MIC RECORD to current lane
-//                       SONG pg: set loop start  (keep holding = record,
-//                                                 release = trim + commit)
-// /   REC               toggle live record       (none)
+// .   AUX               page action/preview      MIC RECORD to lane/slot
+//                       SONG: set loop start      SONG: master recorder toggle
+// /   REC               toggle live record or page action
 // spc                   play / stop              play from top
 //
 // PIANO (PATTERN + SOUND pages, synth track selected)
@@ -139,8 +139,8 @@ static inline const char* actLongName(uint8_t act) {
         case ACT_CLR:    return "CLEAR PAT";
         case ACT_BPM_DN: return "OCT- / PRJ-";
         case ACT_BPM_UP: return "OCT+ / PRJ+";
-        case ACT_SONG:   return "RESAMPLE";
-        case ACT_AUX:    return "MIC SAMPLE";
+        case ACT_SONG:   return "SONG HOLD";
+        case ACT_AUX:    return "AUX HOLD";
     }
     return "";
 }

@@ -3,6 +3,7 @@
 // ============================================================
 #include "wavetable.h"
 #include "sampler.h"   // reuse WAV parsing helpers
+#include "sd_io_arbiter.h"
 #include <SD.h>
 #include <math.h>
 #include <string.h>
@@ -107,14 +108,16 @@ void wavetableInitBuiltins() {
 }
 
 void wavetableLoadUserFromSD() {
-    File dir = SD.open(DIR_WAVETABLES);
+    File dir;
+    { SdIoGuard guard; dir = SD.open(DIR_WAVETABLES); }
     if (!dir || !dir.isDirectory()) return;
 
     // temp buffer for decoded wav (single cycle files are small; cap 4096 frames)
     const int MAXF = 4096;
     static int16_t tmp[MAXF];
 
-    File f = dir.openNextFile();
+    File f;
+    { SdIoGuard guard; f = dir.openNextFile(); }
     while (f && g_numWavetables < NUM_WT_TOTAL) {
         String nm = f.name();
         int slash = nm.lastIndexOf('/');
@@ -143,8 +146,7 @@ void wavetableLoadUserFromSD() {
                 g_numWavetables++;
             }
         }
-        f.close();
-        f = dir.openNextFile();
+        { SdIoGuard guard; f.close(); f = dir.openNextFile(); }
     }
-    dir.close();
+    { SdIoGuard guard; dir.close(); }
 }

@@ -1,185 +1,110 @@
 # Mini Studio 16 implementation and verification plan
 
-Status: implementation branch `agent/v3-alpha-sd-streaming`
+Branch: `agent/v3-alpha-sd-streaming`
 
-This plan keeps the current groovebox usable while proving the risky parts in
-the order that can invalidate later work. A feature is not called verified
-until the corresponding gate passes on a physical Cardputer-ADV.
+All software-only milestones below are implemented. Their automated gates pass
+locally and are compiled in GitHub Actions; physical gates are explicitly left
+open until the Cardputer-ADV arrives.
 
 ## Fixed product targets
 
-- Six independent, SD-backed mono loop tracks, up to 20 seconds each. Track 1
-  establishes the exact frame length; tracks 2–6 start at its next boundary
-  and use the same frame count.
-- Sixteen sampler slots with a 40-second project quota, melodic and sliced-drum
-  playback modes, trim, pitch, gain, filter and step automation.
+- Six independent SD-backed mono loop tracks, up to 20 seconds each. Track 1
+  establishes the exact frame length; tracks 2–6 begin on its boundaries.
+- Sixteen streamed sampler slots sharing a 40-second normalized quota, melodic
+  and sliced playback, trim/pitch/gain/filter, and per-step locks.
 - Sixteen 16-step patterns and a 128-entry pattern chain.
-- Five role-neutral event tracks covering 128 bars.
-- BMI270 motion mappings and recordable motion automation.
-- BLE MIDI input/output/clock/transport.
-- USB MIDI input plus MIDI clock, start, continue and stop. Device mode and
-  direct USB-host controller mode are separate validation targets; direct
-  Yamaha/CYD connections depend on class compliance, OTG cabling and power.
-- Long master WAV recording to microSD, independent of the existing short
-  RAM-backed resampling workflow.
-- A versioned USB serial command protocol and companion CLI for automation,
-  diagnostics and OpenClaw-style control.
-- Optional stem export for synth 1, synth 2, synth 3 and the combined drum bus.
-- Existing speaker, microphone, headphone output and battery support.
-- A documented expansion interface for line input and conventional Bluetooth
-  A2DP audio. The ESP32-S3 cannot provide Bluetooth Classic A2DP by firmware.
+- Five event tracks over 128 bars.
+- BMI270 motion mapping, MIDI CC, and recorded automation.
+- BLE MIDI input/output and clock/transport.
+- Composite USB CDC+MIDI device mode plus a separately flashed direct
+  class-compliant USB-MIDI host mode.
+- Long master WAV recording, optional five-bus stem export, and the inherited
+  short resampler.
+- A bounded serial command protocol and CLI for diagnostics/automation.
+- Existing speaker, mic, headphone, keyboard, synth, drum, battery, project,
+  and factory-content support.
+- A future external interface for true line input and conventional Bluetooth
+  A2DP audio, neither of which stock S3 firmware can create.
 
-## Architecture boundaries
+## Non-negotiable architecture boundaries
 
-1. The audio render task never opens, seeks, reads, writes or closes a file.
-2. The storage task is the only owner of long-audio `File` objects.
-3. Audio crosses the task boundary through bounded single-producer,
-   single-consumer rings with monotonic counters.
-4. A storage stall produces a counted underrun/overrun and silence/dropout,
-   never a blocked audio callback or memory overrun.
-5. Long audio is stored as 22.05 kHz, mono, signed 16-bit WAV. Project files
-   contain metadata and filenames, not PCM.
-6. Existing GBX v1/v2 files remain readable. v3 writes a new version rather
-   than changing the legacy binary layout in place.
-7. New transport, recording and remote-control paths are additive. Existing
-   keyboard control, mic sampling, short resampling, synths and drums remain
-   available throughout the migration.
-8. USB serial commands are versioned, bounded and non-blocking. Parsing never
-   allocates memory or performs file I/O; commands enqueue or request work from
-   the subsystem that owns it.
-9. Master and stem audio use one real-time tap and a storage-side writer. Stem
-   export must not turn the audio render task into a multi-file SD writer.
+1. The audio renderer performs no file open/read/write/seek/close operation.
+2. Storage workers own long-audio files; PCM crosses tasks only through bounded
+   SPSC rings.
+3. A storage stall causes a counted underrun/overrun and deterministic silence
+   or dropped input, never a blocked render callback or out-of-bounds access.
+4. Long internal audio is 22.05 kHz mono signed 16-bit PCM. Projects contain
+   metadata and filenames, not long PCM payloads.
+5. A shared recursive arbiter serializes all FatFS calls and publishes
+   contention/failure/max-hold telemetry.
+6. Every persisted format is versioned. GBX v7 is current; v1–v6 load paths are
+   retained.
+7. New systems are additive. Original Microgroove workflows remain compiled
+   and usable.
+8. USB serial parsing is bounded/non-allocating and only requests subsystem
+   work; callbacks never perform audio storage I/O.
+9. USB device and host are separate images because the S3 exposes one native
+   USB PHY/role at a time.
 
-## Milestones and gates
+## Completed milestones
 
-### M0 — reproducible baseline
+| Milestone | Implemented result | Automated evidence | Physical gate |
+| --- | --- | --- | --- |
+| M0 reproducible build | Pinned PlatformIO/M5/TinyUSB/NimBLE dependencies; normal and host profiles; merged images | Both profiles compile/link in CI | Flash and boot |
+| M1 storage boundary | SPSC rings, SD diagnostic, central arbiter, latency/error/high-water metrics | Concurrent ring test; diagnostic and arbiter integration compile | Exact-card stall distribution and 10-minute soak |
+| M2 control plane | `MS16/1`, CLI, JSON, monitor/discovery, soak client | 100k malformed fuzz; 10k line soak; CLI tests | 10k commands while audio plays |
+| M3 master/stems | Long master WAV; interleaved five-bus stem container; splitter; temp recovery | WAV/session/header/split/recovery tests | 30-minute zero-drop files and power cuts |
+| M4 six loops | L1–L6 record/play/mute/volume/clear; exact timeline; SD refill; underrun resync; recovery | Timeline/stall/record/ring tests | Six streams for 30 minutes; six plus record |
+| M5 sampler/sequencer | 16 patterns, 128 chain, 16 streamed slots, 40-second quota, melodic/sliced, trim/params/locks, bus/mic recording, GBX v4+ | Layout, migration syntax, quota/slice/lock/voice tests | Reboot persistence and live latency |
+| M6 event/motion/MIDI | Five × 128-bar event tracks; BMI270 mappings/automation; BLE MIDI; composite USB device; alternate USB host | Event/motion/MIDI/BLE/USB descriptor tests; both images link | Gesture calibration, reconnect, enumeration, clock jitter |
+| M7 full duplex/expansion | Low-level experiment boundary, cap pin map, fixed PCM packet/CRC contract, and external hardware requirements | Packet layout/CRC/bounds host-tested; no safe analog/RF host-only substitute exists | ES8311 experiment; line/A2DP hardware |
 
-- Add a checked-in PlatformIO environment matching the README.
-- Compile the unmodified firmware and record flash/RAM usage.
-- Preserve a baseline merged image.
+## Hardware test sequence
 
-Gate: clean compile and link with pinned dependencies.
+Run in this order so a failing lower layer does not invalidate later results.
 
-### M1 — storage diagnostics and transport primitive
+1. Flash normal image; collect boot/heap/subsystem telemetry; regress display,
+   keyboard, speaker, headphones, mic, synths, drums, save/load, and short
+   sampling.
+2. Cold-mount the FAT32 card ten times. Run SD diagnostics three times while
+   audio plays, then a ten-minute storage soak.
+3. Exercise loop L1 alone, then L1–L6, then L1–L6 plus one new recording.
+4. Fill all 16 sampler slots to the 40-second quota; test pitch/slices/locks;
+   save, reboot, and reload.
+5. Run five event tracks and motion automation through 128 bars.
+6. Capture 1-, 10-, and 30-minute master/stem sessions; inspect frames, drops,
+   WAV/container structure, and split stems.
+7. Perform intentional recording power cuts on a disposable SD card and verify
+   recovery/quarantine behavior.
+8. Pair BLE MIDI and run reconnect plus 30-minute external-clock tests.
+9. Validate composite USB CDC+MIDI with a computer/DAW while the CLI runs.
+10. Flash the host image and validate Yamaha/CYD with the correct OTG/VBUS
+    arrangement, including attach/detach and non-MIDI devices.
+11. Calibrate gesture thresholds and test lower-level ES8311 full duplex.
 
-- Add a host-tested power-of-two SPSC PCM ring.
-- Add on-device SD tests for sequential write/read and six-file round-robin
-  reads using the same chunk size as the proposed audio worker.
-- Report minimum heap, maximum operation latency and pass/fail thresholds over
-  USB serial and on the device.
+## Initial pass criteria
 
-Gate: no ring corruption in stress tests; the physical card sustains the test
-for ten minutes without an operation stall longer than the configured buffer
-reservoir.
-
-### M2 — versioned control plane
-
-- Add a bounded `MS16/1` USB serial protocol with request IDs and explicit
-  success/error responses.
-- Expose status, transport, tempo, note/drum triggers, SD diagnostics and
-  master-recorder control without removing device-keyboard control.
-- Add a desktop CLI whose framing and response parser are host-tested without
-  requiring a connected device.
-
-Gate: malformed/oversized input cannot overflow buffers or stall the main
-loop; every request receives a correlated response; host parser/CLI tests and
-the target firmware build pass.
-
-Current pre-hardware status: parser fuzzing, line soak, correlated protocol,
-JSON CLI output, port discovery and monitoring are implemented. Device-side
-soak remains pending.
-
-### M3 — long master recording and stem capture
-
-- Add a master-bus SPSC recording ring and a storage-owned WAV writer.
-- Record to a temporary WAV, finalize its header, then publish a unique file in
-  `/groovebox/recordings`.
-- Preserve the existing short resampling sampler as a separate workflow.
-- Count ring overruns, write failures, maximum SD write latency and frames.
-- Capture master plus synth 1/2/3/drum buses into one sequential storage stream
-  when stems are enabled, then split/export outside the real-time renderer.
-
-Gate: a 30-minute master recording has a valid header, exact frame count and
-zero dropped frames; recovery and stem splitting survive interruption tests.
-
-Current pre-hardware status: master and five-bus sequential writers, temporary
-file recovery/quarantine, stem container, interleaving and desktop splitting
-are implemented. Physical zero-drop and power-cut tests remain pending.
-
-### M4 — six-track loop engine
-
-- Add one storage worker, per-track playback rings and one recording ring.
-- Record to a temporary WAV, finalize its header, then replace the old track.
-- Keep a recoverable backup until the replacement is finalized.
-- Add empty/armed/recording/playing/muted/error states and underrun counters.
-- Add a LOOP page and six-track controls.
-
-Gate: six generated 20-second tracks play for 30 minutes with zero underruns;
-recording a seventh input stream while six play is tested separately.
-
-Current pre-hardware status: six-track lifecycle and exact Track-1 boundary
-model are host-tested. SD-backed playback/recording waits on measured M1 data.
-
-### M5 — sequencer and sampler model
-
-- Expand to 16 patterns and a 128-entry chain with banked UI.
-- Introduce GBX v3 and migrate GBX v1/v2 on load.
-- Replace RAM-only sample descriptors with hybrid cached/streamed assets.
-- Add 16 melodic/sliced slots and parameter locks.
-
-Gate: legacy projects load identically; v3 save/load round-trips byte-stable
-metadata; 40 seconds of sample audio remains playable after reboot.
-
-### M6 — event looper, motion, BLE MIDI and USB MIDI
-
-- Add five timestamped event tracks, 128-bar bounds and event decimation.
-- Read BMI270 at 50–100 Hz, filter tilt/gyro/jerk and map them to parameters.
-- Add BLE MIDI notes, CC, clock and transport with bounded queues.
-- Add USB MIDI input, 24 PPQN clock, start/continue/stop and optional song
-  position handling. Validate USB-device and USB-host roles independently.
-
-Gate: event save/load round-trip; recorded automation returns to the same
-musical tick; BLE disconnect/reconnect and USB attach/detach never stall audio;
-external clock drives a repeatable transport without main-loop drift.
-
-Current pre-hardware status: MIDI running-status/realtime parsing, bounded
-queueing, note/drum routing, song position and external transport stepping are
-implemented. The pinned Arduino-ESP32 2.0.16 environment has no high-level
-`USBMIDI` class, so the device adapter requires a deliberate TinyUSB component
-integration or framework migration; see `USB_MIDI_TOOLCHAIN.md`. USB/BLE
-adapters and device validation remain pending.
-
-### M7 — input and wireless-audio hardware validation
-
-- Prototype a single low-level full-duplex I2S owner for ES8311 TX/RX; do not
-  run the independent M5Unified speaker and mic drivers on the same I2S port.
-- Measure feedback, clocking and CPU cost on Cardputer-ADV.
-- If onboard full duplex is unsuitable, use the expansion audio codec for line
-  input and monitored recording.
-- Conventional Bluetooth headphones/speakers require an external Bluetooth
-  Classic A2DP coprocessor; the S3 firmware exposes a digital PCM interface to
-  that board.
-
-Gate: monitored recording has no I2S driver conflicts or unstable feedback;
-external audio hardware passes latency and noise checks.
-
-## Initial hardware test matrix
-
-Record the exact card brand/model/capacity/filesystem for every result.
-
-| Test | Minimum run | Pass condition |
+| Test | Minimum | Pass condition |
 | --- | ---: | --- |
-| 4 KiB sequential read | 2 min | average payload > 1.0 MB/s |
-| 4 KiB sequential write | 2 min | average payload > 0.5 MB/s |
-| Six-file 4 KiB round-robin read | 10 min | zero errors; max stall covered by ring |
-| Six playback streams | 30 min | zero audio underruns |
-| Six playback + one record | 10 min | zero underruns/overruns and valid WAV |
-| Master WAV record | 30 min | zero dropped frames; exact playable duration |
-| USB serial soak | 10,000 commands | correlated replies; no reboot or audio stall |
-| USB MIDI clock | 30 min | stable transport; start/continue/stop repeatable |
-| Power loss during recording | 10 cycles | prior loop remains recoverable |
-| BLE reconnect while playing | 20 cycles | no audio task stall or reboot |
+| 4 KiB sequential read | 2 min | average payload > 1.0 MiB/s |
+| 4 KiB sequential write | 2 min | average payload > 0.5 MiB/s |
+| Six-file round-robin read | 10 min | zero errors; worst stall covered by reservoir |
+| Six loop streams | 30 min | zero phase drift; zero audible underruns |
+| Six loops + recording | 10 min | zero underruns/overruns; valid published WAV |
+| Full sampler quota | reboot cycle | all 16 metadata/events/locks valid and playable |
+| Master/stems | 30 min | zero drops; exact duration/frame counts |
+| Serial protocol | 10,000 commands | correlated replies; no reboot/audio stall |
+| BLE/USB clock | 30 min each | repeatable transport; no stuck notes/reboot |
+| Attach/reconnect | 20 cycles | no leak, crash, or audio-task stall |
+| Power loss | 10 cycles | prior valid take survives; temp repaired/quarantined |
 
-The thresholds are intentionally conservative starting points. The measured
-latency distribution, not the card label or peak throughput, determines the
-final chunk and ring sizes.
+These thresholds are starting gates, not product specifications. Measured
+latency distributions and free-heap telemetry determine any final buffer-size
+changes.
+
+## Plan-amendment rule
+
+Hardware results must be committed with the firmware SHA, board revision, card
+model/capacity/filesystem/cluster size, test duration, and full telemetry. A
+failed gate creates a focused bug-fix item and rerun; it does not get relabeled
+as “passed” from theoretical bandwidth or a successful compile.

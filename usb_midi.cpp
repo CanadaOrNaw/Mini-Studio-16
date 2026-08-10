@@ -36,6 +36,7 @@ alignas(4) uint32_t s_messagesSent = 0;
 alignas(4) uint32_t s_errors = 0;
 bool s_transferInFlight = false;
 bool s_cancelRequested = false;
+bool s_interfaceClaimed = false;
 
 void inputTransferComplete(usb_transfer_t* transfer) {
     s_transferInFlight = false;
@@ -83,13 +84,15 @@ void closeDevice() {
         usb_host_transfer_free(s_inputTransfer);
         s_inputTransfer = nullptr;
     }
-    if (s_device && s_interface.found)
+    if (s_device && s_interfaceClaimed)
         usb_host_interface_release(s_client, s_device, s_interface.interfaceNumber);
     if (s_device) usb_host_device_close(s_client, s_device);
     s_device = nullptr;
     s_interface = {};
+    s_messages.reset();
     s_transferInFlight = false;
     s_cancelRequested = false;
+    s_interfaceClaimed = false;
     __atomic_store_n(&s_deviceAddress, 0u, __ATOMIC_RELEASE);
     __atomic_fetch_and(&s_actions, ~kActionClose, __ATOMIC_ACQ_REL);
 }
@@ -112,8 +115,13 @@ void openDevice() {
         reinterpret_cast<const uint8_t*>(config), config->wTotalLength);
     if (!s_interface.found ||
         usb_host_interface_claim(s_client, s_device, s_interface.interfaceNumber,
-                                 s_interface.alternateSetting) != ESP_OK ||
-        usb_host_transfer_alloc(s_interface.inputMaxPacket, 0,
+                                 s_interface.alternateSetting) != ESP_OK) {
+        __atomic_add_fetch(&s_errors, 1u, __ATOMIC_RELAXED);
+        __atomic_fetch_or(&s_actions, kActionClose, __ATOMIC_ACQ_REL);
+        return;
+    }
+    s_interfaceClaimed = true;
+    if (usb_host_transfer_alloc(s_interface.inputMaxPacket, 0,
                                 &s_inputTransfer) != ESP_OK) {
         __atomic_add_fetch(&s_errors, 1u, __ATOMIC_RELAXED);
         __atomic_fetch_or(&s_actions, kActionClose, __ATOMIC_ACQ_REL);
@@ -176,8 +184,12 @@ void clientTask(void*) {
 
 void usbMidiInit() {
     s_messages.reset();
+    __atomic_store_n(&s_actions, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_deviceAddress, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_available, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_mounted, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_bytesReceived, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_messagesSent, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_errors, 0u, __ATOMIC_RELEASE);
     usb_host_config_t config = {};
     config.skip_phy_setup = false;
@@ -204,8 +216,9 @@ void usbMidiUpdate() {
 }
 
 bool usbMidiSend(const uint8_t*, size_t) {
-    __atomic_add_fetch(&s_errors, 1u, __ATOMIC_RELAXED);
-    return false;  // Host profile is controller-input-only for the first hardware pass.
+    // The first host profile is intentionally controller-input-only. Internal
+    // note/CC mirrors are therefore unsupported, not transport errors.
+    return false;
 }
 
 UsbMidiSnapshot usbMidiSnapshot() {

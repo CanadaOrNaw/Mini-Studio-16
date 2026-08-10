@@ -10,5 +10,10 @@ Copy the `groovebox/` folder to the root of a FAT32 microSD card:
 - `groovebox/wavetables/` — empty; drop single-cycle WAVs (AKWF) here and
   they appear as extra oscillators.
 
+Mini Studio 16 creates `groovebox/loops`, `groovebox/recordings`, and
+`groovebox/diag` as needed. The inherited P1 project loads through the legacy
+GBX migration path; saving writes the current GBX v7 format while retaining a
+backup of the prior project.
+
 The demo project uses only the built-in 808/909 engines, so it plays even
-without the sample pack. Also available as a one-click zip on the Releases page.
+without the sample pack.

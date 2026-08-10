@@ -554,15 +554,15 @@ static void drawDiagPage() {
 static void drawHelpPage() {
     static const char* lines[] = {
         "spc play/stop (hold=from top)",
-        "ctl page  / rec  z clr  xcvb=arrows",
+        "ctl page  / action z clear xcvb move",
         "` 1 2 3 tracks (hold=mute)",
         "4..- patterns; tab bank A/B",
         "= load  del save  (both=demo)",
         "opt/alt bpm-+ (hold=octave/prj)",
-        "notes: home row + q w r t y ...",
-        "hold m=accent  , slide  n song",
-        "hold . 0.5s = MIC SAMPLE lane",
-        "hold n while playing = RESAMPLE",
+        "SAMPLE: tab browse/sound/lock",
+        "LOOP: /=rec .=mute x/b=volume",
+        "EVENT /=arm  MOTION .=target",
+        "SONG hold .=master n=stems",
     };
     int y = 16;
     canvas.setTextColor(COL_DIM);
@@ -591,7 +591,7 @@ void uiDraw() {
         case PAGE_MOTION:  drawMotionPage();
             drawFooter("v/c:map x/b:source .:target z:clear"); break;
         case PAGE_SONG:    drawSongPage();
-            drawFooter("hold .=master  hold n=stems"); break;
+            drawFooter("4..-:set z:clr | hold .=master n=stems"); break;
         case PAGE_DIAG:    drawDiagPage();
             drawFooter("/:run  keep music playing"); break;
         default:           drawHelpPage();

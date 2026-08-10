@@ -1,127 +1,203 @@
-# Cardputer-ADV alpha test guide
+# Cardputer-ADV hardware validation guide
 
-This branch is an engineering alpha. It preserves the existing instrument and
-adds the first measurements needed before long-audio streaming is enabled.
+Use this guide when the physical device arrives. Record the firmware commit,
+board revision, SD make/model/capacity/filesystem/cluster size, exact command,
+duration, and complete serial output for every pass or failure.
 
-## Build and flash
+## 1. Prepare and flash
 
-Build with the checked-in PlatformIO environment:
+1. Back up the SD card and use FAT32 for the first pass.
+2. Build or download a CI artifact only after host, sanitizer, and firmware jobs
+   all pass.
+3. Flash the normal merged image at offset `0x0`:
+
+   ```bash
+   esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
+   ```
+
+4. Open a 115200-baud serial monitor and save the full boot log.
+5. Confirm `BOOT_READY` reports `sd=1`, sensible `heapFree`/`heapLargest`, and
+   `BOOT_SUBSYSTEM` reports loop, sampler, motion, BLE, and USB availability.
+6. Save all recovery and SD-arbiter lines. Do not accept a boot loop, watchdog,
+   allocation failure, or subsystem silently unavailable.
+
+Direct source build/upload:
 
 ```bash
 pio run -e m5stack-cardputer-adv
-```
-
-Upload over USB:
-
-```bash
 pio run -e m5stack-cardputer-adv -t upload --upload-port /dev/ttyACM0
 ```
 
-Or flash the CI-produced merged image at offset `0x0`:
+## 2. Inherited-function regression
+
+Before stressing new systems, verify the original instrument:
+
+- display/splash and every keyboard key;
+- all three synth tracks, mono/poly/chords/accent/slide;
+- all eight drum lanes, mute, tune, decay, choke, and RAM samples;
+- speaker and headphone output;
+- built-in mic short sample and short master resample;
+- patterns, song chain, project save/load, and v1/v2 migration sample if
+  available;
+- ten consecutive cold boots with SD mount.
+
+Any regression is a blocker even if the new feature works.
+
+## 3. SD diagnostic
+
+1. Start the demo or a dense pattern and leave it playing.
+2. Tap `ctrl` to the SD TEST page and press `/`.
+3. Do not remove the card or power while RUNNING.
+4. Save the final screen and complete `SDDIAG` line.
+5. Repeat three times after cold boots, then run the longer soak/loop tests.
+
+The quick diagnostic writes/reads generated data under `/groovebox/diag`,
+checks sequential and six-file round-robin traffic, validates content, and
+reports throughput, maximum operation latency, minimum heap, and errors.
+
+Initial quick-screen gates:
+
+- write at least 500 KiB/s;
+- sequential and six-file reads at least 1,000 KiB/s;
+- no measured read/write/flush stall above 75 ms;
+- no data, open, read, write, seek, or cleanup errors.
+
+Preserve failures: maximum stall and minimum heap matter more than PASS/FAIL.
+
+## 4. Six-track looper
+
+Standalone controls: LOOPS page, `v/c` select, `x/b` volume, `/` record/stop,
+`.` mute, `z` clear. CLI equivalents:
 
 ```bash
-esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 record
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 stop
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop 2 record
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 volume 75
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop-status
 ```
 
-Do not flash an image until its build job and host-tests job both pass.
+Verify:
 
-## SD test procedure
+- L1 free-stops and fixes the exact timeline, capped at 20 seconds;
+- L2–L6 wait for an L1 boundary and stop at exactly L1's frame count;
+- mute consumes audio and unmute returns at the correct phase;
+- volume changes are click-free enough for use and persist through GBX v7;
+- six tracks play for 30 minutes without phase drift or audible underrun;
+- an injected/real stall increments underrun and the track returns only at the
+  next boundary, never late/off-phase;
+- recording while six tracks play produces no ring drops or corrupt WAV;
+- clearing L1 clears the shared timeline/all tracks as documented.
 
-1. Back up the card. The test only creates files under `/groovebox/diag`, but a
-   backup is still appropriate before testing development firmware.
-2. Insert the FAT32 card and boot Microgroove.
-3. Start the demo or a pattern and keep it playing. The point is to exercise
-   storage without stopping the existing audio renderer.
-4. Tap `ctrl` until the `SD TEST` page appears.
-5. Press `/` once. Do not remove power or the card while the page says RUNNING.
-6. Record the final screen and the one-line `SDDIAG` result from a 115200-baud
-   USB serial monitor.
-7. Repeat at least three times after a cold boot.
+## 5. Streamed sampler
 
-This built-in test is a quick screening pass over 3 MiB of generated data. A
-passing result permits longer qualification work; it does not satisfy the
-10-minute M1 soak gate by itself.
+Fill all 16 slots with mono 16-bit WAVs. Exercise melodic and sliced modes,
+all 16 performance keys, trim, pitch, gain, cutoff, resonance, four overlapping
+voices, pattern events, and step locks. Then record both bus and mic sources:
 
-Example serial result:
-
-```text
-SDDIAG state=PASS write=1234KB/s read=2456KB/s rr6=1789KB/s maxWrite=18000us maxRead=9000us minHeap=121000 errors=0
+```bash
+python tools/ministudio_cli.py --port /dev/ttyACM0 sample-record 1 bus melodic
+python tools/ministudio_cli.py --port /dev/ttyACM0 sample-stop 1
+python tools/ministudio_cli.py --port /dev/ttyACM0 sample-record 2 mic sliced
+python tools/ministudio_cli.py --port /dev/ttyACM0 sample-stop 2
+python tools/ministudio_cli.py --port /dev/ttyACM0 sample-status
 ```
 
-PASS currently means:
+The total normalized duration must stop at 40 seconds. Save a project, reboot,
+reload, and confirm all slots, modes, trims, parameters, events, and locks.
+Require zero unexplained underruns/drops and no audio-task stalls.
 
-- write throughput at least 500 KiB/s;
-- sequential and six-file read throughput at least 1000 KiB/s;
-- no individual measured read/write/flush stall above 75 ms;
-- no read, write or data-verification errors.
+## 6. Event looper and motion
 
-These are starting gates, not marketing specifications. Save FAIL results too;
-the maximum stall and minimum heap are more useful than the label.
+Set each of five tracks to a different length including 128 bars. Arm, perform
+synth/drum/sample parts, mute/unmute, save/reboot, and confirm musical tick
+alignment. Fill toward the bounded 2,048-event capacity and verify graceful
+rejection rather than corruption.
 
-## Master recording test
+On MOTION, exercise tilt X/Y, acceleration, gyro, shake, and slap. Calibrate
+neutral position, useful range, noise, cooldown, and false triggers. Record
+motion automation into an armed event track and confirm repeatable playback.
+Verify outgoing mapping CCs on channel 16, controllers 16–19.
 
-With a pattern playing, use the CLI:
+## 7. Master and stems
+
+Standalone SONG-page controls: hold `.` toggles master; hold `n` toggles stems.
+CLI:
 
 ```bash
 python tools/ministudio_cli.py --port /dev/ttyACM0 master start
 python tools/ministudio_cli.py --port /dev/ttyACM0 status
 python tools/ministudio_cli.py --port /dev/ttyACM0 master stop
+python tools/ministudio_cli.py --port /dev/ttyACM0 stems start
+python tools/ministudio_cli.py --port /dev/ttyACM0 stems stop
 ```
 
-Copy the reported `MASTERnnn.wav` from `/groovebox/recordings`. Confirm that its
-duration matches elapsed recording time, it opens without repair, and the final
-`MASTER` line and `status` both report `dropped=0` and `errors=0`. Repeat for 1,
-10, and 30 minutes.
-
-For recovery, begin another recording, wait at least five seconds, and remove
-power without sending `master stop`. On the next boot the firmware must report
-`MASTER_RECOVERY state=RECOVERED`, preserve `RECOVERnnn.wav`, and allow a new
-master recording. Use a disposable/test SD card for intentional power cuts.
-
-## Stem capture test
-
-Run `stems start`, play all three synth tracks and drums, then run `stems stop`.
-Copy the reported `.mss` file and split it:
+Run 1-, 10-, and 30-minute master and stem captures with dense audio plus SD
+streams. Require exact duration/frame count, valid headers, `dropped=0`, and
+`errors=0`. Copy `.mss` and split it:
 
 ```bash
 python tools/split_stems.py STEM001.mss exported-stems
 ```
 
-All five WAVs must have identical frame counts. Muting a source on the device
-must make its corresponding stem silent while leaving the other buses intact.
-The final `STEMS` line must report `dropped=0` and `errors=0`. Master and stem
-recording are intentionally mutually exclusive in this alpha.
+All five WAVs must have identical frame counts; isolated buses must contain the
+expected audio/silence. Master and stems are mutually exclusive.
 
-## USB serial soak
+On a disposable card, power off during active master, stem, loop, and sampler
+recording. On reboot, require a structurally valid recovery or `.bad`
+quarantine, preservation of the last published take, and ability to record
+again. Repeat ten cycles.
 
-Run at least 10,000 alternating `ping`, `status`, tempo and transport requests.
-Every `MS16/1` response must repeat the request ID. Keep audio playing and note
-any click, UI stall, missing response, reboot, or nonzero `midiDropped` value.
+## 8. Serial and composite USB MIDI
 
-The checked-in soak client performs the correlated request test:
+Run the CLI soak while dense audio, six loops, and motion are active:
 
 ```bash
 python tools/protocol_soak.py --port /dev/ttyACM0 --count 10000
 ```
 
-## New sequencer controls
+Require correlated request IDs, no reboot/UI/audio stall, and bounded error
+counters. Then connect a computer/DAW and verify that CDC and MIDI enumerate
+together. Test notes, CC, clock, song position, start/continue/stop, output
+mirroring, unplug/replug 20 times, and a 30-minute external-clock session.
 
-- `tab` switches pattern bank A/B.
-- Bank A maps the eight pattern keys to patterns 1–8.
-- Bank B maps them to patterns 9–16.
-- Song mode now has 128 entries. Moving the cursor past entry 64 switches the
-  visible grid to entries 65–128.
-- Projects save as GBX v3. GBX v1/v2 projects still load into the first eight
-  patterns and first 64 chain entries.
-- Saving uses a temporary file and retains the prior project as `P#.gbx.bak`
-  after a successful replacement.
+## 9. BLE MIDI
 
-## Results to return for the next iteration
+Pair `Mini Studio 16`. Test notes, CC, clock/transport, outgoing motion CC, and
+twenty disconnect/reconnect cycles while audio plays. Require no stuck notes,
+queue growth, reboot, or render stall. Record malformed/dropped packet counters.
 
-- Card make, model, capacity and FAT32 cluster size.
-- All `SDDIAG` lines, including failures.
-- Whether audio clicked, paused or rebooted during the six-file read.
-- Any screen freeze or keyboard lag.
-- Whether the card cold-boots and mounts reliably on ten consecutive starts.
-- Master/stem final metrics, file durations, and whether interrupted captures
-  recovered successfully.
+## 10. Direct USB-MIDI host profile
+
+Before connecting anything, document the OTG adapter and safe VBUS/powered-hub
+arrangement. Never connect two powered hosts together.
+
+Flash:
+
+```bash
+esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha-usb-host.bin
+```
+
+Test Yamaha, CYD, disconnect during traffic, twenty reconnects, a non-MIDI
+device, and 30 minutes of clock. This profile is input-only and lacks CDC, so
+use UI/audio behavior plus any available hardware debug path. Document how the
+normal image is restored.
+
+## 11. Built-in full duplex
+
+The inherited high-level path switches between mic and speaker. Test the
+current behavior first. A later lower-level ES8311 experiment may attempt one
+I2S owner for simultaneous ADC/DAC; monitor for driver conflicts, feedback,
+clock errors, noise, CPU load, and audio drops. Do not claim full duplex from
+compile success.
+
+## Results required for each bug-fix pass
+
+- firmware commit and image SHA-256;
+- board revision and power/cable setup;
+- SD card identity/filesystem/cluster size;
+- exact reproduction steps and duration;
+- full boot plus relevant `MS16/1`, `SDDIAG`, recorder, loop, sampler, MIDI,
+  heap, and SD-arbiter telemetry;
+- produced file(s), or at least sizes/frame counts/checksums;
+- whether audio clicked, phase-shifted, muted, froze, rebooted, or recovered.

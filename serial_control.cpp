@@ -429,7 +429,7 @@ void dispatch(const ControlRequest& request) {
                           " %s OK queueDrops=%lu usbAvailable=%u usbMounted=%u usbHost=%u "
                           "usbRx=%lu usbTx=%lu usbErrors=%lu bleAvailable=%u "
                           "bleConnected=%u bleRx=%lu bleTx=%lu bleMalformed=%lu "
-                          "bleDrops=%lu\n",
+                          "bleDrops=%lu clockDrops=%lu\n",
                           request.id, static_cast<unsigned long>(midiInputDroppedEvents()),
                           usb.available ? 1u : 0u, usb.mounted ? 1u : 0u,
                           usb.hostMode ? 1u : 0u,
@@ -440,7 +440,8 @@ void dispatch(const ControlRequest& request) {
                           static_cast<unsigned long>(ble.packetsReceived),
                           static_cast<unsigned long>(ble.packetsSent),
                           static_cast<unsigned long>(ble.malformedPackets),
-                          static_cast<unsigned long>(ble.droppedPackets));
+                          static_cast<unsigned long>(ble.droppedPackets),
+                          static_cast<unsigned long>(sequencerMidiClockDropped()));
             break;
         }
 

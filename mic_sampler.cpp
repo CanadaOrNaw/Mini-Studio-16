@@ -70,10 +70,18 @@ static bool writeWav(const char* name, uint32_t start, uint32_t frames, uint32_t
     memcpy(h + 28, &brate, 4);
     memcpy(h + 40, &dataBytes, 4);
     bool ok = false;
-    { SdIoGuard guard;
-      ok = f.write(h, 44) == 44 &&
-           f.write((uint8_t*)(g_scratch + start), dataBytes) == dataBytes;
-      f.close(); }
+    { SdIoGuard guard; ok = f.write(h, 44) == 44; }
+    uint32_t written = 0;
+    while (ok && written < dataBytes) {
+        const uint32_t remaining = dataBytes - written;
+        const uint32_t chunk = remaining < 4096u ? remaining : 4096u;
+        size_t got = 0;
+        { SdIoGuard guard;
+          got = f.write(reinterpret_cast<uint8_t*>(g_scratch + start) + written, chunk); }
+        if (got != chunk) ok = false;
+        else written += chunk;
+    }
+    { SdIoGuard guard; f.close(); }
     return ok;
 }
 

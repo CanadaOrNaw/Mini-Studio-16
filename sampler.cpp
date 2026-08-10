@@ -17,6 +17,16 @@ SampleInfo g_samples[MAX_SAMPLES];
 uint8_t    g_numSamples   = 0;
 
 bool samplerInit() {
+    // Directory availability must not depend on whether the optional legacy
+    // RAM pool fits; streamed audio and projects use the same root.
+    {
+        SdIoGuard guard;
+        if (!SD.exists(DIR_ROOT))       SD.mkdir(DIR_ROOT);
+        if (!SD.exists(DIR_SAMPLES))    SD.mkdir(DIR_SAMPLES);
+        if (!SD.exists(DIR_WAVETABLES)) SD.mkdir(DIR_WAVETABLES);
+        if (!SD.exists(DIR_PROJECTS))   SD.mkdir(DIR_PROJECTS);
+    }
+
     // Worker stacks and the wireless stacks are created after this call.
     // Preserve their boot reserve instead of letting the legacy RAM pool take
     // every currently-free byte before those subsystems start.
@@ -27,13 +37,24 @@ bool samplerInit() {
         ? freeBytes - kBootReserveBytes : 0;
     if (bytes > SAMPLE_POOL_BYTES) bytes = SAMPLE_POOL_BYTES;
     bytes &= ~static_cast<uint32_t>(16u * 1024u - 1u);
-    if (bytes < 32u * 1024u) bytes = 32u * 1024u;
+    if (bytes < 32u * 1024u) {
+        Serial.printf("RAM_SAMPLE_POOL unavailable free=%lu reserve=%lu\n",
+                      static_cast<unsigned long>(freeBytes),
+                      static_cast<unsigned long>(kBootReserveBytes));
+        return false;
+    }
     while (bytes >= 32 * 1024) {
         g_samplePool = (int16_t*)heap_caps_malloc(bytes, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
         if (g_samplePool) break;
         bytes -= 16 * 1024;
     }
-    if (!g_samplePool) return false;
+    if (!g_samplePool) {
+        Serial.printf("RAM_SAMPLE_POOL allocation_failed free=%lu reserve=%lu\n",
+                      static_cast<unsigned long>(heap_caps_get_free_size(
+                          MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)),
+                      static_cast<unsigned long>(kBootReserveBytes));
+        return false;
+    }
     g_poolCapacity = bytes / sizeof(int16_t);
     Serial.printf("RAM_SAMPLE_POOL bytes=%lu free_after=%lu reserve=%lu\n",
                   static_cast<unsigned long>(bytes),
@@ -41,12 +62,6 @@ bool samplerInit() {
                       MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)),
                   static_cast<unsigned long>(kBootReserveBytes));
     samplerClearAll();
-
-    SdIoGuard guard;
-    if (!SD.exists(DIR_ROOT))       SD.mkdir(DIR_ROOT);
-    if (!SD.exists(DIR_SAMPLES))    SD.mkdir(DIR_SAMPLES);
-    if (!SD.exists(DIR_WAVETABLES)) SD.mkdir(DIR_WAVETABLES);
-    if (!SD.exists(DIR_PROJECTS))   SD.mkdir(DIR_PROJECTS);
     return true;
 }
 
@@ -150,6 +165,7 @@ bool wavDecodeToMono16(File& f, int16_t* dst, uint32_t maxFrames,
 
 int samplerLoad(const char* filename) {
     if (masterRecorderIsBusy() || stemRecorderIsBusy()) return -1;
+    if (!g_samplePool || g_poolCapacity == 0) return -1;
     int existing = samplerFindByName(filename);
     if (existing >= 0) return existing;
     if (g_numSamples >= MAX_SAMPLES) return -1;

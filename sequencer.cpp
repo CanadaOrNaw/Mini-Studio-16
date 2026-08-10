@@ -10,6 +10,7 @@
 #include "motion.h"
 #include "midi_input.h"
 #include "midi_output.h"
+#include "midi_clock_output.h"
 
 Pattern    g_patterns[NUM_PATTERNS];
 uint8_t    g_song[SONG_LENGTH];
@@ -40,6 +41,7 @@ extern bool g_needRedraw;   // owned by ui.cpp
 static uint32_t s_stepUs      = 0;
 static uint32_t s_lastStepUs  = 0;
 static bool     s_externalClock = false;
+static MidiClockOutputScheduler s_midiClock;
 static uint32_t s_stepPeriod() { return 60000000UL / g_bpm / 4; }   // 16th notes
 
 void sequencerInit() {
@@ -68,6 +70,7 @@ void sequencerInit() {
     g_drumLanes[6].chokeGroup = 1;
     g_drumLanes[7].chokeGroup = 1;
     eventLooperInit();
+    s_midiClock.reset();
 }
 
 // ---------- triggering ----------
@@ -151,12 +154,15 @@ static void prepareStart(bool fromTop) {
 void sequencerStart(bool fromTop) {
     s_externalClock = false;
     prepareStart(fromTop);
-    s_lastStepUs = micros() - s_stepPeriod();   // fire step immediately
+    const uint32_t now = micros();
+    s_lastStepUs = now - s_stepPeriod();   // fire step immediately
+    s_midiClock.start(now);
     if (!midiInputIsDispatching()) midiOutputRealtime(fromTop ? 0xFA : 0xFB);
 }
 
 void sequencerStop() {
     s_externalClock = false;
+    s_midiClock.stop();
     g_playing = false;
     g_playStep = 0;
     eventLooperResetTransport();
@@ -191,6 +197,8 @@ static void advanceOneStep() {
 void sequencerTick() {
     if (!g_playing || s_externalClock) return;
     uint32_t now = micros();
+    uint8_t clockPulses = s_midiClock.pulsesDue(now, g_bpm);
+    while (clockPulses--) midiOutputRealtime(0xF8);
     if (now - s_lastStepUs < s_stepPeriod()) return;
     s_lastStepUs += s_stepPeriod();                 // accumulate: no drift
     advanceOneStep();
@@ -198,10 +206,11 @@ void sequencerTick() {
 
 void sequencerExternalStart(bool fromTop) {
     s_externalClock = true;
+    s_midiClock.stop();
     prepareStart(fromTop);
 }
 
-void sequencerExternalStop() { g_playing = false; }
+void sequencerExternalStop() { g_playing = false; s_midiClock.stop(); }
 
 void sequencerExternalStep() {
     if (s_externalClock && g_playing) advanceOneStep();
@@ -224,6 +233,8 @@ uint16_t sequencerEventRecordStep() {
     return (micros() - s_lastStepUs > s_stepPeriod() / 2)
         ? g_eventLoopPosition : previous;
 }
+
+uint32_t sequencerMidiClockDropped() { return s_midiClock.dropped(); }
 
 // ---------- live input ----------
 // quantize: current step if within first half, else next step

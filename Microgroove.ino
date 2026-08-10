@@ -68,10 +68,11 @@ void setup() {
     stemRecorderInit(s_sdOk);
 
     // Modules
-    micSamplerInit();                // scratch first, then sample pool
+    const bool scratchOk = micSamplerInit();  // scratch first, then sample pool
+    bool legacySamplerOk = false;
     wavetableInitBuiltins();
     if (s_sdOk) {
-        samplerInit();               // also creates /groovebox dirs
+        legacySamplerOk = samplerInit();  // also creates /groovebox dirs
         wavetableLoadUserFromSD();
     }
     loopEngineInit(s_sdOk);
@@ -106,10 +107,12 @@ void setup() {
                       MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)),
                   static_cast<unsigned long>(heap_caps_get_largest_free_block(
                       MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)));
-    Serial.printf("BOOT_SUBSYSTEM loop=%u sampler=%u motion=%u ble=%u usb=%u\n",
+    Serial.printf("BOOT_SUBSYSTEM scratch=%u legacySampler=%u loop=%u streamSampler=%u "
+                  "motion=%u ble=%u usb=%u usbHost=%u\n",
+                  scratchOk ? 1u : 0u, legacySamplerOk ? 1u : 0u,
                   bootLoops.available ? 1u : 0u, bootSampler.available ? 1u : 0u,
                   bootMotion.available ? 1u : 0u, bootBle.available ? 1u : 0u,
-                  bootUsb.available ? 1u : 0u);
+                  bootUsb.available ? 1u : 0u, bootUsb.hostMode ? 1u : 0u);
 
     if (!s_sdOk) uiStatus("NO SD CARD");
     g_needRedraw = true;

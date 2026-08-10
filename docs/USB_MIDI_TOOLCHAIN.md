@@ -1,70 +1,107 @@
-# USB MIDI integration boundary
+# USB MIDI profiles and hardware boundary
 
-Mini Studio 16 now has a transport-independent MIDI byte parser, bounded event
-queue, note/drum routing, song-position handling, and 24-PPQN clock transport.
-Those pieces are host-tested. They do not, by themselves, make the Cardputer's
-USB connector enumerate as a MIDI device or host an external USB controller.
+Mini Studio 16 implements two separately flashed USB roles on the ESP32-S3's
+single native USB PHY.
 
-## Why the adapter is a separate milestone
+## Normal profile: computer-facing device
 
-The reproducible firmware environment is pinned to `espressif32@6.7.0`, which
-uses Arduino-ESP32 2.0.16 / ESP-IDF 4.4.x. That Arduino tag exposes the native
-USB CDC path used by the command protocol, but its `libraries/USB` package does
-not contain the later Arduino `USBMIDI` class. Enabling USB MIDI in the current
-build is therefore not a one-line include.
+PlatformIO environment: `m5stack-cardputer-adv`
 
-ESP32-S3 hardware can provide USB MIDI. Espressif's current TinyUSB device stack
-lists MIDI among its supported classes and includes a `tusb_midi` example:
+- `ARDUINO_USB_MODE=0`
+- `ARDUINO_USB_CDC_ON_BOOT=1`
+- Adafruit TinyUSB 3.1.3 provides `Adafruit_USBD_MIDI`
+- CDC serial and USB MIDI are intended to enumerate as a composite device
+- MIDI input/output feeds the same bounded queue and output mirror as BLE MIDI
 
-- <https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/usb_device.html>
-- <https://github.com/espressif/esp-idf/tree/master/examples/peripherals/usb/device/tusb_midi>
+Build:
 
-The next adapter spike must choose and compile one of these paths:
+```bash
+pio run -e m5stack-cardputer-adv
+```
 
-1. migrate the project to an Arduino-ESP32/ESP-IDF release that exposes the
-   required TinyUSB MIDI device support, then regression-test M5Cardputer,
-   M5Unified, SD, speaker, microphone, serial control, and the firmware image;
-2. keep the pinned environment and integrate a compatible TinyUSB MIDI
-   component plus composite CDC+MIDI descriptors explicitly.
+This is the normal standalone/computer/DAW image and preserves the `MS16/1`
+CLI over CDC.
 
-The second path avoids a broad framework migration but owns more USB descriptor
-and stack integration. The first path is easier to maintain if all existing
-hardware libraries continue to build and behave correctly. Neither path should
-replace CDC serial: the intended computer-facing device is composite CDC+MIDI
-so the CLI and MIDI can coexist.
+## Alternate profile: direct controller host
 
-## Device mode is not host mode
+PlatformIO environment: `m5stack-cardputer-adv-usb-host`
 
-USB device mode lets a computer or DAW see Mini Studio 16 as MIDI equipment.
-Directly plugging a class-compliant Yamaha keyboard or another controller into
-the Cardputer makes the Cardputer a USB host. Espressif documents host mode as a
-separate stack whose class driver and daemon/client tasks must be provided by
-the application:
+- `ARDUINO_USB_MODE=1`
+- CDC on boot is disabled
+- `MS16_USB_MIDI_HOST=1` selects the ESP-IDF USB Host implementation
+- A client/daemon pair enumerates one Audio-class MIDIStreaming interface,
+  claims its bulk/interrupt IN endpoint, decodes four-byte USB-MIDI 1.0 event
+  packets, and forwards their MIDI bytes into the bounded input pipeline
+- Transfers are canceled, flushed, freed, and the claimed interface released
+  on disconnect
+- The first hardware pass is intentionally controller-input-only
 
-- <https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/usb_host.html>
+Build:
 
-Host validation also depends on OTG cabling and safe VBUS power. The S3's native
-USB controllers share one internal PHY, so USB role, flashing/debugging path,
-and simultaneous CDC availability must be tested as one system rather than
-assumed independently.
+```bash
+pio run -e m5stack-cardputer-adv-usb-host
+```
 
-## Existing adapter contract
+CI outputs `microgroove-v3-alpha-usb-host.bin`, a merged image flashed at
+offset `0x0`. Because CDC is unavailable in this role, on-device MIDI status and
+UI/behavior are the first diagnostics; USB-host telemetry over another channel
+can be added only if hardware testing proves it necessary.
 
-A future USB-device, USB-host, or BLE adapter only needs to feed received MIDI
-bytes into `midiInputFeedByte()` from one producer context. Parsing and musical
-dispatch stay outside the USB callback. If more than one physical MIDI input is
-active simultaneously, each producer must receive its own queue and the main
-loop must merge their drained events; the current queue is intentionally SPSC.
+## Why there are two images
 
-## Acceptance gate
+USB device mode lets a computer see Mini Studio 16 as MIDI equipment. Plugging
+a Yamaha/CYD controller directly into the Cardputer makes the Cardputer the USB
+host. These roles cannot share the S3's internal PHY simultaneously, and host
+mode also changes flashing/debugging and VBUS responsibilities.
 
-The USB MIDI milestone is complete only when:
+Do not connect two powered USB hosts together. The hardware pass must document:
 
-- the pinned or migrated target firmware compiles in CI;
-- CDC serial and MIDI enumerate together in device mode;
-- note, CC, clock, start, continue, stop, and song-position traffic reaches the
-  existing MIDI queue without blocking the audio task;
-- attach, detach, malformed packets, and queue overflow do not reboot or stall
-  the instrument;
-- direct-controller host mode is tested separately with documented cable and
-  power requirements.
+- exact Cardputer-ADV USB connector behavior;
+- OTG adapter/cable;
+- whether the controller needs more current than the Cardputer can safely
+  supply;
+- whether external powered-hub VBUS is isolated correctly;
+- how the board is reflashed after loading the host profile.
+
+## Shared MIDI behavior
+
+USB device, USB host, and BLE all feed the transport-independent MIDI layer.
+That layer already handles:
+
+- channel voice running status and note-on velocity zero;
+- notes, drum routing, and control changes;
+- realtime clock interleaved with other messages;
+- 24-PPQN stepping, song position, start, continue, and stop;
+- bounded queue overflow counters;
+- outgoing note/CC/transport mirroring in device/BLE roles.
+
+Incoming CC maps conventionally per synth channel (CC74 cutoff, CC71
+resonance, CC7 volume). CC20–22 address synth 1–3 cutoff and CC23–25 address
+synth 1–3 resonance from any channel. Internal transport schedules 24-PPQN
+output clock with bounded catch-up and a dropped-pulse counter.
+
+The host descriptor parser and USB-MIDI event packet decoder are pure C++ and
+host-tested. The production host driver itself compiles/links against the
+pinned ESP-IDF 4.4 USB Host API in CI.
+
+## Physical acceptance gates
+
+### Device profile
+
+- CDC and MIDI enumerate together on Linux, macOS, and at least one DAW.
+- The CLI and MIDI operate concurrently without disconnects or audio stalls.
+- Note, CC, clock, start/continue/stop, and song position reach the instrument.
+- Output notes/CC/transport reach the host without stuck notes.
+- Twenty reconnect cycles and a 30-minute clock run cause no reboot/leak.
+
+### Host profile
+
+- Yamaha and CYD enumerate with documented OTG/VBUS hardware.
+- Their interface/endpoint descriptors match or are safely rejected.
+- Note and realtime traffic reaches the existing queue.
+- Attach/detach, transfer cancel, queue overflow, a non-MIDI USB device, and a
+  malformed/unsupported descriptor never crash or stall audio.
+- A 30-minute external-clock run is repeatable.
+
+Compilation proves API/toolchain compatibility; only these device tests prove
+electrical, enumeration, and timing behavior.

@@ -24,6 +24,8 @@ build_run protocol "$test_dir/test_control_protocol.cpp" "$test_dir/../control_p
 build_run protocol_fuzz "$test_dir/test_control_protocol_fuzz.cpp" \
     "$test_dir/../control_protocol.cpp"
 build_run wav "$test_dir/test_wav_file.cpp" "$test_dir/../wav_file.cpp"
+build_run midi "$test_dir/test_midi.cpp" "$test_dir/../midi_parser.cpp" \
+    "$test_dir/../midi_transport.cpp"
 build_run loop_stream -pthread "$test_dir/test_loop_stream_core.cpp"
 build_run sampler_slots "$test_dir/test_sampler_slots.cpp" "$test_dir/../sampler_slots.cpp"
 build_run sample_stream -pthread "$test_dir/test_sample_stream_core.cpp"
@@ -32,5 +34,7 @@ build_run motion "$test_dir/test_motion_core.cpp"
 build_run ble_codec "$test_dir/test_ble_midi_codec.cpp"
 build_run usb_midi_host "$test_dir/test_usb_midi_host_descriptor.cpp" \
     "$test_dir/../usb_midi_host_descriptor.cpp"
+build_run audio_cap "$test_dir/test_audio_cap_protocol.cpp" \
+    "$test_dir/../audio_cap_protocol.cpp"
 
 echo "Sanitizers (${SANITIZER_SET:-undefined}): core, protocol, fuzz, streaming, event, motion and MIDI tests passed"

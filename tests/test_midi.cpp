@@ -1,6 +1,8 @@
 #include "../midi_event_queue.h"
 #include "../midi_parser.h"
 #include "../midi_transport.h"
+#include "../midi_clock_output.h"
+#include "../midi_control_map.h"
 
 #include <cassert>
 #include <iostream>
@@ -64,6 +66,36 @@ int main() {
     for (int i = 0; i < 4; ++i) assert(queue.pop(event));
     assert(queue.size() == 0);
 
-    std::cout << "midi: parser, queue and transport tests passed\n";
+    MidiClockOutputScheduler outputClock;
+    outputClock.reset();
+    outputClock.start(1000);
+    const uint32_t clockPeriod = 60000000u / 128u / 24u;
+    assert(outputClock.pulsesDue(1000 + clockPeriod - 1, 128) == 0);
+    assert(outputClock.pulsesDue(1000 + clockPeriod, 128) == 1);
+    assert(outputClock.pulsesDue(1000 + 6 * clockPeriod, 128) == 5);
+    // A long stall is bounded and counted instead of generating an unlimited burst.
+    assert(outputClock.pulsesDue(1000 + 30 * clockPeriod, 128) == 6);
+    assert(outputClock.dropped() == 18);
+    outputClock.stop();
+    assert(outputClock.pulsesDue(1000 + 40 * clockPeriod, 128) == 0);
+
+    MidiClockOutputScheduler wrappedClock;
+    wrappedClock.reset();
+    wrappedClock.start(0xFFFFFF00u);
+    assert(wrappedClock.pulsesDue(0xFFFFFF00u + 25000u, 100) == 1);
+
+    MidiMappedControl mapped = midiMapControl(2, 74);
+    assert(mapped.kind == MIDI_MAPPED_CUTOFF && mapped.synthTrack == 2);
+    mapped = midiMapControl(0, 71);
+    assert(mapped.kind == MIDI_MAPPED_RESONANCE && mapped.synthTrack == 0);
+    mapped = midiMapControl(1, 7);
+    assert(mapped.kind == MIDI_MAPPED_VOLUME && mapped.synthTrack == 1);
+    mapped = midiMapControl(15, 21);
+    assert(mapped.kind == MIDI_MAPPED_CUTOFF && mapped.synthTrack == 1);
+    mapped = midiMapControl(15, 24);
+    assert(mapped.kind == MIDI_MAPPED_RESONANCE && mapped.synthTrack == 1);
+    assert(midiMapControl(15, 74).kind == MIDI_MAPPED_NONE);
+
+    std::cout << "midi: parser, queue, transport, CC map and output clock passed\n";
     return 0;
 }

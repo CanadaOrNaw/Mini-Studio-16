@@ -2,11 +2,8 @@
 // Microgroove - input.cpp
 // Snapshot diffing -> immediate / short / long press dispatch.
 // All bindings live in keymap.h.
-// Sampling gestures:
-//   hold AUX (.) 0.5s  -> mic records to the current drum lane
-//                         while AUX stays held; release = commit
-//   hold SONG (n) 0.5s -> (while playing) resample the mix;
-//                         then tap a pad to commit
+// Context-sensitive hold actions preserve the inherited mic/resample gestures
+// and add streamed slot recording plus SONG-page master/stem recording.
 // ============================================================
 #include <M5Cardputer.h>
 #include "config.h"
@@ -25,6 +22,7 @@
 #include "motion.h"
 #include "master_recorder.h"
 #include "stem_recorder.h"
+#include "midi_output.h"
 
 void inputInit();
 void inputUpdate();
@@ -58,8 +56,32 @@ static uint8_t  s_rptKc   = KC_NONE;
 static uint32_t s_rptNext = 0;
 static uint16_t s_rptCount = 0;
 
+struct HeldMidiNote { uint8_t key, channel, note; };
+static HeldMidiNote s_heldMidiNotes[16];
+static uint8_t s_heldMidiNoteCount = 0;
+
 // ---------- helpers ----------
 static bool accentHeld(const KeySnap& s) { return s.has('m'); }
+
+static void rememberMidiNote(uint8_t key, uint8_t channel, uint8_t note) {
+    for (uint8_t index = 0; index < s_heldMidiNoteCount; ++index) {
+        if (s_heldMidiNotes[index].key != key) continue;
+        s_heldMidiNotes[index] = {key, channel, note};
+        return;
+    }
+    if (s_heldMidiNoteCount < sizeof(s_heldMidiNotes) / sizeof(s_heldMidiNotes[0]))
+        s_heldMidiNotes[s_heldMidiNoteCount++] = {key, channel, note};
+}
+
+static void releaseMidiNote(uint8_t key) {
+    for (uint8_t index = 0; index < s_heldMidiNoteCount; ++index) {
+        if (s_heldMidiNotes[index].key != key) continue;
+        midiOutputNoteOff(s_heldMidiNotes[index].channel,
+                          s_heldMidiNotes[index].note);
+        s_heldMidiNotes[index] = s_heldMidiNotes[--s_heldMidiNoteCount];
+        return;
+    }
+}
 
 static uint8_t heldPianoCount(const KeySnap& s) {
     uint8_t c = 0;
@@ -577,7 +599,7 @@ static void doLong(uint8_t act) {
             } else if (g_curOctave < 7) g_curOctave++;
             g_needRedraw = true; break;
 
-        case ACT_SONG:                        // long SONG = resample the mix
+        case ACT_SONG:
             if (g_curPage == PAGE_SONG) {
                 if (stemRecorderIsBusy())
                     uiStatus(stemRecorderStop() ? "STEMS SAVING..." : "STEM STOP FAILED");
@@ -600,7 +622,7 @@ static void doLong(uint8_t act) {
             else uiStatus("PLAY, THEN HOLD");
             break;
 
-        case ACT_AUX:                         // long AUX = mic record
+        case ACT_AUX:
             if (g_curPage == PAGE_SONG) {
                 if (masterRecorderIsBusy())
                     uiStatus(masterRecorderStop() ? "MASTER SAVING..." : "MASTER STOP FAILED");
@@ -642,16 +664,22 @@ static void doPiano(uint8_t kc, const KeySnap& now) {
 
     if (g_curPage == PAGE_SOUND) {
         g_synths[g_curTrack].noteOn(noteToFreq(note, oct), accent, false);  // audition
+        midiOutputNoteOn(g_curTrack,
+                         static_cast<uint8_t>((oct + 1u) * 12u + note - 1u),
+                         accent ? 127 : 96);
     } else {
         bool legato = heldPianoCount(s_prev) >= 1;
         liveSynthNote(g_curTrack, note, oct, accent, legato);
     }
+    rememberMidiNote(kc, g_curTrack,
+                     static_cast<uint8_t>((oct + 1u) * 12u + note - 1u));
 }
 
 // ---------- main entry ----------
 void inputInit() {
     s_prev = KeySnap();
     s_nHolds = 0; s_rptAct = ACT_NONE;
+    s_heldMidiNoteCount = 0;
     g_holdProg = 0; g_holdLabel[0] = 0;
 }
 
@@ -760,6 +788,11 @@ void inputUpdate() {
         g_recPadKc = KC_NONE;
         micRecStop();
     }
+
+    // Release outbound MIDI notes even though the internal synth uses a
+    // decay-only envelope. This prevents stuck notes in a connected DAW.
+    for (uint8_t index = 0; index < s_prev.n; ++index)
+        if (!now.has(s_prev.codes[index])) releaseMidiNote(s_prev.codes[index]);
 
     // -- released --
     for (uint8_t i = 0; i < s_nHolds; ) {
