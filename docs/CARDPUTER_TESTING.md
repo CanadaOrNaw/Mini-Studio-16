@@ -7,6 +7,8 @@ duration, and complete serial output for every pass or failure.
 ## 1. Prepare and flash
 
 1. Back up the SD card and use FAT32 for the first pass.
+   `Mini-Studio-16_SD.zip` in the CI artifact contains the starter `groovebox/`
+   tree; extract that folder at the card root.
 2. Build or download a CI artifact only after host, sanitizer, and firmware jobs
    all pass. Run `sha256sum -c SHA256SUMS.txt` from the extracted artifact
    directory and retain `BUILD_INFO.txt` with the test evidence.

@@ -23,7 +23,7 @@ official Microgroove or lebiro.studio release.
 | Six-track audio looper | Six independent 22.05 kHz mono SD streams, up to 20 seconds; Track 1 fixes the frame length; tracks 2–6 align to its boundary; mute, volume, recovery, and resync | Zero-underrun playback and simultaneous recording on the actual card |
 | PO-style sampler | 16 SD-streamed slots sharing a normalized 40-second quota; melodic/sliced modes, 16 slices, trim, pitch, gain, filter, four voices, pattern triggers, and sparse parameter locks | Performance and latency on the actual SD card |
 | Sequencer | 16 patterns × 16 steps and a 128-entry chain | Keyboard/UI usability pass |
-| Event looper | Five role-neutral tracks, 1–128 bars, 2,048 events, note/drum/sample/control recording, arm/mute/clear | Long-run timing and live workflow |
+| Event looper | Five role-mapped drum/bass/chord/lead/sample-control tracks, 1–128 bars, 2,048 events, arm/mute/clear | Long-run timing and live workflow |
 | Motion | BMI270 filtering, tilt/accel/gyro/shake/slap sources, four mappings, synth cutoff/resonance targets, MIDI CC, and recordable automation | IMU calibration and gesture thresholds |
 | MIDI | BLE MIDI input/output; composite USB CDC+MIDI device image; separate direct USB-MIDI host image; notes, CC, clock, song position, start/continue/stop | Enumeration, reconnect, clock jitter, OTG/VBUS behavior |
 | Recording | Long master WAVs and optional five-bus master/synth1/synth2/synth3/drums stem containers on SD | Zero-drop 30-minute captures and power-cut cycles |
@@ -84,8 +84,9 @@ esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
 ```
 
 Each artifact includes `SHA256SUMS.txt`, `BUILD_INFO.txt`, both application
-ELFs/images, both merged images, and both resource reports. Verify the extracted
-artifact with `sha256sum -c SHA256SUMS.txt` before flashing.
+ELFs/images, both merged images, both resource reports, the license, and a
+`Mini-Studio-16_SD.zip` starter card image. Verify the extracted artifact with
+`sha256sum -c SHA256SUMS.txt` before flashing.
 
 The host image is named `microgroove-v3-alpha-usb-host.bin`. Flashing it
 replaces the normal CDC+MIDI image; the ESP32-S3's single native USB PHY cannot

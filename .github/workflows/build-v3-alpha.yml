@@ -54,6 +54,10 @@ jobs:
             --output .pio/build/m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin
       - name: Create artifact manifest
         run: |
+          (cd factory-sd && python -m zipfile -c \
+            ../.pio/build/Mini-Studio-16_SD.zip groovebox)
+          cp factory-sd/README.md .pio/build/SD_CARD_README.md
+          cp LICENSE .pio/build/LICENSE.txt
           cd .pio/build
           sha256sum \
             m5stack-cardputer-adv/microgroove-v3-alpha.bin \
@@ -64,6 +68,9 @@ jobs:
             m5stack-cardputer-adv-usb-host/firmware.bin \
             m5stack-cardputer-adv-usb-host/firmware.elf \
             m5stack-cardputer-adv-usb-host/size-report.json \
+            Mini-Studio-16_SD.zip \
+            SD_CARD_README.md \
+            LICENSE.txt \
             > SHA256SUMS.txt
           {
             echo "repository=$GITHUB_REPOSITORY"
@@ -87,4 +94,7 @@ jobs:
             .pio/build/m5stack-cardputer-adv-usb-host/size-report.json
             .pio/build/SHA256SUMS.txt
             .pio/build/BUILD_INFO.txt
+            .pio/build/Mini-Studio-16_SD.zip
+            .pio/build/SD_CARD_README.md
+            .pio/build/LICENSE.txt
           if-no-files-found: error
