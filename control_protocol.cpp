@@ -1,4 +1,5 @@
 #include "control_protocol.h"
+#include "sampler_slots.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -133,6 +134,38 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
             else if (sameWord(action, "unmute")) request.command = CONTROL_LOOP_UNMUTE;
             else if (sameWord(action, "clear")) request.command = CONTROL_LOOP_CLEAR;
             else return CONTROL_PARSE_BAD_ARGUMENTS;
+        }
+    } else if (sameWord(verb, "sample")) {
+        char* slotOrStatus = nextToken(cursor);
+        if (!slotOrStatus) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(slotOrStatus, "status")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_SAMPLE_STATUS;
+        } else {
+            if (!parseNumber(slotOrStatus, 1, SAMPLER_SLOT_COUNT, request.arg1))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            char* action = nextToken(cursor);
+            if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
+            if (sameWord(action, "assign")) {
+                char* filename = nextToken(cursor);
+                char* mode = nextToken(cursor);
+                if (!filename || strlen(filename) >= sizeof(request.text) || !mode ||
+                    !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+                strcpy(request.text, filename);
+                if (sameWord(mode, "melodic")) request.arg2 = SAMPLER_SLOT_MELODIC;
+                else if (sameWord(mode, "sliced")) request.arg2 = SAMPLER_SLOT_SLICED;
+                else return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.command = CONTROL_SAMPLE_ASSIGN;
+            } else if (sameWord(action, "trigger")) {
+                if (!parseNumber(nextToken(cursor), 1, SAMPLER_SLICE_COUNT, request.arg2) ||
+                    !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.command = CONTROL_SAMPLE_TRIGGER;
+            } else if (sameWord(action, "clear")) {
+                if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.command = CONTROL_SAMPLE_CLEAR;
+            } else {
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            }
         }
     } else {
         return CONTROL_PARSE_UNKNOWN_COMMAND;

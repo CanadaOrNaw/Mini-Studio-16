@@ -7,13 +7,16 @@
 #include "wavetable.h"
 #include "master_recorder.h"
 #include "stem_recorder.h"
+#include "loop_engine.h"
+#include "sampler_slots.h"
+#include "streaming_sampler.h"
 #include <SD.h>
 #include <string.h>
 
 uint8_t g_curProject = 0;
 
 #define GBX_MAGIC   0x31584247u   // "GBX1"
-#define GBX_VERSION 3             // v3: 16 patterns + 128-entry chain
+#define GBX_VERSION 4             // v4: sampler slots, triggers and sparse locks
 #define LEGACY_NUM_PATTERNS 8
 #define LEGACY_SONG_LENGTH  64
 
@@ -77,15 +80,54 @@ struct __attribute__((packed)) ProjectFileV3 {
     uint8_t      drums[NUM_PATTERNS][NUM_STEPS];
 };
 
+struct __attribute__((packed)) SaveSamplerRegion {
+    uint32_t startFrame;
+    uint32_t lengthFrames;
+};
+
+struct __attribute__((packed)) SaveSamplerSlot {
+    uint8_t mode;
+    char filename[SAMPLE_NAME_LEN];
+    uint32_t sourceFrames;
+    uint32_t sourceRate;
+    uint32_t quotaFrames;
+    uint32_t trimStart;
+    uint32_t trimLength;
+    uint8_t rootMidi;
+    int16_t pitchQ8;
+    uint16_t gainQ15;
+    uint16_t cutoffQ15;
+    uint16_t resonanceQ15;
+    SaveSamplerRegion slices[SAMPLER_SLICE_COUNT];
+};
+
+struct __attribute__((packed)) SaveSamplerLock {
+    uint8_t pattern, step, slot, flags;
+    int16_t pitchQ8;
+    uint16_t gainQ15, cutoffQ15, resonanceQ15, trimStartQ15, trimLengthQ15;
+};
+
+struct __attribute__((packed)) ProjectFileV4 {
+    ProjectFileV3 base;
+    SaveSamplerSlot samplerSlots[SAMPLER_SLOT_COUNT];
+    uint8_t samplerKeys[NUM_PATTERNS][NUM_STEPS][SAMPLER_SLOT_COUNT];
+    uint16_t samplerLockCount;
+    SaveSamplerLock samplerLocks[SAMPLER_LOCK_CAPACITY];
+};
+
 union ProjectBuffer {
     ProjectFileV1 v1;
     ProjectFileV2 v2;
     ProjectFileV3 v3;
+    ProjectFileV4 v4;
 };
 
 static_assert(sizeof(ProjectFileV1) == 1807, "GBX v1 layout changed");
 static_assert(sizeof(ProjectFileV2) == 3346, "GBX v2 layout changed");
 static_assert(sizeof(ProjectFileV3) == 6226, "unexpected GBX v3 layout");
+static_assert(sizeof(SaveSamplerSlot) == 190, "sampler slot layout changed");
+static_assert(sizeof(SaveSamplerLock) == 16, "sampler lock layout changed");
+static_assert(sizeof(ProjectFileV4) == 15412, "unexpected GBX v4 layout");
 
 static bool readProjectFile(const char* path, ProjectBuffer& loaded, uint16_t& version) {
     File f = SD.open(path, FILE_READ);
@@ -96,7 +138,7 @@ static bool readProjectFile(const char* path, ProjectBuffer& loaded, uint16_t& v
     uint32_t magic;
     memcpy(&magic, head, sizeof(magic));
     memcpy(&version, head + sizeof(magic), sizeof(version));
-    if (magic != GBX_MAGIC || (version != 1 && version != 2 && version != 3)) {
+    if (magic != GBX_MAGIC || (version < 1 || version > GBX_VERSION)) {
         f.close();
         return false;
     }
@@ -104,9 +146,11 @@ static bool readProjectFile(const char* path, ProjectBuffer& loaded, uint16_t& v
     f.seek(0);
     void* destination = version == 1 ? static_cast<void*>(&loaded.v1) :
                         version == 2 ? static_cast<void*>(&loaded.v2) :
-                                       static_cast<void*>(&loaded.v3);
+                        version == 3 ? static_cast<void*>(&loaded.v3) :
+                                       static_cast<void*>(&loaded.v4);
     const size_t expected = version == 1 ? sizeof(loaded.v1) :
-                            version == 2 ? sizeof(loaded.v2) : sizeof(loaded.v3);
+                            version == 2 ? sizeof(loaded.v2) :
+                            version == 3 ? sizeof(loaded.v3) : sizeof(loaded.v4);
     const size_t got = f.read(static_cast<uint8_t*>(destination), expected);
     f.close();
     return got == expected;
@@ -117,7 +161,8 @@ static void slotPath(uint8_t slot, char* out, size_t n) {
 }
 
 bool storageProjectExists(uint8_t slot) {
-    if (masterRecorderIsBusy() || stemRecorderIsBusy()) return false;
+    if (masterRecorderIsBusy() || stemRecorderIsBusy() || loopEngineIsRecording() ||
+        streamingSamplerBusy()) return false;
     char path[64]; slotPath(slot, path, sizeof(path));
     if (SD.exists(path)) return true;
     char backupPath[72];
@@ -126,26 +171,29 @@ bool storageProjectExists(uint8_t slot) {
 }
 
 bool storageSaveProject(uint8_t slot) {
-    if (masterRecorderIsBusy() || stemRecorderIsBusy()) return false;
-    static ProjectFileV3 pf;   // static: too big for stack
+    if (masterRecorderIsBusy() || stemRecorderIsBusy() || loopEngineIsRecording() ||
+        streamingSamplerBusy()) return false;
+    static ProjectFileV4 pf;   // static: too big for stack
     memset(&pf, 0, sizeof(pf));
 
-    pf.magic = GBX_MAGIC;
-    pf.version = GBX_VERSION;
-    pf.bpm = g_bpm;
-    pf.songLoopStart = g_songLoopStart;
-    memcpy(pf.song, g_song, SONG_LENGTH);
+    ProjectFileV3& base = pf.base;
+
+    base.magic = GBX_MAGIC;
+    base.version = GBX_VERSION;
+    base.bpm = g_bpm;
+    base.songLoopStart = g_songLoopStart;
+    memcpy(base.song, g_song, SONG_LENGTH);
 
     for (int s = 0; s < NUM_SYNTHS; s++) {
         SynthVoice& v = g_synths[s].v[0];
-        pf.voices[s] = g_synths[s].voices;
-        pf.synths[s] = { (uint8_t)v.oscMode, v.wtIndex,
+        base.voices[s] = g_synths[s].voices;
+        base.synths[s] = { (uint8_t)v.oscMode, v.wtIndex,
                          v.fltCutoff, v.fltReso, v.fltEnvAmt,
                          v.ampDecRate, v.filtDecRate, v.volume };
     }
     for (int l = 0; l < NUM_DRUM_LANES; l++) {
         DrumLane& d = g_drumLanes[l];
-        SaveDrumLane& o = pf.lanes[l];
+        SaveDrumLane& o = base.lanes[l];
         o.engine = d.engine; o.type = d.type; o.chokeGroup = d.chokeGroup;
         o.volume = d.volume; o.tune = d.tune; o.decay = d.decay;
         if (d.engine == ENG_SMPL && d.sampleSlot >= 0 && d.sampleSlot < g_numSamples)
@@ -155,11 +203,46 @@ bool storageSaveProject(uint8_t slot) {
         for (int s = 0; s < NUM_SYNTHS; s++)
             for (int st = 0; st < NUM_STEPS; st++) {
                 const SynthCell& c = g_patterns[p].synth[s][st];
-                SaveCell& o = pf.cells[p][s][st];
+                SaveCell& o = base.cells[p][s][st];
                 for (int i = 0; i < MAX_POLY; i++) { o.note[i] = c.note[i]; o.oct[i] = c.oct[i]; }
                 o.flags = (uint8_t)((c.accent ? 1 : 0) | (c.slide ? 2 : 0));
             }
-        memcpy(pf.drums[p], g_patterns[p].drums, NUM_STEPS);
+        memcpy(base.drums[p], g_patterns[p].drums, NUM_STEPS);
+    }
+
+    for (uint8_t slot = 0; slot < SAMPLER_SLOT_COUNT; ++slot) {
+        const SamplerSlot& in = g_samplerSlotBank.slot(slot);
+        SaveSamplerSlot& out = pf.samplerSlots[slot];
+        out.mode = in.mode;
+        memcpy(out.filename, in.filename, sizeof(out.filename));
+        out.sourceFrames = in.sourceFrames;
+        out.sourceRate = in.sourceRate;
+        out.quotaFrames = in.quotaFrames;
+        out.trimStart = in.trimStart;
+        out.trimLength = in.trimLength;
+        out.rootMidi = in.rootMidi;
+        out.pitchQ8 = in.pitchQ8;
+        out.gainQ15 = in.gainQ15;
+        out.cutoffQ15 = in.cutoffQ15;
+        out.resonanceQ15 = in.resonanceQ15;
+        for (uint8_t slice = 0; slice < SAMPLER_SLICE_COUNT; ++slice) {
+            out.slices[slice].startFrame = in.slices[slice].startFrame;
+            out.slices[slice].lengthFrames = in.slices[slice].lengthFrames;
+        }
+    }
+    for (uint8_t pattern = 0; pattern < NUM_PATTERNS; ++pattern)
+        for (uint8_t step = 0; step < NUM_STEPS; ++step)
+            for (uint8_t slot = 0; slot < SAMPLER_SLOT_COUNT; ++slot)
+                pf.samplerKeys[pattern][step][slot] =
+                    g_samplerSequence.eventKey(pattern, step, slot);
+    pf.samplerLockCount = g_samplerSequence.lockCount();
+    for (uint16_t index = 0; index < pf.samplerLockCount; ++index) {
+        const SamplerLockEntry& in = g_samplerSequence.lock(index);
+        SaveSamplerLock& out = pf.samplerLocks[index];
+        out.pattern = in.pattern; out.step = in.step; out.slot = in.slot; out.flags = in.flags;
+        out.pitchQ8 = in.pitchQ8; out.gainQ15 = in.gainQ15;
+        out.cutoffQ15 = in.cutoffQ15; out.resonanceQ15 = in.resonanceQ15;
+        out.trimStartQ15 = in.trimStartQ15; out.trimLengthQ15 = in.trimLengthQ15;
     }
 
     char path[64]; slotPath(slot, path, sizeof(path));
@@ -217,8 +300,60 @@ static void applyLane(int l, const SaveDrumLane& o) {
         d.sampleSlot = (int8_t)samplerLoad(o.sampleName);   // -1 if missing
 }
 
+static bool applySamplerV4(const ProjectFileV4& pf) {
+    SamplerSlotBank bank;
+    SamplerSequence sequence;
+    for (uint8_t index = 0; index < SAMPLER_SLOT_COUNT; ++index) {
+        const SaveSamplerSlot& in = pf.samplerSlots[index];
+        if (in.mode == SAMPLER_SLOT_EMPTY) continue;
+        if ((in.mode != SAMPLER_SLOT_MELODIC && in.mode != SAMPLER_SLOT_SLICED) ||
+            in.rootMidi > 127 || in.gainQ15 > 32767 || in.cutoffQ15 > 32767 ||
+            in.resonanceQ15 > 32767 ||
+            !bank.assign(index, in.filename, in.sourceFrames, in.sourceRate,
+                         static_cast<SamplerSlotMode>(in.mode)) ||
+            bank.slot(index).quotaFrames != in.quotaFrames ||
+            !bank.setTrim(index, in.trimStart, in.trimLength))
+            return false;
+        SamplerSlot& out = bank.slot(index);
+        out.rootMidi = in.rootMidi;
+        out.pitchQ8 = in.pitchQ8;
+        out.gainQ15 = in.gainQ15;
+        out.cutoffQ15 = in.cutoffQ15;
+        out.resonanceQ15 = in.resonanceQ15;
+        for (uint8_t slice = 0; slice < SAMPLER_SLICE_COUNT; ++slice)
+            if (!bank.setSlice(index, slice, in.slices[slice].startFrame,
+                               in.slices[slice].lengthFrames))
+                return false;
+    }
+    if (!bank.validate() || pf.samplerLockCount > SAMPLER_LOCK_CAPACITY) return false;
+    for (uint8_t pattern = 0; pattern < NUM_PATTERNS; ++pattern)
+        for (uint8_t step = 0; step < NUM_STEPS; ++step)
+            for (uint8_t slot = 0; slot < SAMPLER_SLOT_COUNT; ++slot) {
+                const uint8_t key = pf.samplerKeys[pattern][step][slot];
+                if (key != 0xFF && !sequence.setEvent(pattern, step, slot, key)) return false;
+            }
+    const uint8_t knownFlags = SAMPLER_LOCK_PITCH | SAMPLER_LOCK_GAIN |
+                               SAMPLER_LOCK_FILTER | SAMPLER_LOCK_TRIM;
+    for (uint16_t index = 0; index < pf.samplerLockCount; ++index) {
+        const SaveSamplerLock& in = pf.samplerLocks[index];
+        if ((in.flags & ~knownFlags) != 0 || in.gainQ15 > 32767 ||
+            in.cutoffQ15 > 32767 || in.resonanceQ15 > 32767) return false;
+        SamplerLockEntry out = {};
+        out.pattern = in.pattern; out.step = in.step; out.slot = in.slot; out.flags = in.flags;
+        out.pitchQ8 = in.pitchQ8; out.gainQ15 = in.gainQ15;
+        out.cutoffQ15 = in.cutoffQ15; out.resonanceQ15 = in.resonanceQ15;
+        out.trimStartQ15 = in.trimStartQ15; out.trimLengthQ15 = in.trimLengthQ15;
+        if (!sequence.setLock(out)) return false;
+    }
+    if (!sequence.validate()) return false;
+    g_samplerSlotBank = bank;
+    g_samplerSequence = sequence;
+    return true;
+}
+
 bool storageLoadProject(uint8_t slot) {
-    if (masterRecorderIsBusy() || stemRecorderIsBusy()) return false;
+    if (masterRecorderIsBusy() || stemRecorderIsBusy() || loopEngineIsRecording() ||
+        streamingSamplerBusy()) return false;
     char path[64]; slotPath(slot, path, sizeof(path));
     static ProjectBuffer loaded;
     uint16_t version = 0;
@@ -234,11 +369,13 @@ bool storageLoadProject(uint8_t slot) {
     bool ok = false;
 
     samplerClearAll();
+    g_samplerSlotBank.clear();
+    g_samplerSequence.clear();
     memset(g_patterns, 0, sizeof(g_patterns));
     memset(g_song, SONG_EMPTY, sizeof(g_song));
 
-    if (version == 3) {
-        const ProjectFileV3& pf = loaded.v3;
+    if (version == 3 || version == 4) {
+        const ProjectFileV3& pf = version == 4 ? loaded.v4.base : loaded.v3;
         g_bpm = pf.bpm;
         g_songLoopStart = pf.songLoopStart;
         memcpy(g_song, pf.song, SONG_LENGTH);
@@ -254,7 +391,7 @@ bool storageLoadProject(uint8_t slot) {
                 }
             memcpy(g_patterns[p].drums, pf.drums[p], NUM_STEPS);
         }
-        ok = true;
+        ok = version == 4 ? applySamplerV4(loaded.v4) : true;
     } else if (version == 2) {
         const ProjectFileV2& pf = loaded.v2;
         g_bpm = pf.bpm;

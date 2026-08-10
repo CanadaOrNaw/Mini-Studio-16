@@ -8,6 +8,7 @@
 #include "serial_line_buffer.h"
 #include "stem_recorder.h"
 #include "loop_engine.h"
+#include "streaming_sampler.h"
 
 #include <Arduino.h>
 #include <string.h>
@@ -190,6 +191,64 @@ void dispatch(const ControlRequest& request) {
                               request.id, static_cast<unsigned>(request.arg1));
             else
                 replyError(request.id, "loop_clear_rejected");
+            break;
+
+        case CONTROL_SAMPLE_STATUS: {
+            const StreamingSamplerSnapshot sampler = streamingSamplerSnapshot();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK available=%u quota=%lu "
+                          "remaining=%lu queued=%lu drops=%lu starts=%lu errors=%lu "
+                          "maxRead=%lu",
+                          request.id, sampler.available ? 1u : 0u,
+                          static_cast<unsigned long>(g_samplerSlotBank.quotaUsedFrames()),
+                          static_cast<unsigned long>(g_samplerSlotBank.quotaRemainingFrames()),
+                          static_cast<unsigned long>(sampler.queuedCommands),
+                          static_cast<unsigned long>(sampler.commandDrops),
+                          static_cast<unsigned long>(sampler.starts),
+                          static_cast<unsigned long>(sampler.errors),
+                          static_cast<unsigned long>(sampler.maxReadUs));
+            for (uint8_t voice = 0; voice < STREAMING_SAMPLE_VOICES; ++voice) {
+                const SampleStreamVoiceSnapshot& item = sampler.voices[voice];
+                Serial.printf(" v%u=%s,%u,%lu,%lu,%lu",
+                              static_cast<unsigned>(voice + 1),
+                              sampleStreamStateName(item.state),
+                              static_cast<unsigned>(item.slot + 1),
+                              static_cast<unsigned long>(item.consumedFrames),
+                              static_cast<unsigned long>(item.bufferedFrames),
+                              static_cast<unsigned long>(item.underruns));
+            }
+            Serial.println("");
+            break;
+        }
+
+        case CONTROL_SAMPLE_ASSIGN:
+            if (streamingSamplerAssign(static_cast<uint8_t>(request.arg1 - 1),
+                                       request.text,
+                                       static_cast<SamplerSlotMode>(request.arg2)))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK sample=%u state=assigning file=%s\n",
+                              request.id, static_cast<unsigned>(request.arg1), request.text);
+            else
+                replyError(request.id, "sample_assign_rejected");
+            break;
+
+        case CONTROL_SAMPLE_TRIGGER:
+            if (streamingSamplerTrigger(static_cast<uint8_t>(request.arg1 - 1),
+                                        static_cast<uint8_t>(request.arg2 - 1)))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK sample=%u key=%u state=queued\n",
+                              request.id, static_cast<unsigned>(request.arg1),
+                              static_cast<unsigned>(request.arg2));
+            else
+                replyError(request.id, "sample_trigger_rejected");
+            break;
+
+        case CONTROL_SAMPLE_CLEAR:
+            if (streamingSamplerClear(static_cast<uint8_t>(request.arg1 - 1)))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK sample=%u state=clearing\n", request.id,
+                              static_cast<unsigned>(request.arg1));
+            else
+                replyError(request.id, "sample_clear_rejected");
             break;
 
         default:

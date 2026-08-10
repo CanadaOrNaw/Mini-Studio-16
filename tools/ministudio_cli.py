@@ -96,6 +96,14 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["loop", "status"]
     if args.command == "loop":
         return ["loop", args.track, args.action]
+    if args.command == "sample-status":
+        return ["sample", "status"]
+    if args.command == "sample-assign":
+        return ["sample", args.slot, "assign", args.filename, args.mode]
+    if args.command == "sample-trigger":
+        return ["sample", args.slot, "trigger", args.key]
+    if args.command == "sample-clear":
+        return ["sample", args.slot, "clear"]
     raise ValueError(f"unsupported command: {args.command}")
 
 
@@ -128,6 +136,16 @@ def parser() -> argparse.ArgumentParser:
     loop = sub.add_parser("loop")
     loop.add_argument("track", type=int, choices=range(1, 7))
     loop.add_argument("action", choices=("record", "stop", "mute", "unmute", "clear"))
+    sub.add_parser("sample-status", help="show streamed sampler quota, voices and counters")
+    sample_assign = sub.add_parser("sample-assign")
+    sample_assign.add_argument("slot", type=int, choices=range(1, 17))
+    sample_assign.add_argument("filename", help="mono 16-bit WAV in /groovebox/samples")
+    sample_assign.add_argument("mode", choices=("melodic", "sliced"))
+    sample_trigger = sub.add_parser("sample-trigger")
+    sample_trigger.add_argument("slot", type=int, choices=range(1, 17))
+    sample_trigger.add_argument("key", type=int, choices=range(1, 17))
+    sample_clear = sub.add_parser("sample-clear")
+    sample_clear.add_argument("slot", type=int, choices=range(1, 17))
     sub.add_parser("ports", help="list serial ports without opening one")
     monitor = sub.add_parser("monitor", help="print asynchronous device output")
     monitor.add_argument("--seconds", type=float, default=0.0, help="0 means run until interrupted")

@@ -11,6 +11,7 @@
 #include "master_recorder.h"
 #include "stem_recorder.h"
 #include "loop_engine.h"
+#include "streaming_sampler.h"
 
 float g_scopeBuf[SCREEN_W];
 volatile int g_scopeIdx = 0;
@@ -44,8 +45,11 @@ static void audioTask(void*) {
                 for (int d = 0; d < NUM_DRUM_LANES; d++)
                     drumBus += g_drumLanes[d].render() * 0.6f;
 
+            const int32_t streamedSamplePcm = streamingSamplerRender();
+            const float sampleBus = g_previewVoice.render() +
+                static_cast<float>(streamedSamplePcm) / 32768.0f;
             const float dryMix = synthBus[0] + synthBus[1] + synthBus[2] + drumBus +
-                                 g_previewVoice.render();
+                                 sampleBus;
             const int16_t dryPcm = toPcm(dryMix);
             const int32_t loopPcm = loopEngineProcessFrame(dryPcm);
             float mix = dryMix + static_cast<float>(loopPcm) / 12000.0f;

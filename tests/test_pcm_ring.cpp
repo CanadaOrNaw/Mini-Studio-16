@@ -75,10 +75,19 @@ static void testConcurrentOrder() {
 }
 
 int main() {
+    {
+        SpscRing<int, 8> peekRing;
+        const int values[] = {4, 5, 6};
+        assert(peekRing.push(values, 3) == 3);
+        int value = 0;
+        assert(peekRing.peek(0, value) && value == 4);
+        assert(peekRing.peek(2, value) && value == 6);
+        assert(!peekRing.peek(3, value));
+        assert(peekRing.size() == 3);
+    }
     testBasicAndWrap();
     testBulkBoundsAndDiscard();
     testConcurrentOrder();
     std::cout << "pcm_ring: all tests passed\n";
     return 0;
 }
-

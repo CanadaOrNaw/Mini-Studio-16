@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "config.h"
 
 #define CONTROL_PROTOCOL_PREFIX "MS16/1"
 #define CONTROL_REQUEST_ID_LEN 16
@@ -28,6 +29,10 @@ enum ControlCommand : uint8_t {
     CONTROL_LOOP_MUTE,
     CONTROL_LOOP_UNMUTE,
     CONTROL_LOOP_CLEAR,
+    CONTROL_SAMPLE_STATUS,
+    CONTROL_SAMPLE_ASSIGN,
+    CONTROL_SAMPLE_TRIGGER,
+    CONTROL_SAMPLE_CLEAR,
 };
 
 enum ControlParseStatus : uint8_t {
@@ -46,6 +51,7 @@ struct ControlRequest {
     uint16_t arg1;
     uint16_t arg2;
     uint16_t arg3;
+    char text[SAMPLE_NAME_LEN];
 };
 
 ControlParseStatus controlParseLine(const char* line, ControlRequest& request);

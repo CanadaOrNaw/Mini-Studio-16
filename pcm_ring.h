@@ -34,6 +34,14 @@ public:
     bool pushOne(const T& value) { return push(&value, 1) == 1; }
     bool popOne(T& value) { return pop(&value, 1) == 1; }
 
+    bool peek(size_t offset, T& value) const {
+        const uint32_t read = __atomic_load_n(&_read, __ATOMIC_RELAXED);
+        const uint32_t write = __atomic_load_n(&_write, __ATOMIC_ACQUIRE);
+        if (offset >= static_cast<size_t>(write - read)) return false;
+        value = _data[(read + static_cast<uint32_t>(offset)) & (Capacity - 1)];
+        return true;
+    }
+
     size_t push(const T* source, size_t count) {
         if (!source || count == 0) return 0;
 
@@ -78,4 +86,3 @@ private:
     alignas(4) uint32_t _read;
     alignas(4) uint32_t _write;
 };
-

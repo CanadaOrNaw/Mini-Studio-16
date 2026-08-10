@@ -4,6 +4,8 @@
 #include "sequencer.h"
 #include <Arduino.h>
 #include <string.h>
+#include "sampler_slots.h"
+#include "streaming_sampler.h"
 
 Pattern    g_patterns[NUM_PATTERNS];
 uint8_t    g_song[SONG_LENGTH];
@@ -92,6 +94,13 @@ static void triggerStep(uint8_t step) {
         uint8_t mask = p.drums[step];
         for (int l = 0; l < NUM_DRUM_LANES; l++)
             if (mask & (1 << l)) triggerLane(l);
+    }
+
+    for (uint8_t slot = 0; slot < SAMPLER_SLOT_COUNT; ++slot) {
+        const uint8_t key = g_samplerSequence.eventKey(g_playPattern, step, slot);
+        if (key == 0xFF) continue;
+        streamingSamplerTrigger(slot, key,
+            g_samplerSequence.findLock(g_playPattern, step, slot));
     }
 }
 

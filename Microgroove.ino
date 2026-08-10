@@ -29,6 +29,7 @@
 #include "midi_input.h"
 #include "stem_recorder.h"
 #include "loop_engine.h"
+#include "streaming_sampler.h"
 #include "ui.h"
 
 void inputInit();
@@ -68,6 +69,7 @@ void setup() {
         wavetableLoadUserFromSD();
     }
     loopEngineInit(s_sdOk);
+    streamingSamplerInit(s_sdOk);
     sequencerInit();
     midiInputInit();
     loadDemoPattern();

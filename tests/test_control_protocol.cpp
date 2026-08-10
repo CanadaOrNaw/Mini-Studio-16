@@ -1,4 +1,5 @@
 #include "../control_protocol.h"
+#include "../sampler_slots.h"
 
 #include <cassert>
 #include <cstring>
@@ -38,6 +39,15 @@ int main() {
     assert(request.command == CONTROL_LOOP_RECORD && request.arg1 == 6);
     request = parseOk("MS16/1 10 loop 2 unmute");
     assert(request.command == CONTROL_LOOP_UNMUTE && request.arg1 == 2);
+    request = parseOk("MS16/1 11 sample status");
+    assert(request.command == CONTROL_SAMPLE_STATUS);
+    request = parseOk("MS16/1 12 sample 16 assign CHORD.wav melodic");
+    assert(request.command == CONTROL_SAMPLE_ASSIGN && request.arg1 == 16 &&
+           request.arg2 == SAMPLER_SLOT_MELODIC &&
+           std::strcmp(request.text, "CHORD.wav") == 0);
+    request = parseOk("MS16/1 13 sample 2 trigger 16");
+    assert(request.command == CONTROL_SAMPLE_TRIGGER && request.arg1 == 2 &&
+           request.arg2 == 16);
 
     ControlRequest invalid = {};
     assert(controlParseLine("", invalid) == CONTROL_PARSE_EMPTY);
@@ -49,6 +59,9 @@ int main() {
     assert(controlParseLine("MS16/1 1 drum 9", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 loop 0 record", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 loop 1 dance", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 sample 17 clear", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 sample 1 trigger 0", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 sample 1 assign x.wav stereo", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 wat", invalid) == CONTROL_PARSE_UNKNOWN_COMMAND);
     assert(controlParseLine("MS16/1 1 ping extra", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
 

@@ -64,6 +64,15 @@ class MiniStudioCliTests(unittest.TestCase):
         args = cli.parser().parse_args(["loop", "6", "record"])
         self.assertEqual(cli.command_words(args), ["loop", 6, "record"])
 
+    def test_sample_commands(self):
+        args = cli.parser().parse_args(["sample-status"])
+        self.assertEqual(cli.command_words(args), ["sample", "status"])
+        args = cli.parser().parse_args(["sample-assign", "16", "CHORD.wav", "melodic"])
+        self.assertEqual(cli.command_words(args),
+                         ["sample", 16, "assign", "CHORD.wav", "melodic"])
+        args = cli.parser().parse_args(["sample-trigger", "2", "16"])
+        self.assertEqual(cli.command_words(args), ["sample", 2, "trigger", 16])
+
 
 if __name__ == "__main__":
     unittest.main()
