@@ -89,6 +89,8 @@ class MiniStudioCliTests(unittest.TestCase):
         )
         self.assertEqual(cli.command_words(args),
                          ["motion", 4, "map", "shake", "synth3_resonance"])
+        args = cli.parser().parse_args(["midi-status"])
+        self.assertEqual(cli.command_words(args), ["midi", "status"])
 
 
 if __name__ == "__main__":

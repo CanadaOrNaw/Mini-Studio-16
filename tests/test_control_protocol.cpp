@@ -62,6 +62,8 @@ int main() {
     assert(request.command == CONTROL_MOTION_MAP && request.arg1 == 4 &&
            request.arg2 == MOTION_SOURCE_SHAKE &&
            request.arg3 == MOTION_TARGET_SYNTH3_RESONANCE);
+    request = parseOk("MS16/1 19 midi status");
+    assert(request.command == CONTROL_MIDI_STATUS);
 
     ControlRequest invalid = {};
     assert(controlParseLine("", invalid) == CONTROL_PARSE_EMPTY);
@@ -80,6 +82,7 @@ int main() {
     assert(controlParseLine("MS16/1 1 event 1 bars 129", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 motion 5 clear", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 motion 1 map banana synth1_cutoff", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 midi start", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 wat", invalid) == CONTROL_PARSE_UNKNOWN_COMMAND);
     assert(controlParseLine("MS16/1 1 ping extra", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
 

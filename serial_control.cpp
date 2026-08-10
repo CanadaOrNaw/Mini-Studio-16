@@ -11,6 +11,8 @@
 #include "streaming_sampler.h"
 #include "event_looper.h"
 #include "motion.h"
+#include "ble_midi.h"
+#include "usb_midi.h"
 
 #include <Arduino.h>
 #include <string.h>
@@ -353,6 +355,27 @@ void dispatch(const ControlRequest& request) {
                           " %s OK motion=%u state=cleared\n", request.id,
                           static_cast<unsigned>(request.arg1));
             break;
+
+        case CONTROL_MIDI_STATUS: {
+            const BleMidiSnapshot ble = bleMidiSnapshot();
+            const UsbMidiSnapshot usb = usbMidiSnapshot();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK queueDrops=%lu usbAvailable=%u usbMounted=%u "
+                          "usbRx=%lu usbTx=%lu usbErrors=%lu bleAvailable=%u "
+                          "bleConnected=%u bleRx=%lu bleTx=%lu bleMalformed=%lu "
+                          "bleDrops=%lu\n",
+                          request.id, static_cast<unsigned long>(midiInputDroppedEvents()),
+                          usb.available ? 1u : 0u, usb.mounted ? 1u : 0u,
+                          static_cast<unsigned long>(usb.bytesReceived),
+                          static_cast<unsigned long>(usb.messagesSent),
+                          static_cast<unsigned long>(usb.sendErrors),
+                          ble.available ? 1u : 0u, ble.connected ? 1u : 0u,
+                          static_cast<unsigned long>(ble.packetsReceived),
+                          static_cast<unsigned long>(ble.packetsSent),
+                          static_cast<unsigned long>(ble.malformedPackets),
+                          static_cast<unsigned long>(ble.droppedPackets));
+            break;
+        }
 
         default:
             replyError(request.id, "unsupported_command");

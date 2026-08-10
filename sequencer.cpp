@@ -8,6 +8,8 @@
 #include "streaming_sampler.h"
 #include "event_looper.h"
 #include "motion.h"
+#include "midi_input.h"
+#include "midi_output.h"
 
 Pattern    g_patterns[NUM_PATTERNS];
 uint8_t    g_song[SONG_LENGTH];
@@ -150,6 +152,7 @@ void sequencerStart(bool fromTop) {
     s_externalClock = false;
     prepareStart(fromTop);
     s_lastStepUs = micros() - s_stepPeriod();   // fire step immediately
+    if (!midiInputIsDispatching()) midiOutputRealtime(fromTop ? 0xFA : 0xFB);
 }
 
 void sequencerStop() {
@@ -157,6 +160,7 @@ void sequencerStop() {
     g_playing = false;
     g_playStep = 0;
     eventLooperResetTransport();
+    if (!midiInputIsDispatching()) midiOutputRealtime(0xFC);
 }
 
 static void songAdvance() {
@@ -238,6 +242,8 @@ void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent, boo
     // poly: legato means "chord", not slide
     g_synths[track].noteOn(noteToFreq(note, octave), accent, !poly && legato);
     const uint8_t midi = static_cast<uint8_t>((octave + 1u) * 12u + note - 1u);
+    if (!midiInputIsDispatching())
+        midiOutputNoteOn(track, midi, accent ? 127 : 96);
     eventLooperRecordSynth(sequencerEventRecordStep(), track, midi,
                            accent ? 127 : 96);
 
@@ -264,6 +270,8 @@ void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent, boo
 
 void liveDrumHit(uint8_t lane) {
     triggerLane(lane);
+    if (!midiInputIsDispatching())
+        midiOutputNoteOn(9, static_cast<uint8_t>(36 + lane), 127);
     eventLooperRecordDrum(sequencerEventRecordStep(), lane, 127);
     if (g_recEnabled) {
         if (g_playing) {

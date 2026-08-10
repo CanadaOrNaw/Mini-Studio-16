@@ -103,7 +103,7 @@ bool bleMidiSend(const uint8_t* message, size_t length) {
                                          length, packet, sizeof(packet));
     if (!encoded) return false;
     s_characteristic->setValue(packet, encoded);
-    if (!s_characteristic->notify()) return false;
+    s_characteristic->notify();
     __atomic_add_fetch(&s_sent, 1u, __ATOMIC_RELAXED);
     return true;
 }
@@ -118,4 +118,3 @@ BleMidiSnapshot bleMidiSnapshot() {
     result.droppedPackets = __atomic_load_n(&s_dropped, __ATOMIC_RELAXED);
     return result;
 }
-

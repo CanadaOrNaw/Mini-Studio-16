@@ -32,6 +32,7 @@
 #include "streaming_sampler.h"
 #include "motion.h"
 #include "ble_midi.h"
+#include "usb_midi.h"
 #include "ui.h"
 
 void inputInit();
@@ -76,6 +77,7 @@ void setup() {
     midiInputInit();
     motionInit();
     bleMidiInit();
+    usbMidiInit();
     loadDemoPattern();
 
     uiSplash();
@@ -97,6 +99,7 @@ void setup() {
 void loop() {
     serialControlUpdate();
     bleMidiUpdate();
+    usbMidiUpdate();
     midiInputUpdate();
     motionUpdate();
     inputUpdate();

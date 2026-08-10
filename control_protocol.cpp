@@ -237,6 +237,11 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
                 request.command = CONTROL_MOTION_MAP;
             } else return CONTROL_PARSE_BAD_ARGUMENTS;
         }
+    } else if (sameWord(verb, "midi")) {
+        char* action = nextToken(cursor);
+        if (!action || !sameWord(action, "status") || !noMore(cursor))
+            return CONTROL_PARSE_BAD_ARGUMENTS;
+        request.command = CONTROL_MIDI_STATUS;
     } else {
         return CONTROL_PARSE_UNKNOWN_COMMAND;
     }

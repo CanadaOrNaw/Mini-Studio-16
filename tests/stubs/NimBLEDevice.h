@@ -32,7 +32,7 @@ public:
     std::string getValue() const { return {}; }
     void setValue(const uint8_t*, size_t) {}
     void setCallbacks(NimBLECharacteristicCallbacks*) {}
-    bool notify() { return true; }
+    void notify() {}
 };
 
 class NimBLEService {
@@ -69,4 +69,3 @@ public:
     }
     static void startAdvertising() {}
 };
-

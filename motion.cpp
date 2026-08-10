@@ -2,6 +2,7 @@
 
 #include "event_looper.h"
 #include "sequencer.h"
+#include "midi_output.h"
 
 #include <Arduino.h>
 #include <M5Cardputer.h>
@@ -13,6 +14,7 @@ MotionSnapshot s_snapshot = {};
 uint32_t s_lastUpdateMs = 0;
 uint16_t s_lastRecordStep[MOTION_MAPPING_COUNT];
 uint8_t s_lastRecordValue[MOTION_MAPPING_COUNT];
+uint8_t s_lastOutputValue[MOTION_MAPPING_COUNT];
 
 void applyTarget(uint8_t target, uint8_t value) {
     if (target == MOTION_TARGET_NONE || target >= MOTION_TARGET_COUNT) return;
@@ -43,6 +45,12 @@ void applyMappings() {
             continue;
         const uint8_t value = s_snapshot.values[item.source];
         applyTarget(item.target, value);
+        const uint8_t outputDelta = value > s_lastOutputValue[mapping]
+            ? value - s_lastOutputValue[mapping] : s_lastOutputValue[mapping] - value;
+        if (outputDelta >= 2) {
+            midiOutputControlChange(15, static_cast<uint8_t>(16 + mapping), value);
+            s_lastOutputValue[mapping] = value;
+        }
         const uint8_t delta = value > s_lastRecordValue[mapping]
             ? value - s_lastRecordValue[mapping] : s_lastRecordValue[mapping] - value;
         if (recordStep != s_lastRecordStep[mapping] && delta >= 2 &&
@@ -62,6 +70,7 @@ void motionInit() {
     for (uint8_t index = 0; index < MOTION_MAPPING_COUNT; ++index) {
         s_lastRecordStep[index] = 0xFFFF;
         s_lastRecordValue[index] = 0;
+        s_lastOutputValue[index] = 0;
     }
     s_lastUpdateMs = 0;
 }

@@ -9,6 +9,7 @@ namespace {
 MidiParser s_parser;
 MidiEventQueue<128> s_queue;
 MidiTransportClock s_transport;
+bool s_dispatching = false;
 
 void routeEvent(const MidiEvent& event) {
     const MidiTransportResult transport = s_transport.consume(event);
@@ -46,7 +47,12 @@ void midiInputFeedByte(uint8_t byte) {
 void midiInputUpdate() {
     MidiEvent event = {};
     uint8_t budget = 32;
-    while (budget-- && s_queue.pop(event)) routeEvent(event);
+    while (budget-- && s_queue.pop(event)) {
+        s_dispatching = true;
+        routeEvent(event);
+        s_dispatching = false;
+    }
 }
 
 uint32_t midiInputDroppedEvents() { return s_queue.dropped(); }
+bool midiInputIsDispatching() { return s_dispatching; }
