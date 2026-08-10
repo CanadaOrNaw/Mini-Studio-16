@@ -6,6 +6,7 @@
 #include "sd_io_arbiter.h"
 #include <SD.h>
 #include <math.h>
+#include <new>
 #include <string.h>
 
 int16_t g_wavetables[NUM_WT_TOTAL][WT_SIZE];
@@ -114,7 +115,12 @@ void wavetableLoadUserFromSD() {
 
     // temp buffer for decoded wav (single cycle files are small; cap 4096 frames)
     const int MAXF = 4096;
-    static int16_t tmp[MAXF];
+    int16_t* tmp = new (std::nothrow) int16_t[MAXF];
+    if (!tmp) {
+        SdIoGuard guard;
+        dir.close();
+        return;
+    }
 
     File f;
     { SdIoGuard guard; f = dir.openNextFile(); }
@@ -149,4 +155,5 @@ void wavetableLoadUserFromSD() {
         { SdIoGuard guard; f.close(); f = dir.openNextFile(); }
     }
     { SdIoGuard guard; dir.close(); }
+    delete[] tmp;
 }

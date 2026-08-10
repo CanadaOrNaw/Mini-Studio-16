@@ -40,7 +40,9 @@ Mono mode provides 303-style slide/legato; poly mode records chords up to three
 notes.
 
 The drum track contains eight lanes. Each can use 808 synthesis, 909 synthesis,
-or the inherited RAM sample engine, with volume, tune, decay, and choke group.
+or the inherited sample engine, with volume, tune, decay, and choke group.
+Short files use the adaptive RAM pool when it fits; otherwise the same lane
+gesture transparently uses a streamed sampler slot.
 
 On PATTERN/SOUND, the home-row piano plays synths. With drums selected,
 `fn shift a s d f g h` trigger lanes 1–8. Hold `m` for accent; overlapping mono
@@ -66,7 +68,7 @@ volume, tune, decay, and choke. `v/c` chooses a row, `x/b` changes it, and hold
 
 ## SAMPLE page
 
-This page combines the original RAM sample browser with the new 16-slot
+This page combines the original sample browser with the new 16-slot
 SD-streamed instrument.
 
 ### Browser mode
@@ -76,7 +78,8 @@ SD-streamed instrument.
 - Tap `n` toggles melodic/sliced mode and updates an occupied slot.
 - `/` assigns the highlighted file to the streamed slot.
 - Tap `.` previews the streamed slot or highlighted legacy file.
-- Tap pattern keys `4`–`-` to load the highlighted file into RAM drum lane 1–8
+- Tap pattern keys `4`–`-` to load the highlighted file into drum lane 1–8;
+  the firmware selects RAM or streamed playback according to available memory
   (the inherited workflow).
 - Hold `.` and keep holding to stream the built-in mic into the current slot;
   release to stop/finalize.

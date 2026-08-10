@@ -15,7 +15,7 @@
 
 namespace {
 constexpr uint32_t kPlaybackRingFrames = 1024;
-constexpr uint32_t kRecordRingFrames = 8192;
+constexpr uint32_t kRecordRingFrames = 4096;
 constexpr size_t kReadFrames = 256;
 constexpr size_t kWriteFrames = 1024;
 constexpr uint32_t kPrimeFrames = 512;

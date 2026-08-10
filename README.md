@@ -28,7 +28,7 @@ official Microgroove or lebiro.studio release.
 | MIDI | BLE MIDI input/output; composite USB CDC+MIDI device image; separate direct USB-MIDI host image; notes, CC, clock, song position, start/continue/stop | Enumeration, reconnect, clock jitter, OTG/VBUS behavior |
 | Recording | Long master WAVs and optional five-bus master/synth1/synth2/synth3/drums stem containers on SD | Zero-drop 30-minute captures and power-cut cycles |
 | Control | Bounded `MS16/1` USB serial protocol, desktop CLI, JSON, monitor, discovery, fuzzing, and soak client | Device-side 10,000-command soak |
-| Existing Microgroove | Three synth tracks, eight drum lanes, keyboard, short RAM sampler/resampler, speaker, mic, headphones, projects, and factory content retained | Regression pass on hardware |
+| Existing Microgroove | Three synth tracks, eight drum lanes, keyboard, short sampler/resampler gestures, speaker, mic, headphones, projects, and factory content retained; samples use adaptive RAM or transparent SD-stream fallback | Regression pass on hardware |
 | Expanded audio | Line input and conventional Bluetooth headphones/speakers | External codec/A2DP expansion hardware; unavailable from stock S3 firmware alone |
 
 The DAW is optional: songs can be captured to master WAV or exported as five
@@ -46,11 +46,15 @@ stems without removing any inherited standalone workflow.
   CLI behavior, and concurrent ring ordering.
 - GitHub runs the host suite plus AddressSanitizer and UndefinedBehaviorSanitizer.
 - Firmware size is checked from the ESP32 linker sections using the same DRAM
-  accounting rules as PlatformIO, with an 80% static-DRAM ceiling.
+  accounting rules as PlatformIO, with a 200 KiB static-DRAM ceiling so runtime
+  workers, wireless stacks, and the 8-bit UI canvas retain heap.
 - GBX v7 persists the expanded sequencer, sampler, locks, event tracks, motion
   mappings, and six-loop mixer while retaining v1–v6 loading.
 - Every long-audio subsystem uses bounded RAM rings; SD files are owned by
   storage workers, not opened or touched by the real-time renderer.
+- The inherited mic-to-drum and short-resample gestures use the streamed
+  recorder when the adaptive RAM pool is unavailable, avoiding an 84 KiB
+  whole-take scratch allocation without removing those workflows.
 - Interrupted master, stem, loop, and streamed-sample temporary files are
   recovered when structurally valid or preserved as `.bad` for diagnosis.
 
@@ -149,7 +153,7 @@ Use a FAT32 microSD card for the first hardware pass:
 ```text
 /groovebox/
 ├── projects/       P1.gbx–P8.gbx, current write version GBX v7
-├── samples/        short RAM samples and 16-slot streamed WAV assets
+├── samples/        adaptive RAM/streamed drum samples and 16-slot WAV assets
 ├── wavetables/     optional single-cycle WAVs
 ├── loops/          L1.wav–L6.wav and recovery files
 ├── recordings/     master WAVs, stem containers, and recovered takes

@@ -51,7 +51,7 @@ Before stressing new systems, verify the original instrument:
 
 - display/splash and every keyboard key;
 - all three synth tracks, mono/poly/chords/accent/slide;
-- all eight drum lanes, mute, tune, decay, choke, and RAM samples;
+- all eight drum lanes, mute, tune, decay, choke, and adaptive RAM/streamed samples;
 - speaker and headphone output;
 - built-in mic short sample and short master resample;
 - patterns, song chain, project save/load, and v1/v2 migration sample if

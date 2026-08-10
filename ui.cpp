@@ -58,6 +58,9 @@ static const char* oscNames[]  = {"SAW","SQR","TRI","SIN","WT"};
 void uiInit() {
     M5Cardputer.Display.setRotation(1);
     M5Cardputer.Display.fillScreen(TFT_BLACK);
+    // The ADV has no PSRAM.  An 8-bit canvas preserves the existing buffered
+    // UI while cutting its heap allocation from 64.8 KiB to 32.4 KiB.
+    canvas.setColorDepth(8);
     canvas.createSprite(SCREEN_W, SCREEN_H);
     canvas.setTextFont(1);
     canvas.setTextSize(1);
@@ -282,8 +285,8 @@ static void drawSoundPage() {
                 case 1: canvas.print(engNames[d.engine]); break;
                 case 2:
                     if (d.engine == ENG_SMPL) {
-                        if (d.sampleSlot >= 0 && d.sampleSlot < g_numSamples)
-                            canvas.print(g_samples[d.sampleSlot].name);
+                        const char* name = samplerReferenceName(d.sampleSlot);
+                        if (name[0]) canvas.print(name);
                         else { canvas.setTextColor(COL_GRID); canvas.print("(no sample)"); }
                     } else {
                         canvas.print(d.engine == ENG_909 ? type909[d.type] : type808[d.type]);

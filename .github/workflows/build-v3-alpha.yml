@@ -40,11 +40,13 @@ jobs:
         run: >-
           python tools/check_firmware_size.py
           .pio/build/m5stack-cardputer-adv/firmware.elf
+          --max-static 204800
           --report .pio/build/m5stack-cardputer-adv/size-report.json
       - name: Enforce USB-host profile resource budget
         run: >-
           python tools/check_firmware_size.py
           .pio/build/m5stack-cardputer-adv-usb-host/firmware.elf
+          --max-static 204800
           --report .pio/build/m5stack-cardputer-adv-usb-host/size-report.json
       - name: Create merged 8 MB flash image
         run: |

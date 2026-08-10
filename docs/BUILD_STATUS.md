@@ -75,8 +75,11 @@ The budget tool mirrors PlatformIO espressif32 6.7.0 section accounting:
 misleading Berkeley `size` summary, which includes ESP32 virtual/padding
 sections and previously produced a false 1.15 MB result.
 
-The CI ceiling is 262,144 static DRAM bytes, 80% of the board definition's
-327,680-byte data budget. This is a regression gate, not runtime-heap proof.
+The CI ceiling is 204,800 static DRAM bytes, 62.5% of the board definition's
+327,680-byte data budget. The UI canvas is explicitly 8-bit, recorder rings use
+bounded reservoirs, and the legacy whole-take scratch
+buffer was replaced by the streamed recorder. This is still a regression gate,
+not runtime-heap proof.
 Boot telemetry reports internal free heap and largest block after subsystem
 initialization; only hardware can validate task stacks, library allocations,
 and the adaptive legacy sample pool together.

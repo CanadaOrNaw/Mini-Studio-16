@@ -79,8 +79,8 @@ def find_size_tool() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("elf", type=pathlib.Path)
-    parser.add_argument("--max-static", type=int, default=262_144,
-                        help="static DRAM ceiling (80%% of the 327680-byte board budget)")
+    parser.add_argument("--max-static", type=int, default=204_800,
+                        help="static DRAM ceiling (62.5%% of the 327680-byte board budget)")
     parser.add_argument("--max-flash", type=int, default=3_000_000,
                         help="program-image ceiling within the 3342336-byte app partition")
     parser.add_argument("--report", type=pathlib.Path)

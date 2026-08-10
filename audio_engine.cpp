@@ -63,11 +63,6 @@ static void audioTask(void*) {
             s_stemBuf[i].synth3 = toPcm(synthBus[2]);
             s_stemBuf[i].drums = toPcm(drumBus);
 
-            if (g_rsmpRemain) {                       // resample tap
-                g_scratch[g_scratchWr++] = buf[i];
-                g_rsmpRemain--;
-            }
-
             if ((i & 7) == 0 && g_scopeIdx < SCREEN_W)
                 g_scopeBuf[g_scopeIdx++] = mix;
         }

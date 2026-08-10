@@ -93,6 +93,7 @@ static M5Stub M5;
 class M5Canvas {
 public:
     explicit M5Canvas(DisplayStub*) {}
+    void setColorDepth(int) {}
     void createSprite(int, int) {}
     void setTextFont(int) {}
     void setTextSize(int) {}

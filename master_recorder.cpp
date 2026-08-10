@@ -16,7 +16,7 @@
 #include <string.h>
 
 namespace {
-constexpr uint32_t kRingFrames = 8192;
+constexpr uint32_t kRingFrames = 4096;
 constexpr size_t kWriteFrames = 2048;
 constexpr const char* kTempPath = DIR_RECORDINGS "/.master.tmp";
 

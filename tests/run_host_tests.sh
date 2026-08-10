@@ -78,6 +78,11 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 
 "$build_dir/test_sampler_slots"
 
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_sample_reference.cpp" -o "$build_dir/test_sample_reference"
+
+"$build_dir/test_sample_reference"
+
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror -pthread \
   "$test_dir/test_sample_stream_core.cpp" -o "$build_dir/test_sample_stream_core"
 

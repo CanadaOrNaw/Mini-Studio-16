@@ -286,8 +286,11 @@ bool storageSaveProject(uint8_t slot) {
         SaveDrumLane& o = base.lanes[l];
         o.engine = d.engine; o.type = d.type; o.chokeGroup = d.chokeGroup;
         o.volume = d.volume; o.tune = d.tune; o.decay = d.decay;
-        if (d.engine == ENG_SMPL && d.sampleSlot >= 0 && d.sampleSlot < g_numSamples)
-            strncpy(o.sampleName, g_samples[d.sampleSlot].name, SAMPLE_NAME_LEN - 1);
+        if (d.engine == ENG_SMPL) {
+            const char* sampleName = samplerReferenceName(d.sampleSlot);
+            if (sampleName[0])
+                strncpy(o.sampleName, sampleName, SAMPLE_NAME_LEN - 1);
+        }
     }
     for (int p = 0; p < NUM_PATTERNS; p++) {
         for (int s = 0; s < NUM_SYNTHS; s++)
@@ -739,6 +742,12 @@ bool storageLoadProject(uint8_t slot) {
         g_songLoopStart = pf.songLoopStart;
         memcpy(g_song, pf.song, SONG_LENGTH);
         for (int s = 0; s < NUM_SYNTHS; s++) applySynth(s, pf.synths[s], pf.voices[s]);
+        // Restore the streamed bank before legacy lane names.  If the adaptive
+        // RAM pool is unavailable, samplerLoad can reuse a saved streamed slot.
+        if (version >= 4) {
+            g_samplerSlotBank = samplerStage->bank;
+            g_samplerSequence = samplerStage->sequence;
+        }
         for (int l = 0; l < NUM_DRUM_LANES; l++) applyLane(l, pf.lanes[l]);
         for (int p = 0; p < NUM_PATTERNS; p++) {
             for (int s = 0; s < NUM_SYNTHS; s++)
@@ -751,10 +760,6 @@ bool storageLoadProject(uint8_t slot) {
             memcpy(g_patterns[p].drums, pf.drums[p], NUM_STEPS);
         }
         ok = true;
-        if (version >= 4) {
-            g_samplerSlotBank = samplerStage->bank;
-            g_samplerSequence = samplerStage->sequence;
-        }
         if (version >= 5) {
             const ProjectFileV5& eventFile = version == 7 ? loaded.v7.base.base :
                                                     version == 6 ? loaded.v6.base : loaded.v5;

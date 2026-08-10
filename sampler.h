@@ -11,6 +11,7 @@ struct SampleInfo {
     uint32_t offset;                 // start index in pool (int16 units)
     uint32_t length;                 // frames
     uint32_t rate;                   // native sample rate
+    int8_t   streamSlot;             // 0..15 when SD streamed, -1 when RAM resident
     bool     used;
 };
 
@@ -24,6 +25,17 @@ bool samplerInit();                       // allocate pool, ensure SD dirs
 void samplerClearAll();                   // wipe pool + registry
 int  samplerLoad(const char* filename);   // returns slot index or -1
 int  samplerFindByName(const char* filename);
+
+// The inherited drum/sample workflow falls back to the v3 SD streamer when
+// the adaptive legacy RAM pool is unavailable.  Negative DrumLane references
+// encode direct streamed slots without changing the persisted lane format.
+int8_t samplerReserveStreamReference();
+int8_t samplerMakeStreamReference(uint8_t streamSlot);
+void samplerReleaseStreamReference(int8_t reference);
+bool samplerDecodeStreamReference(int reference, uint8_t& streamSlot);
+bool samplerReferenceIsStreamed(int reference);
+bool samplerTriggerStreamedReference(int reference, float pitch, float volume);
+const char* samplerReferenceName(int reference);
 
 // Decode an open WAV file to mono int16. Returns false on unsupported format.
 // Used by both the sampler and the wavetable loader.
@@ -42,6 +54,11 @@ struct SampleVoice {
     void init() { data = nullptr; len = 0; pos = 0; inc = 1; gain = 1; active = false; }
 
     void trigger(int slot, float pitch, float volume) {
+        if (samplerReferenceIsStreamed(slot)) {
+            active = false;
+            samplerTriggerStreamedReference(slot, pitch, volume);
+            return;
+        }
         if (slot < 0 || slot >= g_numSamples || !g_samples[slot].used) { active = false; return; }
         data   = g_samplePool + g_samples[slot].offset;
         len    = g_samples[slot].length;

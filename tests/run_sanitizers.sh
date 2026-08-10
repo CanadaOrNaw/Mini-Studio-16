@@ -29,6 +29,7 @@ build_run midi "$test_dir/test_midi.cpp" "$test_dir/../midi_parser.cpp" \
 build_run song_chain "$test_dir/test_song_chain.cpp"
 build_run loop_stream -pthread "$test_dir/test_loop_stream_core.cpp"
 build_run sampler_slots "$test_dir/test_sampler_slots.cpp" "$test_dir/../sampler_slots.cpp"
+build_run sample_reference "$test_dir/test_sample_reference.cpp"
 build_run sample_stream -pthread "$test_dir/test_sample_stream_core.cpp"
 build_run event_looper "$test_dir/test_event_looper.cpp"
 build_run motion "$test_dir/test_motion_core.cpp"

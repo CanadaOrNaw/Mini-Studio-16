@@ -46,7 +46,9 @@ bool streamingSamplerAssign(uint8_t slot, const char* filename,
                             SamplerSlotMode mode);
 bool streamingSamplerClear(uint8_t slot);
 bool streamingSamplerBeginRecord(uint8_t slot, SamplerSlotMode mode,
-                                 uint32_t sourceRate, StreamingSamplerInput input);
+                                 uint32_t sourceRate, StreamingSamplerInput input,
+                                 uint32_t maximumSourceFrames = 0,
+                                 bool autoTrim = false);
 size_t streamingSamplerRecordPush(StreamingSamplerInput input,
                                   const int16_t* frames, size_t count);
 bool streamingSamplerStopRecord();

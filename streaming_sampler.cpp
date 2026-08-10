@@ -19,9 +19,11 @@ namespace {
 constexpr uint32_t kRingFrames = 2048;
 constexpr uint32_t kPrimeFrames = 1536;
 constexpr size_t kReadFrames = 256;
-constexpr uint32_t kRecordRingFrames = 8192;
+constexpr uint32_t kRecordRingFrames = 4096;
 constexpr size_t kWriteFrames = 1024;
-constexpr uint8_t kCommandCapacity = 32;
+constexpr uint8_t kCommandCapacity = 16;
+constexpr int32_t kTrimThreshold = 600;
+constexpr uint32_t kTrimPrerollMs = 30;
 
 using FirmwareSampleCore = SampleStreamCore<STREAMING_SAMPLE_VOICES, kRingFrames>;
 
@@ -77,6 +79,10 @@ alignas(4) uint32_t s_recordSlot = 0;
 alignas(4) uint32_t s_recordFrames = 0;
 alignas(4) uint32_t s_recordTargetFrames = 0;
 alignas(4) uint32_t s_recordDropped = 0;
+alignas(4) uint32_t s_recordAutoTrim = 0;
+alignas(4) uint32_t s_recordHasLoudFrame = 0;
+alignas(4) uint32_t s_recordFirstLoudFrame = 0;
+alignas(4) uint32_t s_recordLastLoudFrame = 0;
 
 StreamingSamplerRecordState recordState() {
     return static_cast<StreamingSamplerRecordState>(
@@ -231,10 +237,25 @@ bool pumpRecording() {
     }
     const uint8_t slot = static_cast<uint8_t>(
         __atomic_load_n(&s_recordSlot, __ATOMIC_RELAXED));
+    const bool autoTrim = __atomic_load_n(&s_recordAutoTrim, __ATOMIC_ACQUIRE) != 0;
+    const bool hasLoudFrame =
+        __atomic_load_n(&s_recordHasLoudFrame, __ATOMIC_ACQUIRE) != 0;
+    if (ok && autoTrim && !hasLoudFrame) ok = false;
     if (ok) {
         ok = g_samplerSlotBank.assign(slot, s_recordFilename, s_recordFramesWritten,
                                       s_recordSourceRate,
                                       static_cast<SamplerSlotMode>(s_recordMode));
+    }
+    if (ok && autoTrim) {
+        const uint32_t first =
+            __atomic_load_n(&s_recordFirstLoudFrame, __ATOMIC_ACQUIRE);
+        const uint32_t last =
+            __atomic_load_n(&s_recordLastLoudFrame, __ATOMIC_ACQUIRE);
+        const uint32_t preroll = s_recordSourceRate * kTrimPrerollMs / 1000u;
+        const uint32_t start = first > preroll ? first - preroll : 0;
+        const uint32_t length = last >= start ? last - start + 1u : 0;
+        ok = length >= SAMPLER_SLICE_COUNT &&
+             g_samplerSlotBank.setTrim(slot, start, length);
     }
     if (!ok) {
         { SdIoGuard guard; if (SD.exists(s_recordFinalPath)) SD.remove(s_recordFinalPath); }
@@ -540,6 +561,10 @@ void streamingSamplerInit(bool sdMounted) {
     __atomic_store_n(&s_recordFrames, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_recordTargetFrames, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_recordDropped, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordAutoTrim, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordHasLoudFrame, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordFirstLoudFrame, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordLastLoudFrame, 0u, __ATOMIC_RELEASE);
     if (!sdMounted) return;
     recoverInterruptedRecordings();
     if (xTaskCreatePinnedToCore(storageTask, "sample_sd", 6144, nullptr, 1,
@@ -597,7 +622,8 @@ bool streamingSamplerClear(uint8_t slot) {
 }
 
 bool streamingSamplerBeginRecord(uint8_t slot, SamplerSlotMode mode,
-                                 uint32_t sourceRate, StreamingSamplerInput input) {
+                                 uint32_t sourceRate, StreamingSamplerInput input,
+                                 uint32_t maximumSourceFrames, bool autoTrim) {
     const StreamingSamplerRecordState state = recordState();
     if (!s_sdMounted || !s_task || slot >= SAMPLER_SLOT_COUNT || sourceRate == 0 ||
         (mode != SAMPLER_SLOT_MELODIC && mode != SAMPLER_SLOT_SLICED) ||
@@ -605,6 +631,7 @@ bool streamingSamplerBeginRecord(uint8_t slot, SamplerSlotMode mode,
         state == STREAM_SAMPLE_REC_STARTING || state == STREAM_SAMPLE_REC_RECORDING ||
         state == STREAM_SAMPLE_REC_STOPPING || masterRecorderIsBusy() ||
         stemRecorderIsBusy() || sdDiagnosticsIsRunning() || loopEngineIsRecording() ||
+        micSamplerHasPendingCommit() ||
         (input == STREAM_SAMPLE_INPUT_BUS && micRecActive()))
         return false;
 
@@ -612,7 +639,9 @@ bool streamingSamplerBeginRecord(uint8_t slot, SamplerSlotMode mode,
     const uint32_t availableQuota = g_samplerSlotBank.quotaRemainingFrames() +
                                     previous.quotaFrames;
     const uint64_t scaled = static_cast<uint64_t>(availableQuota) * sourceRate;
-    const uint32_t target = static_cast<uint32_t>(scaled / SAMPLE_RATE);
+    uint32_t target = static_cast<uint32_t>(scaled / SAMPLE_RATE);
+    if (maximumSourceFrames != 0 && target > maximumSourceFrames)
+        target = maximumSourceFrames;
     if (target < SAMPLER_SLICE_COUNT) return false;
 
     SamplerCommand command = {};
@@ -627,6 +656,10 @@ bool streamingSamplerBeginRecord(uint8_t slot, SamplerSlotMode mode,
     __atomic_store_n(&s_recordFrames, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_recordTargetFrames, target, __ATOMIC_RELEASE);
     __atomic_store_n(&s_recordDropped, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordAutoTrim, autoTrim ? 1u : 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordHasLoudFrame, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordFirstLoudFrame, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordLastLoudFrame, 0u, __ATOMIC_RELEASE);
     setRecordState(STREAM_SAMPLE_REC_STARTING);
     if (queueCommand(command)) return true;
     setRecordState(STREAM_SAMPLE_REC_ERROR);
@@ -650,6 +683,21 @@ size_t streamingSamplerRecordPush(StreamingSamplerInput input,
     }
     const size_t wanted = min<size_t>(count, target - produced);
     const size_t pushed = s_recordRing.push(frames, wanted);
+    if (__atomic_load_n(&s_recordAutoTrim, __ATOMIC_RELAXED) != 0) {
+        for (size_t index = 0; index < pushed; ++index) {
+            const int32_t sample = frames[index];
+            const int32_t magnitude = sample < 0 ? -sample : sample;
+            if (magnitude < kTrimThreshold) continue;
+            const uint32_t absolute = produced + static_cast<uint32_t>(index);
+            uint32_t expected = 0;
+            if (__atomic_compare_exchange_n(&s_recordHasLoudFrame, &expected, 1u,
+                                            false, __ATOMIC_ACQ_REL,
+                                            __ATOMIC_ACQUIRE))
+                __atomic_store_n(&s_recordFirstLoudFrame, absolute,
+                                 __ATOMIC_RELEASE);
+            __atomic_store_n(&s_recordLastLoudFrame, absolute, __ATOMIC_RELEASE);
+        }
+    }
     __atomic_add_fetch(&s_recordFrames, static_cast<uint32_t>(pushed), __ATOMIC_RELAXED);
     if (pushed < wanted) {
         __atomic_add_fetch(&s_recordDropped, static_cast<uint32_t>(wanted - pushed),
