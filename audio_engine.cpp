@@ -20,6 +20,11 @@ static int16_t s_bufA[AUDIO_BUF_LEN];
 static int16_t s_bufB[AUDIO_BUF_LEN];
 static StemPcmFrame s_stemBuf[AUDIO_BUF_LEN];
 static TaskHandle_t s_task = nullptr;
+static portMUX_TYPE s_dspMux = portMUX_INITIALIZER_UNLOCKED;
+static AudioDspSnapshot s_dsp = {
+    0, 0, 0, 0,
+    static_cast<uint32_t>(AUDIO_BUF_LEN) * 1000000u / SAMPLE_RATE,
+};
 
 static int16_t toPcm(float sample) {
     if (sample > 1.0f) sample = 1.0f;
@@ -33,6 +38,7 @@ static void audioTask(void*) {
 
     while (true) {
         int16_t* buf = buffers[cur];
+        const uint32_t renderStartedUs = micros();
 
         for (int i = 0; i < AUDIO_BUF_LEN; i++) {
             float synthBus[NUM_SYNTHS] = {0.0f, 0.0f, 0.0f};
@@ -71,6 +77,14 @@ static void audioTask(void*) {
         masterRecorderPush(buf, AUDIO_BUF_LEN);
         stemRecorderPush(s_stemBuf, AUDIO_BUF_LEN);
 
+        const uint32_t renderUs = micros() - renderStartedUs;
+        portENTER_CRITICAL(&s_dspMux);
+        ++s_dsp.blocks;
+        s_dsp.lastRenderUs = renderUs;
+        if (renderUs > s_dsp.maxRenderUs) s_dsp.maxRenderUs = renderUs;
+        if (renderUs >= s_dsp.deadlineUs) ++s_dsp.deadlineMisses;
+        portEXIT_CRITICAL(&s_dspMux);
+
         while (!M5Cardputer.Speaker.playRaw(buf, AUDIO_BUF_LEN, SAMPLE_RATE, false, 1, 0))
             vTaskDelay(1);
 
@@ -80,4 +94,20 @@ static void audioTask(void*) {
 
 void audioEngineStart() {
     xTaskCreatePinnedToCore(audioTask, "audio", 8192, nullptr, 1, &s_task, 0);
+}
+
+AudioDspSnapshot audioEngineDspSnapshot() {
+    portENTER_CRITICAL(&s_dspMux);
+    const AudioDspSnapshot result = s_dsp;
+    portEXIT_CRITICAL(&s_dspMux);
+    return result;
+}
+
+void audioEngineResetDspStats() {
+    portENTER_CRITICAL(&s_dspMux);
+    s_dsp.blocks = 0;
+    s_dsp.lastRenderUs = 0;
+    s_dsp.maxRenderUs = 0;
+    s_dsp.deadlineMisses = 0;
+    portEXIT_CRITICAL(&s_dspMux);
 }

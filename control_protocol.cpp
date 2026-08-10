@@ -4,6 +4,7 @@
 #include "motion.h"
 #include "streaming_sampler.h"
 #include "storage.h"
+#include "synth_parameters.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -72,6 +73,16 @@ bool parseMotionTarget(const char* token, uint16_t& value) {
     else return false;
     return true;
 }
+
+bool parseSynthEngine(const char* token, uint16_t& value) {
+    if (sameWord(token, "mg") || sameWord(token, "mg303") ||
+        sameWord(token, "303")) value = SYNTH_ENGINE_MG;
+    else if (sameWord(token, "mgx")) value = SYNTH_ENGINE_MGX;
+    else if (sameWord(token, "fm") || sameWord(token, "fm4"))
+        value = SYNTH_ENGINE_FM4;
+    else return false;
+    return true;
+}
 }  // namespace
 
 ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
@@ -124,6 +135,11 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
             !parseNumber(nextToken(cursor), 1, 127, request.arg3) || !noMore(cursor))
             return CONTROL_PARSE_BAD_ARGUMENTS;
         request.command = CONTROL_NOTE_ON;
+    } else if (sameWord(verb, "note_off")) {
+        if (!parseNumber(nextToken(cursor), 1, 3, request.arg1) ||
+            !parseNumber(nextToken(cursor), 24, 107, request.arg2) || !noMore(cursor))
+            return CONTROL_PARSE_BAD_ARGUMENTS;
+        request.command = CONTROL_NOTE_OFF;
     } else if (sameWord(verb, "drum")) {
         if (!parseNumber(nextToken(cursor), 1, 8, request.arg1) || !noMore(cursor))
             return CONTROL_PARSE_BAD_ARGUMENTS;
@@ -277,6 +293,40 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
             if (sameWord(action, "save")) request.command = CONTROL_PROJECT_SAVE;
             else if (sameWord(action, "load")) request.command = CONTROL_PROJECT_LOAD;
             else return CONTROL_PARSE_BAD_ARGUMENTS;
+        }
+    } else if (sameWord(verb, "synth")) {
+        char* trackOrAction = nextToken(cursor);
+        if (!trackOrAction) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(trackOrAction, "status")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_SYNTH_STATUS;
+        } else if (sameWord(trackOrAction, "dsp_reset")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_SYNTH_DSP_RESET;
+        } else {
+            if (!parseNumber(trackOrAction, 1, 3, request.arg1))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            char* action = nextToken(cursor);
+            if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
+            if (sameWord(action, "engine")) {
+                if (!parseSynthEngine(nextToken(cursor), request.arg2) || !noMore(cursor))
+                    return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.command = CONTROL_SYNTH_ENGINE;
+            } else if (sameWord(action, "set")) {
+                SynthParameter parameter = SYNTH_PARAM_ENGINE;
+                char* parameterName = nextToken(cursor);
+                if (!synthParameterFromName(parameterName, parameter))
+                    return CONTROL_PARSE_BAD_ARGUMENTS;
+                int32_t minimum = 0;
+                int32_t maximum = 0;
+                if (!synthParameterRange(parameter, minimum, maximum) || minimum < 0 ||
+                    maximum > UINT16_MAX ||
+                    !parseNumber(nextToken(cursor), static_cast<uint16_t>(minimum),
+                                 static_cast<uint16_t>(maximum), request.arg3) ||
+                    !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.arg2 = static_cast<uint16_t>(parameter);
+                request.command = CONTROL_SYNTH_SET;
+            } else return CONTROL_PARSE_BAD_ARGUMENTS;
         }
     } else {
         return CONTROL_PARSE_UNKNOWN_COMMAND;

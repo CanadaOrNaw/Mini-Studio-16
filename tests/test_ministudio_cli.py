@@ -107,6 +107,21 @@ class MiniStudioCliTests(unittest.TestCase):
         args = cli.parser().parse_args(["project", "1", "load"])
         self.assertEqual(cli.command_words(args), ["project", 1, "load"])
 
+    def test_synth_commands(self):
+        args = cli.parser().parse_args(["note-off", "2", "64"])
+        self.assertEqual(cli.command_words(args), ["note_off", 2, 64])
+        args = cli.parser().parse_args(["synth-status"])
+        self.assertEqual(cli.command_words(args), ["synth", "status"])
+        args = cli.parser().parse_args(["synth-engine", "3", "fm4"])
+        self.assertEqual(cli.command_words(args), ["synth", 3, "engine", "fm4"])
+        args = cli.parser().parse_args(
+            ["synth-set", "1", "fm.op2.ratio", "675"]
+        )
+        self.assertEqual(cli.command_words(args),
+                         ["synth", 1, "set", "fm.op2.ratio", 675])
+        args = cli.parser().parse_args(["synth-dsp-reset"])
+        self.assertEqual(cli.command_words(args), ["synth", "dsp_reset"])
+
 
 if __name__ == "__main__":
     unittest.main()

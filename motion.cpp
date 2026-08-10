@@ -30,10 +30,8 @@ void applyTarget(uint8_t target, uint8_t value) {
         case MOTION_TARGET_SYNTH3_RESONANCE: synth = 2; resonance = true; break;
         default: return;
     }
-    g_synths[synth].forEach([&](SynthVoice& voice) {
-        if (resonance) voice.fltReso = normalized;
-        else voice.fltCutoff = 0.02f + normalized * 0.96f;
-    });
+    if (resonance) g_synths[synth].setResonance(normalized);
+    else g_synths[synth].setCutoff(0.02f + normalized * 0.96f);
 }
 
 void applyMappings() {

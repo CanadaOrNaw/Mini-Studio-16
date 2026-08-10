@@ -84,6 +84,8 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["tempo", args.bpm]
     if args.command == "note":
         return ["note", args.track, args.midi_note, args.velocity]
+    if args.command == "note-off":
+        return ["note_off", args.track, args.midi_note]
     if args.command == "drum":
         return ["drum", args.lane]
     if args.command == "sd-test":
@@ -138,6 +140,14 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["project", "status"]
     if args.command == "project":
         return ["project", args.slot, args.action]
+    if args.command == "synth-status":
+        return ["synth", "status"]
+    if args.command == "synth-engine":
+        return ["synth", args.track, "engine", args.engine]
+    if args.command == "synth-set":
+        return ["synth", args.track, "set", args.parameter, args.value]
+    if args.command == "synth-dsp-reset":
+        return ["synth", "dsp_reset"]
     raise ValueError(f"unsupported command: {args.command}")
 
 
@@ -159,6 +169,9 @@ def parser() -> argparse.ArgumentParser:
     note.add_argument("track", type=int, choices=range(1, 4))
     note.add_argument("midi_note", type=int, choices=range(24, 108))
     note.add_argument("velocity", type=int, choices=range(1, 128))
+    note_off = sub.add_parser("note-off", help="release a MGX/FM note")
+    note_off.add_argument("track", type=int, choices=range(1, 4))
+    note_off.add_argument("midi_note", type=int, choices=range(24, 108))
     drum = sub.add_parser("drum")
     drum.add_argument("lane", type=int, choices=range(1, 9))
     sub.add_parser("sd-test")
@@ -212,6 +225,15 @@ def parser() -> argparse.ArgumentParser:
     project = sub.add_parser("project", help="save or load a complete GBX project")
     project.add_argument("slot", type=int, choices=range(1, 9))
     project.add_argument("action", choices=("save", "load"))
+    sub.add_parser("synth-status", help="show engines and audio render deadlines")
+    synth_engine = sub.add_parser("synth-engine", help="select a per-track synth engine")
+    synth_engine.add_argument("track", type=int, choices=range(1, 4))
+    synth_engine.add_argument("engine", choices=("mg", "mgx", "fm4"))
+    synth_set = sub.add_parser("synth-set", help="set a named integer synth parameter")
+    synth_set.add_argument("track", type=int, choices=range(1, 4))
+    synth_set.add_argument("parameter", help="for example fm.op2.ratio or mgx.amp.attack")
+    synth_set.add_argument("value", type=int, choices=range(0, 5001))
+    sub.add_parser("synth-dsp-reset", help="reset audio render timing counters")
     sub.add_parser("ports", help="list serial ports without opening one")
     monitor = sub.add_parser("monitor", help="print asynchronous device output")
     monitor.add_argument("--seconds", type=float, default=0.0, help="0 means run until interrupted")

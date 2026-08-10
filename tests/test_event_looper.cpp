@@ -9,26 +9,31 @@ int main() {
     assert(looper.bars(EVENT_ROLE_BASS) == 128);
     assert(looper.setArmed(EVENT_ROLE_BASS, true));
     assert(looper.add(2047, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 60, 100));
-    assert(looper.count(EVENT_ROLE_BASS) == 1);
+    assert(looper.add(2047, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 60, 0,
+                      EVENT_LOOP_FLAG_NOTE_OFF));
+    assert(looper.count(EVENT_ROLE_BASS) == 2);
 
     int fired = 0;
     looper.forStep(2047, [&](const EventLoopEvent& event) {
         ++fired; assert(event.value1 == 60);
     });
     looper.forStep(4095, [&](const EventLoopEvent&) { ++fired; });
-    assert(fired == 2);
+    assert(fired == 4);
 
     assert(looper.setMuted(EVENT_ROLE_BASS, true));
     looper.forStep(2047, [&](const EventLoopEvent&) { ++fired; });
-    assert(fired == 2);
+    assert(fired == 4);
     assert(looper.setMuted(EVENT_ROLE_BASS, false));
 
     assert(looper.setBars(EVENT_ROLE_DRUM, 2));
     assert(looper.setArmed(EVENT_ROLE_DRUM, true));
     assert(looper.add(35, EVENT_ROLE_DRUM, EVENT_LOOP_DRUM, 3, 127, 0));
-    assert(looper.event(1).step == 3);
+    assert(looper.event(2).step == 3);
     assert(looper.clearTrack(EVENT_ROLE_DRUM));
-    assert(looper.count() == 1);
+    assert(looper.count() == 2);
+    assert(!looper.add(0, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 60, 0, 2));
+    assert(!looper.add(0, EVENT_ROLE_BASS, EVENT_LOOP_DRUM, 0, 127, 0,
+                       EVENT_LOOP_FLAG_NOTE_OFF));
 
     EventLoopEvent invalid = {2048, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 1, 2, 0};
     assert(!looper.appendLoaded(invalid));

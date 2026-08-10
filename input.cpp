@@ -23,6 +23,8 @@
 #include "master_recorder.h"
 #include "stem_recorder.h"
 #include "midi_output.h"
+#include "synth_parameters.h"
+#include "synth_ui_model.h"
 
 void inputInit();
 void inputUpdate();
@@ -76,6 +78,8 @@ static void rememberMidiNote(uint8_t key, uint8_t channel, uint8_t note) {
 static void releaseMidiNote(uint8_t key) {
     for (uint8_t index = 0; index < s_heldMidiNoteCount; ++index) {
         if (s_heldMidiNotes[index].key != key) continue;
+        liveSynthRelease(s_heldMidiNotes[index].channel,
+                         s_heldMidiNotes[index].note);
         midiOutputNoteOff(s_heldMidiNotes[index].channel,
                           s_heldMidiNotes[index].note);
         s_heldMidiNotes[index] = s_heldMidiNotes[--s_heldMidiNoteCount];
@@ -200,31 +204,36 @@ static void adjustSampleParameter(int direction) {
 }
 
 // ---------- SOUND page parameter model ----------
-#define SYNTH_PARAMS 9
 #define DRUM_PARAMS  7
 
-static void adjustSynthParam(SynthTrack& t, uint8_t row, int dir, bool fine) {
-    float step = fine ? 0.01f : 0.05f;
-    if (row == 8) {                                        // VOICES 1..MAX_POLY
-        t.setVoices((uint8_t)constrain((int)t.voices + dir, 1, MAX_POLY));
-        return;
+static void adjustSynthParam(SynthTrack& track, uint8_t row, int direction, bool fine) {
+    const SynthUiRow item = synthSoundBankRow(g_soundBank, row);
+    int32_t value = 0;
+    if (item.parameter >= SYNTH_PARAM_COUNT ||
+        !synthGetParameter(track, item.parameter, value)) return;
+    const int32_t step = synthSoundParameterStep(item.parameter, fine);
+    int32_t next = value + direction * step;
+    int32_t wrap = 0;
+    if (item.parameter == SYNTH_PARAM_ENGINE) wrap = SYNTH_ENGINE_COUNT;
+    else if (item.parameter == SYNTH_PARAM_MG_OSC ||
+             item.parameter == SYNTH_PARAM_MGX_OSC) wrap = OSC_COUNT;
+    else if (item.parameter == SYNTH_PARAM_MG_WAVETABLE ||
+             item.parameter == SYNTH_PARAM_MGX_WAVETABLE)
+        wrap = g_numWavetables;
+    else if (item.parameter == SYNTH_PARAM_MGX_FILTER_MODE) wrap = SYNTH_FILTER_COUNT;
+    else if (item.parameter == SYNTH_PARAM_MGX_LFO_DESTINATION) wrap = SYNTH_LFO_COUNT;
+    else if (item.parameter == SYNTH_PARAM_FM_ALGORITHM) wrap = 8;
+    if (wrap > 0) next = (next % wrap + wrap) % wrap;
+    else {
+        int32_t minimum = 0, maximum = 0;
+        if (synthParameterRange(item.parameter, minimum, maximum))
+            next = constrain(next, minimum, maximum);
     }
-    t.forEach([&](SynthVoice& v) {
-        switch (row) {
-            case 0: v.oscMode = (OscMode)(((int)v.oscMode + dir + OSC_COUNT) % OSC_COUNT); break;
-            case 1: if (g_numWavetables)
-                        v.wtIndex = (uint8_t)(((int)v.wtIndex + dir + g_numWavetables) % g_numWavetables);
-                    break;
-            case 2: v.fltCutoff  = constrain(v.fltCutoff  + dir * step, 0.0f, 1.0f); break;
-            case 3: v.fltReso    = constrain(v.fltReso    + dir * step, 0.0f, 1.0f); break;
-            case 4: v.fltEnvAmt  = constrain(v.fltEnvAmt  + dir * step, 0.0f, 1.0f); break;
-            case 5: v.filtDecRate = constrain(v.filtDecRate + dir * (fine ? 0.00002f : 0.0001f),
-                                              0.9950f, 0.99995f); break;
-            case 6: v.ampDecRate  = constrain(v.ampDecRate  + dir * (fine ? 0.00001f : 0.00005f),
-                                              0.9990f, 0.99999f); break;
-            case 7: v.volume     = constrain(v.volume     + dir * step, 0.0f, 1.0f); break;
-        }
-    });
+    if (!synthSetParameter(track, item.parameter, next)) return;
+    if (item.parameter == SYNTH_PARAM_ENGINE) {
+        g_soundBank = synthFirstSoundBank(track.engine);
+        g_soundParam = 0;
+    }
 }
 
 static void adjustDrumParam(uint8_t lane, uint8_t row, int dir, bool fine) {
@@ -275,7 +284,8 @@ static void arrow(uint8_t act, const KeySnap& now) {
             break;
 
         case PAGE_SOUND: {
-            uint8_t rows = (g_curTrack == NUM_SYNTHS) ? DRUM_PARAMS : SYNTH_PARAMS;
+            uint8_t rows = (g_curTrack == NUM_SYNTHS) ? DRUM_PARAMS :
+                synthSoundBankRows(g_soundBank);
             if (dy) g_soundParam = (uint8_t)((g_soundParam + rows + dy) % rows);
             if (dx) {
                 bool fine = accentHeld(now);
@@ -402,6 +412,11 @@ static void doImmediate(uint8_t act, const KeySnap& now) {
                 g_sampleEditMode = static_cast<uint8_t>((g_sampleEditMode + 1u) % 3u);
                 uiStatus(g_sampleEditMode == 0 ? "SAMPLE BROWSER" :
                          g_sampleEditMode == 1 ? "SLOT SOUND" : "STEP LOCK");
+            } else if (g_curPage == PAGE_SOUND && g_curTrack < NUM_SYNTHS) {
+                g_soundBank = synthNextSoundBank(g_synths[g_curTrack].engine,
+                                                 g_soundBank);
+                g_soundParam = 0;
+                uiStatus(synthSoundBankName(g_soundBank));
             } else {
                 g_patternBank ^= 1;
                 uiStatus(g_patternBank ? "PATTERNS 9-16" : "PATTERNS 1-8");
@@ -418,6 +433,10 @@ static void doShort(uint8_t act) {
     // track select
     if (act >= ACT_TRACK1 && act <= ACT_TRACKD) {
         g_curTrack = (uint8_t)(act - ACT_TRACK1);          // 0..2, 3 = drums
+        if (g_curPage == PAGE_SOUND && g_curTrack < NUM_SYNTHS) {
+            g_soundBank = synthFirstSoundBank(g_synths[g_curTrack].engine);
+            g_soundParam = 0;
+        }
         g_needRedraw = true; return;
     }
     // pattern keys: context
@@ -663,9 +682,11 @@ static void doPiano(uint8_t kc, const KeySnap& now) {
     bool accent = accentHeld(now);
 
     if (g_curPage == PAGE_SOUND) {
-        g_synths[g_curTrack].noteOn(noteToFreq(note, oct), accent, false);  // audition
+        const uint8_t midi = static_cast<uint8_t>((oct + 1u) * 12u + note - 1u);
+        g_synths[g_curTrack].noteOn(noteToFreq(note, oct), accent, false,
+                                    midi, accent ? 127 : 96);  // audition
         midiOutputNoteOn(g_curTrack,
-                         static_cast<uint8_t>((oct + 1u) * 12u + note - 1u),
+                         midi,
                          accent ? 127 : 96);
     } else {
         bool legato = heldPianoCount(s_prev) >= 1;
@@ -789,8 +810,8 @@ void inputUpdate() {
         micRecStop();
     }
 
-    // Release outbound MIDI notes even though the internal synth uses a
-    // decay-only envelope. This prevents stuck notes in a connected DAW.
+    // Releases still prevent stuck outbound notes and now also drive the
+    // ADSR release stage of MGX/FM4. MG/303 intentionally ignores note-off.
     for (uint8_t index = 0; index < s_prev.n; ++index)
         if (!now.has(s_prev.codes[index])) releaseMidiNote(s_prev.codes[index]);
 

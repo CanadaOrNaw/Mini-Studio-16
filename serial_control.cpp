@@ -16,6 +16,8 @@
 #include "mic_sampler.h"
 #include "sd_io_arbiter.h"
 #include "storage.h"
+#include "audio_engine.h"
+#include "synth_parameters.h"
 
 #include <Arduino.h>
 #include <M5Cardputer.h>
@@ -101,11 +103,20 @@ void dispatch(const ControlRequest& request) {
             const uint8_t note = static_cast<uint8_t>((midi % 12) + 1);
             const uint8_t octave = static_cast<uint8_t>((midi / 12) - 1);
             liveSynthNote(static_cast<uint8_t>(request.arg1 - 1), note, octave,
-                          request.arg3 >= 100, false);
+                          request.arg3 >= 100, false,
+                          static_cast<uint8_t>(request.arg3));
             Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK note=%u track=%u\n", request.id,
                           static_cast<unsigned>(midi), static_cast<unsigned>(request.arg1));
             break;
         }
+
+        case CONTROL_NOTE_OFF:
+            liveSynthRelease(static_cast<uint8_t>(request.arg1 - 1),
+                             static_cast<uint8_t>(request.arg2));
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK note_off=%u track=%u\n",
+                          request.id, static_cast<unsigned>(request.arg2),
+                          static_cast<unsigned>(request.arg1));
+            break;
 
         case CONTROL_DRUM_HIT:
             liveDrumHit(static_cast<uint8_t>(request.arg1 - 1));
@@ -484,6 +495,59 @@ void dispatch(const ControlRequest& request) {
             } else replyError(request.id, "project_load_rejected");
             break;
         }
+
+        case CONTROL_SYNTH_STATUS: {
+            const AudioDspSnapshot dsp = audioEngineDspSnapshot();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK dspBlocks=%lu dspLastUs=%lu dspMaxUs=%lu "
+                          "dspMisses=%lu dspDeadlineUs=%lu",
+                          request.id, static_cast<unsigned long>(dsp.blocks),
+                          static_cast<unsigned long>(dsp.lastRenderUs),
+                          static_cast<unsigned long>(dsp.maxRenderUs),
+                          static_cast<unsigned long>(dsp.deadlineMisses),
+                          static_cast<unsigned long>(dsp.deadlineUs));
+            for (uint8_t track = 0; track < NUM_SYNTHS; ++track) {
+                const SynthTrack& synth = g_synths[track];
+                Serial.printf(" t%u=%s,%u,%u,%u,%u",
+                              static_cast<unsigned>(track + 1),
+                              synthEngineName(synth.engine),
+                              static_cast<unsigned>(synth.voices),
+                              static_cast<unsigned>(synth.volume() * 100.0f + 0.5f),
+                              static_cast<unsigned>(synth.cutoff() * 100.0f + 0.5f),
+                              static_cast<unsigned>(synth.resonance() * 100.0f + 0.5f));
+            }
+            Serial.println("");
+            break;
+        }
+
+        case CONTROL_SYNTH_ENGINE: {
+            SynthTrack& synth = g_synths[request.arg1 - 1u];
+            synth.setEngine(static_cast<SynthEngine>(request.arg2));
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK synth=%u engine=%s\n", request.id,
+                          static_cast<unsigned>(request.arg1),
+                          synthEngineName(synth.engine));
+            break;
+        }
+
+        case CONTROL_SYNTH_SET: {
+            SynthTrack& synth = g_synths[request.arg1 - 1u];
+            const SynthParameter parameter = static_cast<SynthParameter>(request.arg2);
+            if (synthSetParameter(synth, parameter, request.arg3))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK synth=%u parameter=%s value=%u\n", request.id,
+                              static_cast<unsigned>(request.arg1),
+                              synthParameterName(parameter),
+                              static_cast<unsigned>(request.arg3));
+            else replyError(request.id, "synth_parameter_rejected");
+            break;
+        }
+
+        case CONTROL_SYNTH_DSP_RESET:
+            audioEngineResetDspStats();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK dsp=reset\n", request.id);
+            break;
 
         default:
             replyError(request.id, "unsupported_command");

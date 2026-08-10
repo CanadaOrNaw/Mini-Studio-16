@@ -3,12 +3,14 @@
 // ============================================================
 #pragma once
 #include "config.h"
+#include "synth_ui_model.h"
 
 extern Page    g_curPage;
 extern bool    g_needRedraw;
 extern float   g_holdProg;       // 0..1 long-press progress / mic level meter
 extern char    g_holdLabel[16];  // label shown next to the footer bar
 extern uint8_t g_soundParam;     // selected row on SOUND page
+extern SynthSoundBank g_soundBank;
 extern uint8_t g_songCursor;     // selected slot on SONG page
 extern uint8_t g_streamSampleSlot;
 extern uint8_t g_streamSampleMode;

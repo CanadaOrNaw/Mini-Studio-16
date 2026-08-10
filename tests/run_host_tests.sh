@@ -11,6 +11,13 @@ compiler_tmp="$build_dir/compiler-tmp"
 mkdir -p "$compiler_tmp"
 export TMPDIR="$compiler_tmp"
 
+synth_sources=(
+  "$test_dir/../synth_dsp.cpp"
+  "$test_dir/../synth_engine.cpp"
+  "$test_dir/../synth_parameters.cpp"
+  "$test_dir/synth_test_support.cpp"
+)
+
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror -pthread \
   "$test_dir/test_pcm_ring.cpp" -o "$build_dir/test_pcm_ring"
 
@@ -18,12 +25,14 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror -pthread \
 
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
   "$test_dir/test_control_protocol.cpp" "$test_dir/../control_protocol.cpp" \
+  "${synth_sources[@]}" \
   -o "$build_dir/test_control_protocol"
 
 "$build_dir/test_control_protocol"
 
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
   "$test_dir/test_control_protocol_fuzz.cpp" "$test_dir/../control_protocol.cpp" \
+  "${synth_sources[@]}" \
   -o "$build_dir/test_control_protocol_fuzz"
 
 "$build_dir/test_control_protocol_fuzz"
@@ -110,6 +119,30 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 "$build_dir/test_usb_midi_host_descriptor"
 
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_synth_engine.cpp" "${synth_sources[@]}" \
+  -o "$build_dir/test_synth_engine"
+
+"$build_dir/test_synth_engine"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_synth_offline_render.cpp" "${synth_sources[@]}" \
+  -o "$build_dir/test_synth_offline_render"
+
+"$build_dir/test_synth_offline_render"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_synth_project.cpp" "$test_dir/../synth_project.cpp" \
+  "${synth_sources[@]}" -o "$build_dir/test_synth_project"
+
+"$build_dir/test_synth_project"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_synth_ui_model.cpp" "$test_dir/../synth_ui_model.cpp" \
+  "${synth_sources[@]}" -o "$build_dir/test_synth_ui_model"
+
+"$build_dir/test_synth_ui_model"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
   "$test_dir/test_audio_cap_protocol.cpp" "$test_dir/../audio_cap_protocol.cpp" \
   -o "$build_dir/test_audio_cap_protocol"
 
@@ -125,7 +158,7 @@ g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
   "$test_dir/../storage.cpp"
 
-echo "storage: GBX v1/v2/v3/v4/v5/v6/v7 layout and syntax checks passed"
+echo "storage: GBX v1/v2/v3/v4/v5/v6/v7/v8 layout and syntax checks passed"
 
 g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
@@ -148,7 +181,10 @@ g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   "$test_dir/../motion.cpp" \
   "$test_dir/../ble_midi.cpp" \
   "$test_dir/../usb_midi.cpp" "$test_dir/../midi_output.cpp" \
-  "$test_dir/../loop_engine.cpp" "$test_dir/../sd_io_arbiter.cpp"
+  "$test_dir/../loop_engine.cpp" "$test_dir/../sd_io_arbiter.cpp" \
+  "$test_dir/../synth_dsp.cpp" "$test_dir/../synth_engine.cpp" \
+  "$test_dir/../synth_parameters.cpp" "$test_dir/../synth_project.cpp" \
+  "$test_dir/../synth_ui_model.cpp"
 
 echo "audio/sequencer/sampler: host syntax checks passed"
 

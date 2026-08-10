@@ -93,10 +93,15 @@ static void triggerStep(uint8_t step) {
         if (g_synthMute[s]) continue;
         const SynthCell& c = p.synth[s][step];
         bool mono = (g_synths[s].voices <= 1);
+        g_synths[s].prepareStep(!c.empty(), mono && c.slide);
         for (int i = 0; i < (mono ? 1 : MAX_POLY); i++)
-            if (c.note[i] != NOTE_EMPTY)
+            if (c.note[i] != NOTE_EMPTY) {
+                const uint8_t midi = static_cast<uint8_t>(
+                    (c.oct[i] + 1u) * 12u + c.note[i] - 1u);
                 g_synths[s].noteOn(noteToFreq(c.note[i], c.oct[i]),
-                                   c.accent, mono && c.slide);
+                                   c.accent, mono && c.slide, midi,
+                                   c.accent ? 127 : 96);
+            }
     }
 
     if (!g_drumMute) {
@@ -120,8 +125,12 @@ static void triggerEvent(const EventLoopEvent& event) {
                 break;
             const uint8_t note = static_cast<uint8_t>((event.value1 % 12) + 1);
             const uint8_t octave = static_cast<uint8_t>((event.value1 / 12) - 1);
-            g_synths[event.target].noteOn(noteToFreq(note, octave),
-                                          event.value2 >= 100, false);
+            if (event.flags & EVENT_LOOP_FLAG_NOTE_OFF)
+                g_synths[event.target].noteOff(event.value1);
+            else
+                g_synths[event.target].noteOn(noteToFreq(note, octave),
+                                              event.value2 >= 100, false,
+                                              event.value1, event.value2);
             break;
         }
         case EVENT_LOOP_DRUM:
@@ -254,16 +263,18 @@ static uint8_t quantizedStep() {
     return step % NUM_STEPS;
 }
 
-void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent, bool legato) {
+void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent,
+                   bool legato, uint8_t velocity) {
     if (track >= NUM_SYNTHS) return;
     bool poly = (g_synths[track].voices > 1);
     // poly: legato means "chord", not slide
-    g_synths[track].noteOn(noteToFreq(note, octave), accent, !poly && legato);
     const uint8_t midi = static_cast<uint8_t>((octave + 1u) * 12u + note - 1u);
+    if (velocity == 0) velocity = accent ? 127 : 96;
+    g_synths[track].noteOn(noteToFreq(note, octave), accent, !poly && legato,
+                           midi, velocity);
     if (!midiInputIsDispatching())
         midiOutputNoteOn(track, midi, accent ? 127 : 96);
-    eventLooperRecordSynth(sequencerEventRecordStep(), track, midi,
-                           accent ? 127 : 96);
+    eventLooperRecordSynth(sequencerEventRecordStep(), track, midi, velocity);
 
     if (g_recEnabled) {
         if (g_playing) {
@@ -284,6 +295,12 @@ void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent, boo
         }
         g_needRedraw = true;
     }
+}
+
+void liveSynthRelease(uint8_t track, uint8_t midiNote) {
+    if (track >= NUM_SYNTHS) return;
+    g_synths[track].noteOff(midiNote);
+    eventLooperRecordSynthRelease(sequencerEventRecordStep(), track, midiNote);
 }
 
 void liveDrumHit(uint8_t lane) {

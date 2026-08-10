@@ -2,6 +2,7 @@
 #include "../sampler_slots.h"
 #include "../motion.h"
 #include "../streaming_sampler.h"
+#include "../synth_parameters.h"
 
 #include <cassert>
 #include <cstring>
@@ -27,6 +28,8 @@ int main() {
     request = parseOk("MS16/1 note1 note 3 107 127");
     assert(request.command == CONTROL_NOTE_ON);
     assert(request.arg1 == 3 && request.arg2 == 107 && request.arg3 == 127);
+    request = parseOk("MS16/1 note2 note_off 2 64");
+    assert(request.command == CONTROL_NOTE_OFF && request.arg1 == 2 && request.arg2 == 64);
 
     request = parseOk("MS16/1 5 drum 8");
     assert(request.command == CONTROL_DRUM_HIT && request.arg1 == 8);
@@ -78,6 +81,16 @@ int main() {
     assert(request.command == CONTROL_PROJECT_SAVE && request.arg1 == 8);
     request = parseOk("MS16/1 22 project 1 load");
     assert(request.command == CONTROL_PROJECT_LOAD && request.arg1 == 1);
+    request = parseOk("MS16/1 sy synth status");
+    assert(request.command == CONTROL_SYNTH_STATUS);
+    request = parseOk("MS16/1 se synth 2 engine fm4");
+    assert(request.command == CONTROL_SYNTH_ENGINE && request.arg1 == 2 &&
+           request.arg2 == SYNTH_ENGINE_FM4);
+    request = parseOk("MS16/1 sp synth 3 set fm.op4.ratio 675");
+    assert(request.command == CONTROL_SYNTH_SET && request.arg1 == 3 &&
+           request.arg2 == SYNTH_PARAM_FM_OP4_RATIO && request.arg3 == 675);
+    request = parseOk("MS16/1 sr synth dsp_reset");
+    assert(request.command == CONTROL_SYNTH_DSP_RESET);
 
     ControlRequest invalid = {};
     assert(controlParseLine("", invalid) == CONTROL_PARSE_EMPTY);
@@ -102,6 +115,10 @@ int main() {
     assert(controlParseLine("MS16/1 1 project 0 save", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 project 9 load", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 project 1 delete", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 synth 0 engine fm4", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 synth 1 engine fake", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 synth 1 set fm.index 801", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 synth 1 set fm.op5.ratio 100", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 wat", invalid) == CONTROL_PARSE_UNKNOWN_COMMAND);
     assert(controlParseLine("MS16/1 1 ping extra", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
 

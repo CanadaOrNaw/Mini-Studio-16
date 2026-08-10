@@ -35,6 +35,15 @@ bool eventLooperRecordSynth(uint16_t step, uint8_t synthTrack, uint8_t midiNote,
                              synthTrack, midiNote, velocity);
 }
 
+bool eventLooperRecordSynthRelease(uint16_t step, uint8_t synthTrack,
+                                   uint8_t midiNote) {
+    if (synthTrack >= NUM_SYNTHS || midiNote < 12 || midiNote > 127) return false;
+    const uint8_t role = eventLooperRoleForSynth(synthTrack);
+    return g_eventLooper.add(step, role, EVENT_LOOP_NOTE,
+                             synthTrack, midiNote, 0,
+                             EVENT_LOOP_FLAG_NOTE_OFF);
+}
+
 bool eventLooperRecordDrum(uint16_t step, uint8_t lane, uint8_t velocity) {
     if (lane >= NUM_DRUM_LANES) return false;
     return g_eventLooper.add(step, EVENT_ROLE_DRUM, EVENT_LOOP_DRUM,

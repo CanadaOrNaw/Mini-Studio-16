@@ -17,6 +17,8 @@ enum EventLoopType : uint8_t {
     EVENT_LOOP_CONTROL,
 };
 
+static const uint8_t EVENT_LOOP_FLAG_NOTE_OFF = 1u;
+
 enum EventLoopRole : uint8_t {
     EVENT_ROLE_DRUM = 0,
     EVENT_ROLE_BASS,
@@ -82,6 +84,7 @@ public:
              uint8_t target, uint8_t value1, uint8_t value2, uint8_t flags = 0) {
         if (track >= EVENT_LOOP_TRACKS || !_tracks[track].armed ||
             type < EVENT_LOOP_NOTE || type > EVENT_LOOP_CONTROL ||
+            !validFlags(type, flags) ||
             _count >= EVENT_LOOP_CAPACITY)
             return false;
         EventLoopEvent event = {};
@@ -100,6 +103,7 @@ public:
     bool appendLoaded(const EventLoopEvent& event) {
         if (_count >= EVENT_LOOP_CAPACITY || event.track >= EVENT_LOOP_TRACKS ||
             event.type < EVENT_LOOP_NOTE || event.type > EVENT_LOOP_CONTROL ||
+            !validFlags(static_cast<EventLoopType>(event.type), event.flags) ||
             event.step >= bars(event.track) * EVENT_LOOP_STEPS_PER_BAR)
             return false;
         _events[_count++] = event;
@@ -138,10 +142,14 @@ public:
     const EventLoopTrackState& track(uint8_t index) const { return _tracks[index]; }
 
 private:
+    static bool validFlags(EventLoopType type, uint8_t flags) {
+        return type == EVENT_LOOP_NOTE ? (flags & ~EVENT_LOOP_FLAG_NOTE_OFF) == 0
+                                       : flags == 0;
+    }
+
     EventLoopEvent _events[EVENT_LOOP_CAPACITY];
     EventLoopTrackState _tracks[EVENT_LOOP_TRACKS];
     uint16_t _count;
 };
 
 static_assert(sizeof(EventLoopEvent) == 8, "event loop storage layout changed");
-

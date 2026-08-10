@@ -25,10 +25,13 @@
 #include "ble_midi.h"
 #include "usb_midi.h"
 #include "sd_io_arbiter.h"
+#include "synth_parameters.h"
+#include "synth_ui_model.h"
 
 Page    g_curPage    = PAGE_PATTERN;
 bool    g_needRedraw = true;
 uint8_t g_soundParam = 0;
+SynthSoundBank g_soundBank = SYNTH_BANK_LEGACY;
 uint8_t g_songCursor = 0;
 uint8_t g_streamSampleSlot = 0;
 uint8_t g_streamSampleMode = SAMPLER_SLOT_MELODIC;
@@ -221,6 +224,82 @@ static void drawBar(int x, int y, float v01) {
     canvas.fillRect(x + 1, y + 1, (int)(60 * v01), 5, COL_SYNTH1);
 }
 
+static bool synthBarParameter(SynthParameter parameter) {
+    switch (parameter) {
+        case SYNTH_PARAM_VOLUME:
+        case SYNTH_PARAM_MG_CUTOFF:
+        case SYNTH_PARAM_MG_RESONANCE:
+        case SYNTH_PARAM_MG_FILTER_ENV:
+        case SYNTH_PARAM_MG_FILTER_DECAY:
+        case SYNTH_PARAM_MG_AMP_DECAY:
+        case SYNTH_PARAM_MGX_CUTOFF:
+        case SYNTH_PARAM_MGX_RESONANCE:
+        case SYNTH_PARAM_MGX_FILTER_ENV:
+        case SYNTH_PARAM_MGX_PULSE_WIDTH:
+        case SYNTH_PARAM_MGX_SUB_LEVEL:
+        case SYNTH_PARAM_MGX_DRIVE:
+        case SYNTH_PARAM_MGX_VELOCITY_AMP:
+        case SYNTH_PARAM_MGX_VELOCITY_FILTER:
+        case SYNTH_PARAM_MGX_AMP_SUSTAIN:
+        case SYNTH_PARAM_MGX_FILTER_SUSTAIN:
+        case SYNTH_PARAM_MGX_LFO_DEPTH:
+        case SYNTH_PARAM_FM_FEEDBACK:
+            return true;
+        default:
+            if (parameter >= SYNTH_PARAM_FM_OP1_LEVEL && parameter < SYNTH_PARAM_COUNT) {
+                const uint8_t field = static_cast<uint8_t>(
+                    parameter - SYNTH_PARAM_FM_OP1_RATIO) % 6u;
+                return field == 1u || field == 4u;
+            }
+            return false;
+    }
+}
+
+static void drawSynthParameterValue(const SynthTrack& track,
+                                    SynthParameter parameter, int y) {
+    int32_t value = 0;
+    if (!synthGetParameter(track, parameter, value)) {
+        canvas.print("?");
+        return;
+    }
+    if (parameter == SYNTH_PARAM_ENGINE) canvas.print(synthEngineName(track.engine));
+    else if (parameter == SYNTH_PARAM_MG_OSC || parameter == SYNTH_PARAM_MGX_OSC)
+        canvas.print(oscNames[value]);
+    else if (parameter == SYNTH_PARAM_MG_WAVETABLE ||
+             parameter == SYNTH_PARAM_MGX_WAVETABLE) {
+        canvas.print(value < g_numWavetables ? g_wtNames[value] : "WT?");
+        const OscMode mode = parameter == SYNTH_PARAM_MG_WAVETABLE
+            ? track.v[0].oscMode : track.mgxPatch.oscMode;
+        if (mode != OSC_WT) { canvas.setTextColor(COL_GRID); canvas.print(" (off)"); }
+    } else if (parameter == SYNTH_PARAM_MGX_FILTER_MODE)
+        canvas.print(synthFilterModeName(static_cast<SynthFilterMode>(value)));
+    else if (parameter == SYNTH_PARAM_MGX_LFO_DESTINATION)
+        canvas.print(synthLfoDestinationName(static_cast<SynthLfoDestination>(value)));
+    else if (parameter == SYNTH_PARAM_VOICES)
+        canvas.printf("%ld %s", static_cast<long>(value),
+                      value > 1 ? "POLY" : "MONO");
+    else if (synthBarParameter(parameter)) drawBar(64, y, value * 0.01f);
+    else if (parameter == SYNTH_PARAM_MGX_LFO_RATE)
+        canvas.printf("%ld.%02ld Hz", static_cast<long>(value / 100),
+                      static_cast<long>(value % 100));
+    else if (parameter == SYNTH_PARAM_FM_INDEX)
+        canvas.printf("%ld.%02ld", static_cast<long>(value / 100),
+                      static_cast<long>(value % 100));
+    else if (parameter >= SYNTH_PARAM_FM_OP1_RATIO && parameter < SYNTH_PARAM_COUNT &&
+             ((parameter - SYNTH_PARAM_FM_OP1_RATIO) % 6u) == 0u)
+        canvas.printf("%ld.%02ld", static_cast<long>(value / 100),
+                      static_cast<long>(value % 100));
+    else if ((parameter >= SYNTH_PARAM_MGX_AMP_ATTACK &&
+              parameter <= SYNTH_PARAM_MGX_AMP_RELEASE) ||
+             (parameter >= SYNTH_PARAM_MGX_FILTER_ATTACK &&
+              parameter <= SYNTH_PARAM_MGX_FILTER_RELEASE) ||
+             parameter >= SYNTH_PARAM_FM_OP1_ATTACK)
+        canvas.printf("%ld ms", static_cast<long>(value));
+    else if (parameter == SYNTH_PARAM_FM_ALGORITHM)
+        canvas.printf("A%ld", static_cast<long>(value + 1));
+    else canvas.printf("%ld", static_cast<long>(value));
+}
+
 static void drawSoundPage() {
     bool onDrums = (g_curTrack == NUM_SYNTHS);
     canvas.setTextColor(trackCols[g_curTrack]);
@@ -229,7 +308,9 @@ static void drawSoundPage() {
         DrumLane& d = g_drumLanes[g_curDrumLane];
         canvas.printf("DRUM LANE %d  [%s]", g_curDrumLane + 1, engNames[d.engine]);
     } else {
-        canvas.printf("SYNTH %d", g_curTrack + 1);
+        canvas.printf("SYNTH %d %s [%s]", g_curTrack + 1,
+                      synthEngineName(g_synths[g_curTrack].engine),
+                      synthSoundBankName(g_soundBank));
     }
 
     // scope
@@ -248,28 +329,14 @@ static void drawSoundPage() {
 
     if (!onDrums) {
         SynthTrack& trk = g_synths[g_curTrack];
-        SynthVoice& v = trk.v[0];
-        const char* names[] = {"OSC","WTABLE","CUTOFF","RESO","ENV AMT","FLT DEC","AMP DEC","VOLUME","VOICES"};
-        for (int r = 0; r < 9; r++) {
+        const uint8_t rows = synthSoundBankRows(g_soundBank);
+        for (uint8_t r = 0; r < rows; r++) {
+            const SynthUiRow item = synthSoundBankRow(g_soundBank, r);
             bool sel = (g_soundParam == r);
             canvas.setTextColor(sel ? COL_TEXT : COL_DIM);
             canvas.setCursor(2, y);
-            canvas.printf("%s%-8s", sel ? ">" : " ", names[r]);
-            switch (r) {
-                case 0: canvas.print(oscNames[v.oscMode]); break;
-                case 1: canvas.print(g_wtNames[v.wtIndex]);
-                        if (v.oscMode != OSC_WT) { canvas.setTextColor(COL_GRID); canvas.print(" (off)"); }
-                        break;
-                case 2: drawBar(64, y, v.fltCutoff);  break;
-                case 3: drawBar(64, y, v.fltReso);    break;
-                case 4: drawBar(64, y, v.fltEnvAmt);  break;
-                case 5: drawBar(64, y, (v.filtDecRate - 0.995f) / 0.00495f); break;
-                case 6: drawBar(64, y, (v.ampDecRate  - 0.999f) / 0.00099f); break;
-                case 7: drawBar(64, y, v.volume);     break;
-                case 8: canvas.printf("%u %s", trk.voices,
-                                      trk.voices > 1 ? "POLY" : "MONO(303)");
-                        break;
-            }
+            canvas.printf("%s%-8s", sel ? ">" : " ", item.label);
+            drawSynthParameterValue(trk, item.parameter, y);
             y += 11;    // 9 rows must clear the footer bar
         }
     } else {
