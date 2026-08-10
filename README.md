@@ -130,6 +130,8 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 sample-record 1 bus melodic
 python tools/ministudio_cli.py --port /dev/ttyACM0 master start
 python tools/ministudio_cli.py --port /dev/ttyACM0 master stop
 python tools/ministudio_cli.py --port /dev/ttyACM0 --json midi-status
+python tools/hardware_smoke.py --port /dev/ttyACM0 --sd-test \
+  --output cardputer-smoke.json
 ```
 
 The bounded wire protocol and every command are documented in

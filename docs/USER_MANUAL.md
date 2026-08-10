@@ -214,7 +214,9 @@ CDC because USB host and device roles cannot share the S3 PHY.
 
 ## Serial CLI
 
-The normal image accepts bounded `MS16/1` commands for every major subsystem.
+The normal image accepts bounded `MS16/1` commands for every major subsystem,
+including project status/save/load, so an agent can create a take and publish
+the complete instrument state without simulating keyboard holds.
 Examples:
 
 ```bash

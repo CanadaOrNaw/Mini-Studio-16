@@ -11,6 +11,7 @@
 #include "midi_input.h"
 #include "midi_output.h"
 #include "midi_clock_output.h"
+#include "song_chain.h"
 
 Pattern    g_patterns[NUM_PATTERNS];
 uint8_t    g_song[SONG_LENGTH];
@@ -142,8 +143,13 @@ static void prepareStart(bool fromTop) {
     if (fromTop) {
         g_playStep = 0;
         if (g_songMode) {
-            g_songPos = g_songLoopStart;
-            if (g_song[g_songPos] != SONG_EMPTY) g_playPattern = g_song[g_songPos];
+            uint8_t position = g_songPos;
+            uint8_t pattern = g_playPattern;
+            if (songChainFirst(g_song, SONG_LENGTH, g_songLoopStart, SONG_EMPTY,
+                               position, pattern)) {
+                g_songPos = position;
+                g_playPattern = pattern;
+            }
         }
         eventLooperResetTransport();
     }
@@ -157,7 +163,10 @@ void sequencerStart(bool fromTop) {
     const uint32_t now = micros();
     s_lastStepUs = now - s_stepPeriod();   // fire step immediately
     s_midiClock.start(now);
-    if (!midiInputIsDispatching()) midiOutputRealtime(fromTop ? 0xFA : 0xFB);
+    if (!midiInputIsDispatching()) {
+        midiOutputRealtime(fromTop ? 0xFA : 0xFB);
+        midiOutputRealtime(0xF8);  // first 24-PPQN clock coincides with step zero
+    }
 }
 
 void sequencerStop() {
@@ -170,15 +179,13 @@ void sequencerStop() {
 }
 
 static void songAdvance() {
-    // find next non-empty slot; wrap to loop start
-    uint8_t start = g_songPos;
-    for (int i = 0; i < SONG_LENGTH; i++) {
-        g_songPos = (g_songPos + 1) % SONG_LENGTH;
-        if (g_songPos == 0 && start != SONG_LENGTH - 1) g_songPos = g_songLoopStart;
-        if (g_song[g_songPos] != SONG_EMPTY) { g_playPattern = g_song[g_songPos]; return; }
-        if (g_songPos == start) break;   // nothing found
+    uint8_t position = g_songPos;
+    uint8_t pattern = g_playPattern;
+    if (songChainNext(g_song, SONG_LENGTH, g_songPos, g_songLoopStart, SONG_EMPTY,
+                      position, pattern)) {
+        g_songPos = position;
+        g_playPattern = pattern;
     }
-    // fallback: stay on current
 }
 
 static void advanceOneStep() {

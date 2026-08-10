@@ -3,6 +3,7 @@
 #include "event_looper_core.h"
 #include "motion.h"
 #include "streaming_sampler.h"
+#include "storage.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -262,6 +263,21 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
         if (!action || !sameWord(action, "status") || !noMore(cursor))
             return CONTROL_PARSE_BAD_ARGUMENTS;
         request.command = CONTROL_MIDI_STATUS;
+    } else if (sameWord(verb, "project")) {
+        char* slotOrStatus = nextToken(cursor);
+        if (!slotOrStatus) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(slotOrStatus, "status")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_PROJECT_STATUS;
+        } else {
+            if (!parseNumber(slotOrStatus, 1, NUM_PROJECT_SLOTS, request.arg1))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            char* action = nextToken(cursor);
+            if (!action || !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            if (sameWord(action, "save")) request.command = CONTROL_PROJECT_SAVE;
+            else if (sameWord(action, "load")) request.command = CONTROL_PROJECT_LOAD;
+            else return CONTROL_PARSE_BAD_ARGUMENTS;
+        }
     } else {
         return CONTROL_PARSE_UNKNOWN_COMMAND;
     }

@@ -45,6 +45,8 @@ bytes per main-loop iteration.
 | `motion MAP map SOURCE TARGET` | Configure mapping 1–4 |
 | `motion MAP clear` | Clear mapping 1–4 |
 | `midi status` | MIDI queue, BLE, USB role/mount, byte/message/error, and dropped output-clock counters |
+| `project status` | Current slot and occupied-slot bit mask |
+| `project SLOT save\|load` | Save or load complete GBX v7 project slot 1–8 |
 
 Motion sources are `tilt_x`, `tilt_y`, `accel`, `gyro`, `shake`, and `slap`.
 Targets are `synth1_cutoff`, `synth2_cutoff`, `synth3_cutoff`,
@@ -87,6 +89,8 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 motion-map 1 tilt_x synth1_cu
 python tools/ministudio_cli.py --port /dev/ttyACM0 master start
 python tools/ministudio_cli.py --port /dev/ttyACM0 master stop
 python tools/ministudio_cli.py --port /dev/ttyACM0 --json midi-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 project-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 project 2 save
 python tools/ministudio_cli.py --port /dev/ttyACM0 monitor --seconds 30
 python tools/protocol_soak.py --port /dev/ttyACM0 --count 10000
 ```

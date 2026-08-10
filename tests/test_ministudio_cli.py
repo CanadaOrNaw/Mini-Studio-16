@@ -99,6 +99,14 @@ class MiniStudioCliTests(unittest.TestCase):
         args = cli.parser().parse_args(["midi-status"])
         self.assertEqual(cli.command_words(args), ["midi", "status"])
 
+    def test_project_commands(self):
+        args = cli.parser().parse_args(["project-status"])
+        self.assertEqual(cli.command_words(args), ["project", "status"])
+        args = cli.parser().parse_args(["project", "8", "save"])
+        self.assertEqual(cli.command_words(args), ["project", 8, "save"])
+        args = cli.parser().parse_args(["project", "1", "load"])
+        self.assertEqual(cli.command_words(args), ["project", 1, "load"])
+
 
 if __name__ == "__main__":
     unittest.main()

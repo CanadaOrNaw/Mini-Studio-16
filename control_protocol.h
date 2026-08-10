@@ -47,6 +47,9 @@ enum ControlCommand : uint8_t {
     CONTROL_MOTION_MAP,
     CONTROL_MOTION_CLEAR,
     CONTROL_MIDI_STATUS,
+    CONTROL_PROJECT_STATUS,
+    CONTROL_PROJECT_SAVE,
+    CONTROL_PROJECT_LOAD,
 };
 
 enum ControlParseStatus : uint8_t {

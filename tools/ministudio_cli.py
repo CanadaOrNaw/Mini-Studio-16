@@ -134,6 +134,10 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["motion", args.mapping, "clear"]
     if args.command == "midi-status":
         return ["midi", "status"]
+    if args.command == "project-status":
+        return ["project", "status"]
+    if args.command == "project":
+        return ["project", args.slot, args.action]
     raise ValueError(f"unsupported command: {args.command}")
 
 
@@ -204,6 +208,10 @@ def parser() -> argparse.ArgumentParser:
     motion_clear = sub.add_parser("motion-clear")
     motion_clear.add_argument("mapping", type=int, choices=range(1, 5))
     sub.add_parser("midi-status", help="show USB and BLE MIDI transport counters")
+    sub.add_parser("project-status", help="show current and occupied project slots")
+    project = sub.add_parser("project", help="save or load a complete GBX project")
+    project.add_argument("slot", type=int, choices=range(1, 9))
+    project.add_argument("action", choices=("save", "load"))
     sub.add_parser("ports", help="list serial ports without opening one")
     monitor = sub.add_parser("monitor", help="print asynchronous device output")
     monitor.add_argument("--seconds", type=float, default=0.0, help="0 means run until interrupted")

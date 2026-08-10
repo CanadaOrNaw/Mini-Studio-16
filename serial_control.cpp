@@ -15,6 +15,7 @@
 #include "usb_midi.h"
 #include "mic_sampler.h"
 #include "sd_io_arbiter.h"
+#include "storage.h"
 
 #include <Arduino.h>
 #include <esp_heap_caps.h>
@@ -442,6 +443,39 @@ void dispatch(const ControlRequest& request) {
                           static_cast<unsigned long>(ble.malformedPackets),
                           static_cast<unsigned long>(ble.droppedPackets),
                           static_cast<unsigned long>(sequencerMidiClockDropped()));
+            break;
+        }
+
+        case CONTROL_PROJECT_STATUS: {
+            uint8_t occupied = 0;
+            for (uint8_t slot = 0; slot < NUM_PROJECT_SLOTS; ++slot)
+                if (storageProjectExists(slot)) occupied |= static_cast<uint8_t>(1u << slot);
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK project=%u occupied=0x%02X\n", request.id,
+                          static_cast<unsigned>(g_curProject + 1u),
+                          static_cast<unsigned>(occupied));
+            break;
+        }
+
+        case CONTROL_PROJECT_SAVE: {
+            const uint8_t slot = static_cast<uint8_t>(request.arg1 - 1u);
+            if (storageSaveProject(slot)) {
+                g_curProject = slot;
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK project=%u state=saved\n", request.id,
+                              static_cast<unsigned>(request.arg1));
+            } else replyError(request.id, "project_save_rejected");
+            break;
+        }
+
+        case CONTROL_PROJECT_LOAD: {
+            const uint8_t slot = static_cast<uint8_t>(request.arg1 - 1u);
+            if (storageLoadProject(slot)) {
+                g_curProject = slot;
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK project=%u state=loaded\n", request.id,
+                              static_cast<unsigned>(request.arg1));
+            } else replyError(request.id, "project_load_rejected");
             break;
         }
 

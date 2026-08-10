@@ -21,6 +21,19 @@ duration, and complete serial output for every pass or failure.
 6. Save all recovery and SD-arbiter lines. Do not accept a boot loop, watchdog,
    allocation failure, or subsystem silently unavailable.
 
+After the manual boot check, capture the read-only subsystem probe and SD test
+as one JSON evidence file:
+
+```bash
+python tools/hardware_smoke.py --port /dev/ttyACM0 --sd-test \
+  --output cardputer-smoke.json
+```
+
+The harness correlates every response, preserves asynchronous boot/diagnostic
+lines, rejects any subsystem error response, and requires terminal `SDDIAG
+state=PASS`. It does not replace the audible, timing, power-cut, or USB/BLE
+checks below.
+
 Direct source build/upload:
 
 ```bash

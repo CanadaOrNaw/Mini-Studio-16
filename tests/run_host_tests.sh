@@ -52,6 +52,11 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 "$build_dir/test_midi"
 
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_song_chain.cpp" -o "$build_dir/test_song_chain"
+
+"$build_dir/test_song_chain"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
   "$test_dir/test_loop_timeline.cpp" -o "$build_dir/test_loop_timeline"
 
 "$build_dir/test_loop_timeline"
@@ -154,3 +159,4 @@ PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_split_stems.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_protocol_soak.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_check_firmware_size.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_factory_project.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_hardware_smoke.py"

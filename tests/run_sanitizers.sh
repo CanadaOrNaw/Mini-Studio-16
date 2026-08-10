@@ -26,6 +26,7 @@ build_run protocol_fuzz "$test_dir/test_control_protocol_fuzz.cpp" \
 build_run wav "$test_dir/test_wav_file.cpp" "$test_dir/../wav_file.cpp"
 build_run midi "$test_dir/test_midi.cpp" "$test_dir/../midi_parser.cpp" \
     "$test_dir/../midi_transport.cpp"
+build_run song_chain "$test_dir/test_song_chain.cpp"
 build_run loop_stream -pthread "$test_dir/test_loop_stream_core.cpp"
 build_run sampler_slots "$test_dir/test_sampler_slots.cpp" "$test_dir/../sampler_slots.cpp"
 build_run sample_stream -pthread "$test_dir/test_sample_stream_core.cpp"
