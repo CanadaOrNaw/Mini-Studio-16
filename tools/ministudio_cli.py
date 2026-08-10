@@ -92,6 +92,10 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["master", args.action]
     if args.command == "stems":
         return ["stems", args.action]
+    if args.command == "loop-status":
+        return ["loop", "status"]
+    if args.command == "loop":
+        return ["loop", args.track, args.action]
     raise ValueError(f"unsupported command: {args.command}")
 
 
@@ -120,6 +124,10 @@ def parser() -> argparse.ArgumentParser:
     master.add_argument("action", choices=("start", "stop"))
     stems = sub.add_parser("stems")
     stems.add_argument("action", choices=("start", "stop"))
+    sub.add_parser("loop-status", help="show six-track streaming state and counters")
+    loop = sub.add_parser("loop")
+    loop.add_argument("track", type=int, choices=range(1, 7))
+    loop.add_argument("action", choices=("record", "stop", "mute", "unmute", "clear"))
     sub.add_parser("ports", help="list serial ports without opening one")
     monitor = sub.add_parser("monitor", help="print asynchronous device output")
     monitor.add_argument("--seconds", type=float, default=0.0, help="0 means run until interrupted")

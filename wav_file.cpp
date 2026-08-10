@@ -14,6 +14,18 @@ void putU32(uint8_t* destination, uint32_t value) {
     destination[2] = static_cast<uint8_t>((value >> 16) & 0xFFu);
     destination[3] = static_cast<uint8_t>((value >> 24) & 0xFFu);
 }
+
+uint16_t getU16(const uint8_t* source) {
+    return static_cast<uint16_t>(source[0]) |
+           static_cast<uint16_t>(source[1] << 8);
+}
+
+uint32_t getU32(const uint8_t* source) {
+    return static_cast<uint32_t>(source[0]) |
+           (static_cast<uint32_t>(source[1]) << 8) |
+           (static_cast<uint32_t>(source[2]) << 16) |
+           (static_cast<uint32_t>(source[3]) << 24);
+}
 }  // namespace
 
 void wavBuildMono16Header(uint8_t header[WAV_PCM_HEADER_BYTES],
@@ -43,4 +55,24 @@ WavRecoveryPlan wavPlanMono16Recovery(uint32_t fileBytes) {
     plan.ignoredTrailingBytes = static_cast<uint8_t>(payload & 1u);
     plan.recoverable = plan.frames > 0;
     return plan;
+}
+
+bool wavParseCanonicalMono16Header(const uint8_t header[WAV_PCM_HEADER_BYTES],
+                                   WavMono16Info& info) {
+    info.sampleRate = 0;
+    info.frames = 0;
+    if (!header || memcmp(header, "RIFF", 4) != 0 ||
+        memcmp(header + 8, "WAVEfmt ", 8) != 0 ||
+        getU32(header + 16) != 16 || getU16(header + 20) != 1 ||
+        getU16(header + 22) != 1 || getU16(header + 34) != 16 ||
+        memcmp(header + 36, "data", 4) != 0)
+        return false;
+    const uint32_t sampleRate = getU32(header + 24);
+    const uint32_t dataBytes = getU32(header + 40);
+    if (sampleRate == 0 || getU32(header + 28) != sampleRate * 2u ||
+        getU16(header + 32) != 2 || (dataBytes & 1u) != 0)
+        return false;
+    info.sampleRate = sampleRate;
+    info.frames = dataBytes / 2u;
+    return true;
 }

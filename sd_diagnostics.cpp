@@ -3,6 +3,7 @@
 #include "config.h"
 #include "master_recorder.h"
 #include "stem_recorder.h"
+#include "loop_engine.h"
 #include <Arduino.h>
 #include <SD.h>
 #include <esp_heap_caps.h>
@@ -278,7 +279,7 @@ void sdDiagnosticsInit(bool sdMounted) {
 
 bool sdDiagnosticsStart() {
     if (!s_sdMounted || sdDiagnosticsIsRunning() || masterRecorderIsBusy() ||
-        stemRecorderIsBusy()) return false;
+        stemRecorderIsBusy() || loopEngineHasActiveIo()) return false;
     portENTER_CRITICAL(&s_mux);
     resetSnapshot(SD_DIAG_RUNNING, "STARTING", 0);
     portEXIT_CRITICAL(&s_mux);

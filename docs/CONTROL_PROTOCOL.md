@@ -38,6 +38,12 @@ loop iteration so a noisy host cannot monopolize the loop.
 | `master stop` | Drain the ring, finalize the WAV header and publish the file |
 | `stems start` | Start one interleaved master/synth1/2/3/drums capture |
 | `stems stop` | Finalize and publish the `.mss` stem container |
+| `loop status` | Report all six loop states, lengths, ring fill and error counters |
+| `loop TRACK record` | Record an empty track; Track 1 establishes the common length |
+| `loop TRACK stop` | Stop/finalize Track 1 before its 20-second ceiling |
+| `loop TRACK mute` | Mute while continuing to consume samples and preserve phase |
+| `loop TRACK unmute` | Restore a muted loop at its current phase |
+| `loop TRACK clear` | Remove a loop; clearing Track 1 clears all six tracks |
 
 The master recorder writes 22.05 kHz, mono, 16-bit PCM under
 `/groovebox/recordings/MASTERnnn.wav`. It does not replace the existing short
@@ -56,6 +62,14 @@ This produces `master.wav`, `synth1.wav`, `synth2.wav`, `synth3.wav`, and
 the next boot when they contain complete frames, or quarantined with a `.bad`
 extension when they do not.
 
+Loop WAVs live under `/groovebox/loops/L1.wav` through `L6.wav`. Track 1 is a
+free-length recording capped at 20 seconds. Tracks 2–6 wait for its next exact
+frame boundary and automatically stop at Track 1's frame count. The storage
+worker refills bounded playback rings; an underrun is counted and the affected
+track stays silent until it is re-primed at the next loop boundary, preventing
+late SD data from shifting its phase. Temporary loop takes never replace an
+existing loop, and interrupted takes are recovered or quarantined on boot.
+
 ## CLI
 
 Install `pyserial`, then run the checked-in client:
@@ -68,6 +82,9 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 master start
 python tools/ministudio_cli.py --port /dev/ttyACM0 status
 python tools/ministudio_cli.py --port /dev/ttyACM0 master stop
 python tools/ministudio_cli.py --port /dev/ttyACM0 stems start
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 record
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 stop
 python tools/ministudio_cli.py --port /dev/ttyACM0 --json status
 python tools/ministudio_cli.py ports
 python tools/ministudio_cli.py --port /dev/ttyACM0 monitor --seconds 30

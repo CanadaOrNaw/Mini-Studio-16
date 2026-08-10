@@ -10,6 +10,7 @@
 #include "mic_sampler.h"
 #include "master_recorder.h"
 #include "stem_recorder.h"
+#include "loop_engine.h"
 
 float g_scopeBuf[SCREEN_W];
 volatile int g_scopeIdx = 0;
@@ -43,8 +44,11 @@ static void audioTask(void*) {
                 for (int d = 0; d < NUM_DRUM_LANES; d++)
                     drumBus += g_drumLanes[d].render() * 0.6f;
 
-            float mix = synthBus[0] + synthBus[1] + synthBus[2] + drumBus +
-                        g_previewVoice.render();
+            const float dryMix = synthBus[0] + synthBus[1] + synthBus[2] + drumBus +
+                                 g_previewVoice.render();
+            const int16_t dryPcm = toPcm(dryMix);
+            const int32_t loopPcm = loopEngineProcessFrame(dryPcm);
+            float mix = dryMix + static_cast<float>(loopPcm) / 12000.0f;
 
             // soft clip
             if (mix > 1.0f) mix = 1.0f; else if (mix < -1.0f) mix = -1.0f;

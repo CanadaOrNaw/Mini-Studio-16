@@ -7,6 +7,7 @@
 #include "midi_input.h"
 #include "serial_line_buffer.h"
 #include "stem_recorder.h"
+#include "loop_engine.h"
 
 #include <Arduino.h>
 #include <string.h>
@@ -127,6 +128,68 @@ void dispatch(const ControlRequest& request) {
                 Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK stems=stopping\n", request.id);
             else
                 replyError(request.id, "stems_not_recording");
+            break;
+
+        case CONTROL_LOOP_STATUS: {
+            const LoopEngineSnapshot loops = loopEngineSnapshot();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK available=%u timeline=%lu "
+                          "absolute=%lu record=%u maxRead=%lu maxWrite=%lu errors=%lu",
+                          request.id, loops.available ? 1u : 0u,
+                          static_cast<unsigned long>(loops.timelineFrames),
+                          static_cast<unsigned long>(loops.absoluteFrame),
+                          loops.recordTrack == LOOP_NO_TRACK ? 0u : loops.recordTrack + 1u,
+                          static_cast<unsigned long>(loops.maxReadUs),
+                          static_cast<unsigned long>(loops.maxWriteUs),
+                          static_cast<unsigned long>(loops.errors));
+            for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
+                const LoopStreamTrackSnapshot& item = loops.tracks[track];
+                Serial.printf(" t%u=%s,%lu,%lu,%lu,%lu,%lu",
+                              static_cast<unsigned>(track + 1),
+                              loopEngineStateName(item.state),
+                              static_cast<unsigned long>(item.lengthFrames),
+                              static_cast<unsigned long>(item.capturedFrames),
+                              static_cast<unsigned long>(item.droppedFrames),
+                              static_cast<unsigned long>(item.underruns),
+                              static_cast<unsigned long>(item.ringFrames));
+            }
+            Serial.println("");
+            break;
+        }
+
+        case CONTROL_LOOP_RECORD:
+            if (loopEngineRequestRecord(static_cast<uint8_t>(request.arg1 - 1)))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK loop=%u state=queued\n",
+                              request.id, static_cast<unsigned>(request.arg1));
+            else
+                replyError(request.id, "loop_record_rejected");
+            break;
+
+        case CONTROL_LOOP_STOP:
+            if (loopEngineStopRecording(static_cast<uint8_t>(request.arg1 - 1)))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK loop=%u state=finalizing\n",
+                              request.id, static_cast<unsigned>(request.arg1));
+            else
+                replyError(request.id, "loop_not_recording");
+            break;
+
+        case CONTROL_LOOP_MUTE:
+        case CONTROL_LOOP_UNMUTE: {
+            const bool muted = request.command == CONTROL_LOOP_MUTE;
+            if (loopEngineSetMuted(static_cast<uint8_t>(request.arg1 - 1), muted))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK loop=%u state=%s\n",
+                              request.id, static_cast<unsigned>(request.arg1),
+                              muted ? "muted" : "playing");
+            else
+                replyError(request.id, "loop_state_rejected");
+            break;
+        }
+
+        case CONTROL_LOOP_CLEAR:
+            if (loopEngineClear(static_cast<uint8_t>(request.arg1 - 1)))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK loop=%u state=clearing\n",
+                              request.id, static_cast<unsigned>(request.arg1));
+            else
+                replyError(request.id, "loop_clear_rejected");
             break;
 
         default:

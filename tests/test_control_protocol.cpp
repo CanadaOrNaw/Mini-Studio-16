@@ -32,6 +32,12 @@ int main() {
     assert(request.command == CONTROL_MASTER_START);
     request = parseOk("MS16/1 7 stems stop");
     assert(request.command == CONTROL_STEM_STOP);
+    request = parseOk("MS16/1 8 loop status");
+    assert(request.command == CONTROL_LOOP_STATUS);
+    request = parseOk("MS16/1 9 loop 6 record");
+    assert(request.command == CONTROL_LOOP_RECORD && request.arg1 == 6);
+    request = parseOk("MS16/1 10 loop 2 unmute");
+    assert(request.command == CONTROL_LOOP_UNMUTE && request.arg1 == 2);
 
     ControlRequest invalid = {};
     assert(controlParseLine("", invalid) == CONTROL_PARSE_EMPTY);
@@ -41,6 +47,8 @@ int main() {
     assert(controlParseLine("MS16/1 1 tempo 39", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 note 1 23 100", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 drum 9", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 loop 0 record", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 loop 1 dance", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 wat", invalid) == CONTROL_PARSE_UNKNOWN_COMMAND);
     assert(controlParseLine("MS16/1 1 ping extra", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
 

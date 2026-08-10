@@ -58,6 +58,12 @@ class MiniStudioCliTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             cli.resolve_port(None, ports + [SimpleNamespace(device="/dev/ttyUSB0")])
 
+    def test_loop_commands(self):
+        args = cli.parser().parse_args(["loop-status"])
+        self.assertEqual(cli.command_words(args), ["loop", "status"])
+        args = cli.parser().parse_args(["loop", "6", "record"])
+        self.assertEqual(cli.command_words(args), ["loop", 6, "record"])
+
 
 if __name__ == "__main__":
     unittest.main()

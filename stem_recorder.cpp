@@ -5,6 +5,7 @@
 #include "mic_sampler.h"
 #include "pcm_ring.h"
 #include "sd_diagnostics.h"
+#include "loop_engine.h"
 
 #include <Arduino.h>
 #include <SD.h>
@@ -159,7 +160,8 @@ void stemRecorderInit(bool sdMounted) {
 
 bool stemRecorderStart() {
     if (!s_sdMounted || stemRecorderIsBusy() || masterRecorderIsBusy() ||
-        sdDiagnosticsIsRunning() || micRecActive() || SD.exists(kTempPath)) return false;
+        sdDiagnosticsIsRunning() || micRecActive() || loopEngineIsRecording() ||
+        SD.exists(kTempPath)) return false;
     char path[64];
     if (!selectPath("STEM", "mss", path, sizeof(path))) return false;
     s_ring.reset();

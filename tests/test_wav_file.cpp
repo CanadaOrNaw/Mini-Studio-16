@@ -22,6 +22,14 @@ int main() {
     assert(readU32(header + 28) == 44100);
     assert(readU32(header + 40) == 88200);
 
+    WavMono16Info info = {};
+    assert(wavParseCanonicalMono16Header(header, info));
+    assert(info.sampleRate == 22050 && info.frames == 44100);
+    uint8_t invalid[WAV_PCM_HEADER_BYTES];
+    std::memcpy(invalid, header, sizeof(invalid));
+    invalid[22] = 2;
+    assert(!wavParseCanonicalMono16Header(invalid, info));
+
     WavRecoveryPlan recovery = wavPlanMono16Recovery(44 + 88201);
     assert(recovery.recoverable);
     assert(recovery.frames == 44100);

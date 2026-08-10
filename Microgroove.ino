@@ -28,6 +28,7 @@
 #include "serial_control.h"
 #include "midi_input.h"
 #include "stem_recorder.h"
+#include "loop_engine.h"
 #include "ui.h"
 
 void inputInit();
@@ -66,6 +67,7 @@ void setup() {
         samplerInit();               // also creates /groovebox dirs
         wavetableLoadUserFromSD();
     }
+    loopEngineInit(s_sdOk);
     sequencerInit();
     midiInputInit();
     loadDemoPattern();

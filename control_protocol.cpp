@@ -116,6 +116,24 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
         if (sameWord(action, "start")) request.command = CONTROL_STEM_START;
         else if (sameWord(action, "stop")) request.command = CONTROL_STEM_STOP;
         else return CONTROL_PARSE_BAD_ARGUMENTS;
+    } else if (sameWord(verb, "loop")) {
+        char* trackOrStatus = nextToken(cursor);
+        if (!trackOrStatus) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(trackOrStatus, "status")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_LOOP_STATUS;
+        } else {
+            if (!parseNumber(trackOrStatus, 1, 6, request.arg1))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            char* action = nextToken(cursor);
+            if (!action || !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            if (sameWord(action, "record")) request.command = CONTROL_LOOP_RECORD;
+            else if (sameWord(action, "stop")) request.command = CONTROL_LOOP_STOP;
+            else if (sameWord(action, "mute")) request.command = CONTROL_LOOP_MUTE;
+            else if (sameWord(action, "unmute")) request.command = CONTROL_LOOP_UNMUTE;
+            else if (sameWord(action, "clear")) request.command = CONTROL_LOOP_CLEAR;
+            else return CONTROL_PARSE_BAD_ARGUMENTS;
+        }
     } else {
         return CONTROL_PARSE_UNKNOWN_COMMAND;
     }

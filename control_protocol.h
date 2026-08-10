@@ -22,6 +22,12 @@ enum ControlCommand : uint8_t {
     CONTROL_MASTER_STOP,
     CONTROL_STEM_START,
     CONTROL_STEM_STOP,
+    CONTROL_LOOP_STATUS,
+    CONTROL_LOOP_RECORD,
+    CONTROL_LOOP_STOP,
+    CONTROL_LOOP_MUTE,
+    CONTROL_LOOP_UNMUTE,
+    CONTROL_LOOP_CLEAR,
 };
 
 enum ControlParseStatus : uint8_t {

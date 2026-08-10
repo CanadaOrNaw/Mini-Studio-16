@@ -7,6 +7,7 @@
 #include "mic_sampler.h"
 #include "wav_file.h"
 #include "stem_recorder.h"
+#include "loop_engine.h"
 
 #include <Arduino.h>
 #include <SD.h>
@@ -185,7 +186,7 @@ void masterRecorderInit(bool sdMounted) {
 
 bool masterRecorderStart() {
     if (!s_sdMounted || masterRecorderIsBusy() || stemRecorderIsBusy() ||
-        sdDiagnosticsIsRunning() || micRecActive())
+        sdDiagnosticsIsRunning() || micRecActive() || loopEngineIsRecording())
         return false;
     if (SD.exists(kTempPath)) return false;
     char path[64];
