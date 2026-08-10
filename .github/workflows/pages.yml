@@ -32,13 +32,20 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages-ready: ${{ steps.pages-config.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - uses: actions/configure-pages@v5
+        id: pages-config
         if: github.event_name != 'pull_request' || github.head_ref == 'agent/v3-alpha-sd-streaming'
+        # Forks and fresh repositories can validate/download the complete site
+        # artifact before an owner enables Pages in Settings. Once enabled,
+        # this step succeeds and the deploy job becomes eligible.
+        continue-on-error: true
       - name: Verify generated hardware assets
         run: python tools/generate_hardware_assets.py --check
       - name: Run CAD and site tests
@@ -51,14 +58,17 @@ jobs:
           path: build/pages
           if-no-files-found: error
       - uses: actions/upload-pages-artifact@v4
-        if: github.event_name != 'pull_request' || github.head_ref == 'agent/v3-alpha-sd-streaming'
+        if: steps.pages-config.outcome == 'success'
         with:
           path: build/pages
 
   deploy:
     # The long-running alpha branch is the product's current integration ref.
     # Deploy it during this draft PR; after merge, pushes to main take over.
-    if: github.event_name != 'pull_request' || github.head_ref == 'agent/v3-alpha-sd-streaming'
+    if: >-
+      needs.build.outputs.pages-ready == 'true' &&
+      (github.event_name != 'pull_request' ||
+      github.head_ref == 'agent/v3-alpha-sd-streaming')
     needs: build
     runs-on: ubuntu-latest
     permissions:
