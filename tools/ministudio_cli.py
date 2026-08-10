@@ -115,6 +115,12 @@ def command_words(args: argparse.Namespace) -> List[object]:
         if args.bars is not None:
             words.append(args.bars)
         return words
+    if args.command == "motion-status":
+        return ["motion", "status"]
+    if args.command == "motion-map":
+        return ["motion", args.mapping, "map", args.source, args.target]
+    if args.command == "motion-clear":
+        return ["motion", args.mapping, "clear"]
     raise ValueError(f"unsupported command: {args.command}")
 
 
@@ -164,6 +170,18 @@ def parser() -> argparse.ArgumentParser:
     event.add_argument("action",
                        choices=("arm", "disarm", "mute", "unmute", "clear", "bars"))
     event.add_argument("bars", type=int, nargs="?", choices=range(1, 129))
+    sub.add_parser("motion-status", help="show BMI270 motion values and mappings")
+    motion_sources = ("tilt_x", "tilt_y", "accel", "gyro", "shake", "slap")
+    motion_targets = (
+        "synth1_cutoff", "synth2_cutoff", "synth3_cutoff",
+        "synth1_resonance", "synth2_resonance", "synth3_resonance",
+    )
+    motion_map = sub.add_parser("motion-map")
+    motion_map.add_argument("mapping", type=int, choices=range(1, 5))
+    motion_map.add_argument("source", choices=motion_sources)
+    motion_map.add_argument("target", choices=motion_targets)
+    motion_clear = sub.add_parser("motion-clear")
+    motion_clear.add_argument("mapping", type=int, choices=range(1, 5))
     sub.add_parser("ports", help="list serial ports without opening one")
     monitor = sub.add_parser("monitor", help="print asynchronous device output")
     monitor.add_argument("--seconds", type=float, default=0.0, help="0 means run until interrupted")

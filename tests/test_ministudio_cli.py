@@ -81,6 +81,15 @@ class MiniStudioCliTests(unittest.TestCase):
         args = cli.parser().parse_args(["event", "3", "arm"])
         self.assertEqual(cli.command_words(args), ["event", 3, "arm"])
 
+    def test_motion_commands(self):
+        args = cli.parser().parse_args(["motion-status"])
+        self.assertEqual(cli.command_words(args), ["motion", "status"])
+        args = cli.parser().parse_args(
+            ["motion-map", "4", "shake", "synth3_resonance"]
+        )
+        self.assertEqual(cli.command_words(args),
+                         ["motion", 4, "map", "shake", "synth3_resonance"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 #include "control_protocol.h"
 #include "sampler_slots.h"
 #include "event_looper_core.h"
+#include "motion.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -47,6 +48,28 @@ bool parseNumber(const char* token, uint16_t minimum, uint16_t maximum, uint16_t
 }
 
 bool noMore(char*& cursor) { return nextToken(cursor) == nullptr; }
+
+bool parseMotionSource(const char* token, uint16_t& value) {
+    if (sameWord(token, "tilt_x")) value = MOTION_SOURCE_TILT_X;
+    else if (sameWord(token, "tilt_y")) value = MOTION_SOURCE_TILT_Y;
+    else if (sameWord(token, "accel")) value = MOTION_SOURCE_ACCEL;
+    else if (sameWord(token, "gyro")) value = MOTION_SOURCE_GYRO;
+    else if (sameWord(token, "shake")) value = MOTION_SOURCE_SHAKE;
+    else if (sameWord(token, "slap")) value = MOTION_SOURCE_SLAP;
+    else return false;
+    return true;
+}
+
+bool parseMotionTarget(const char* token, uint16_t& value) {
+    if (sameWord(token, "synth1_cutoff")) value = MOTION_TARGET_SYNTH1_CUTOFF;
+    else if (sameWord(token, "synth2_cutoff")) value = MOTION_TARGET_SYNTH2_CUTOFF;
+    else if (sameWord(token, "synth3_cutoff")) value = MOTION_TARGET_SYNTH3_CUTOFF;
+    else if (sameWord(token, "synth1_resonance")) value = MOTION_TARGET_SYNTH1_RESONANCE;
+    else if (sameWord(token, "synth2_resonance")) value = MOTION_TARGET_SYNTH2_RESONANCE;
+    else if (sameWord(token, "synth3_resonance")) value = MOTION_TARGET_SYNTH3_RESONANCE;
+    else return false;
+    return true;
+}
 }  // namespace
 
 ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
@@ -192,6 +215,27 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
                 else if (sameWord(action, "clear")) request.command = CONTROL_EVENT_CLEAR;
                 else return CONTROL_PARSE_BAD_ARGUMENTS;
             }
+        }
+    } else if (sameWord(verb, "motion")) {
+        char* mappingOrStatus = nextToken(cursor);
+        if (!mappingOrStatus) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(mappingOrStatus, "status")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_MOTION_STATUS;
+        } else {
+            if (!parseNumber(mappingOrStatus, 1, MOTION_MAPPING_COUNT, request.arg1))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            char* action = nextToken(cursor);
+            if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
+            if (sameWord(action, "clear")) {
+                if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.command = CONTROL_MOTION_CLEAR;
+            } else if (sameWord(action, "map")) {
+                if (!parseMotionSource(nextToken(cursor), request.arg2) ||
+                    !parseMotionTarget(nextToken(cursor), request.arg3) || !noMore(cursor))
+                    return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.command = CONTROL_MOTION_MAP;
+            } else return CONTROL_PARSE_BAD_ARGUMENTS;
         }
     } else {
         return CONTROL_PARSE_UNKNOWN_COMMAND;

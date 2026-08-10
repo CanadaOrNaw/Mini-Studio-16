@@ -70,8 +70,20 @@ struct CardputerStub {
 
 static CardputerStub M5Cardputer;
 
+namespace m5 {
+struct imu_3d_t { float x = 0, y = 0, z = 0; };
+struct imu_data_t { imu_3d_t accel; imu_3d_t gyro; imu_3d_t mag; };
+}
+
+struct ImuStub {
+    bool isEnabled() const { return true; }
+    bool update() { return false; }
+    m5::imu_data_t getImuData() const { return {}; }
+};
+
 struct M5Stub {
     struct Config {};
+    ImuStub Imu;
     Config config() const { return {}; }
 };
 static M5Stub M5;

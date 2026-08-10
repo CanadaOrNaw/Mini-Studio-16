@@ -83,6 +83,16 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 
 "$build_dir/test_event_looper"
 
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_motion_core.cpp" -o "$build_dir/test_motion_core"
+
+"$build_dir/test_motion_core"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_ble_midi_codec.cpp" -o "$build_dir/test_ble_midi_codec"
+
+"$build_dir/test_ble_midi_codec"
+
 g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
   "$test_dir/../sd_diagnostics.cpp"
@@ -93,7 +103,7 @@ g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
   "$test_dir/../storage.cpp"
 
-echo "storage: GBX v1/v2/v3/v4/v5 layout and syntax checks passed"
+echo "storage: GBX v1/v2/v3/v4/v5/v6 layout and syntax checks passed"
 
 g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
@@ -113,6 +123,8 @@ g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   "$test_dir/../sampler_slots.cpp" \
   "$test_dir/../streaming_sampler.cpp" \
   "$test_dir/../event_looper.cpp" \
+  "$test_dir/../motion.cpp" \
+  "$test_dir/../ble_midi.cpp" \
   "$test_dir/../loop_engine.cpp"
 
 echo "audio/sequencer/sampler: host syntax checks passed"

@@ -1,5 +1,6 @@
 #include "../control_protocol.h"
 #include "../sampler_slots.h"
+#include "../motion.h"
 
 #include <cassert>
 #include <cstring>
@@ -55,6 +56,12 @@ int main() {
            request.arg2 == 128);
     request = parseOk("MS16/1 16 event 3 arm");
     assert(request.command == CONTROL_EVENT_ARM && request.arg1 == 3);
+    request = parseOk("MS16/1 17 motion status");
+    assert(request.command == CONTROL_MOTION_STATUS);
+    request = parseOk("MS16/1 18 motion 4 map shake synth3_resonance");
+    assert(request.command == CONTROL_MOTION_MAP && request.arg1 == 4 &&
+           request.arg2 == MOTION_SOURCE_SHAKE &&
+           request.arg3 == MOTION_TARGET_SYNTH3_RESONANCE);
 
     ControlRequest invalid = {};
     assert(controlParseLine("", invalid) == CONTROL_PARSE_EMPTY);
@@ -71,6 +78,8 @@ int main() {
     assert(controlParseLine("MS16/1 1 sample 1 assign x.wav stereo", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 event 6 arm", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 event 1 bars 129", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 motion 5 clear", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 motion 1 map banana synth1_cutoff", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 wat", invalid) == CONTROL_PARSE_UNKNOWN_COMMAND);
     assert(controlParseLine("MS16/1 1 ping extra", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
 

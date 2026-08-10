@@ -40,6 +40,9 @@ enum ControlCommand : uint8_t {
     CONTROL_EVENT_UNMUTE,
     CONTROL_EVENT_CLEAR,
     CONTROL_EVENT_BARS,
+    CONTROL_MOTION_STATUS,
+    CONTROL_MOTION_MAP,
+    CONTROL_MOTION_CLEAR,
 };
 
 enum ControlParseStatus : uint8_t {

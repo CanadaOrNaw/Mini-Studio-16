@@ -30,6 +30,8 @@
 #include "stem_recorder.h"
 #include "loop_engine.h"
 #include "streaming_sampler.h"
+#include "motion.h"
+#include "ble_midi.h"
 #include "ui.h"
 
 void inputInit();
@@ -72,6 +74,8 @@ void setup() {
     streamingSamplerInit(s_sdOk);
     sequencerInit();
     midiInputInit();
+    motionInit();
+    bleMidiInit();
     loadDemoPattern();
 
     uiSplash();
@@ -92,7 +96,9 @@ void setup() {
 
 void loop() {
     serialControlUpdate();
+    bleMidiUpdate();
     midiInputUpdate();
+    motionUpdate();
     inputUpdate();
     micSamplerUpdate();
     sequencerTick();

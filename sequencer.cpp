@@ -7,6 +7,7 @@
 #include "sampler_slots.h"
 #include "streaming_sampler.h"
 #include "event_looper.h"
+#include "motion.h"
 
 Pattern    g_patterns[NUM_PATTERNS];
 uint8_t    g_song[SONG_LENGTH];
@@ -124,8 +125,7 @@ static void triggerEvent(const EventLoopEvent& event) {
             streamingSamplerTrigger(event.target, event.value1);
             break;
         case EVENT_LOOP_CONTROL:
-            // Motion/control targets are applied by motion.cpp. Keeping the event
-            // in the generic timeline makes old projects forward compatible.
+            motionApplyRecordedControl(event.target, event.value1);
             break;
         default:
             break;

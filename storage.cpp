@@ -11,13 +11,14 @@
 #include "sampler_slots.h"
 #include "streaming_sampler.h"
 #include "event_looper.h"
+#include "motion.h"
 #include <SD.h>
 #include <string.h>
 
 uint8_t g_curProject = 0;
 
 #define GBX_MAGIC   0x31584247u   // "GBX1"
-#define GBX_VERSION 5             // v5: five-part 128-bar event looper
+#define GBX_VERSION 6             // v6: persistent motion mappings
 #define LEGACY_NUM_PATTERNS 8
 #define LEGACY_SONG_LENGTH  64
 
@@ -128,12 +129,18 @@ struct __attribute__((packed)) ProjectFileV5 {
     EventLoopEvent events[EVENT_LOOP_CAPACITY];
 };
 
+struct __attribute__((packed)) ProjectFileV6 {
+    ProjectFileV5 base;
+    MotionMapping motionMappings[MOTION_MAPPING_COUNT];
+};
+
 union ProjectBuffer {
     ProjectFileV1 v1;
     ProjectFileV2 v2;
     ProjectFileV3 v3;
     ProjectFileV4 v4;
     ProjectFileV5 v5;
+    ProjectFileV6 v6;
 };
 
 static_assert(sizeof(ProjectFileV1) == 1807, "GBX v1 layout changed");
@@ -143,6 +150,7 @@ static_assert(sizeof(SaveSamplerSlot) == 190, "sampler slot layout changed");
 static_assert(sizeof(SaveSamplerLock) == 16, "sampler lock layout changed");
 static_assert(sizeof(ProjectFileV4) == 15412, "unexpected GBX v4 layout");
 static_assert(sizeof(ProjectFileV5) == 31808, "unexpected GBX v5 layout");
+static_assert(sizeof(ProjectFileV6) == 31816, "unexpected GBX v6 layout");
 
 // Project I/O is serialized on the main task. Reusing one static buffer avoids
 // retaining separate 31 KiB save and load copies in the S3's limited SRAM.
@@ -167,11 +175,13 @@ static bool readProjectFile(const char* path, ProjectBuffer& loaded, uint16_t& v
                         version == 2 ? static_cast<void*>(&loaded.v2) :
                         version == 3 ? static_cast<void*>(&loaded.v3) :
                         version == 4 ? static_cast<void*>(&loaded.v4) :
-                                       static_cast<void*>(&loaded.v5);
+                        version == 5 ? static_cast<void*>(&loaded.v5) :
+                                       static_cast<void*>(&loaded.v6);
     const size_t expected = version == 1 ? sizeof(loaded.v1) :
                             version == 2 ? sizeof(loaded.v2) :
                             version == 3 ? sizeof(loaded.v3) :
-                            version == 4 ? sizeof(loaded.v4) : sizeof(loaded.v5);
+                            version == 4 ? sizeof(loaded.v4) :
+                            version == 5 ? sizeof(loaded.v5) : sizeof(loaded.v6);
     const size_t got = f.read(static_cast<uint8_t*>(destination), expected);
     f.close();
     return got == expected;
@@ -194,10 +204,11 @@ bool storageProjectExists(uint8_t slot) {
 bool storageSaveProject(uint8_t slot) {
     if (masterRecorderIsBusy() || stemRecorderIsBusy() || loopEngineIsRecording() ||
         streamingSamplerBusy()) return false;
-    ProjectFileV5& pf = s_projectBuffer.v5;
+    ProjectFileV6& pf = s_projectBuffer.v6;
     memset(&pf, 0, sizeof(pf));
 
-    ProjectFileV4& v4 = pf.base;
+    ProjectFileV5& v5 = pf.base;
+    ProjectFileV4& v4 = v5.base;
     ProjectFileV3& base = v4.base;
 
     base.magic = GBX_MAGIC;
@@ -269,14 +280,17 @@ bool storageSaveProject(uint8_t slot) {
 
     for (uint8_t track = 0; track < EVENT_LOOP_TRACKS; ++track) {
         const EventLoopTrackState& state = g_eventLooper.track(track);
-        pf.eventTracks[track].bars = static_cast<uint8_t>(
+        v5.eventTracks[track].bars = static_cast<uint8_t>(
             g_eventLooper.bars(track) == 128 ? 0 : g_eventLooper.bars(track));
-        pf.eventTracks[track].flags = static_cast<uint8_t>(
+        v5.eventTracks[track].flags = static_cast<uint8_t>(
             (state.armed ? 1u : 0u) | (state.muted ? 2u : 0u));
     }
-    pf.eventCount = g_eventLooper.count();
-    for (uint16_t index = 0; index < pf.eventCount; ++index)
-        pf.events[index] = g_eventLooper.event(index);
+    v5.eventCount = g_eventLooper.count();
+    for (uint16_t index = 0; index < v5.eventCount; ++index)
+        v5.events[index] = g_eventLooper.event(index);
+    const MotionSnapshot motion = motionSnapshot();
+    for (uint8_t mapping = 0; mapping < MOTION_MAPPING_COUNT; ++mapping)
+        pf.motionMappings[mapping] = motion.mappings[mapping];
 
     char path[64]; slotPath(slot, path, sizeof(path));
     char tempPath[72], backupPath[72];
@@ -421,6 +435,25 @@ static bool applyEventsV5(const ProjectFileV5& pf) {
     return true;
 }
 
+static bool applyMotionV6(const ProjectFileV6& pf) {
+    for (uint8_t mapping = 0; mapping < MOTION_MAPPING_COUNT; ++mapping) {
+        const MotionMapping& item = pf.motionMappings[mapping];
+        const bool empty = item.source == MOTION_SOURCE_NONE &&
+                           item.target == MOTION_TARGET_NONE;
+        if (!empty && (item.source <= MOTION_SOURCE_NONE ||
+                       item.source >= MOTION_SOURCE_COUNT ||
+                       item.target <= MOTION_TARGET_NONE ||
+                       item.target >= MOTION_TARGET_COUNT)) return false;
+    }
+    for (uint8_t mapping = 0; mapping < MOTION_MAPPING_COUNT; ++mapping) {
+        const MotionMapping& item = pf.motionMappings[mapping];
+        if (item.source == MOTION_SOURCE_NONE) motionClearMapping(mapping);
+        else motionSetMapping(mapping, static_cast<MotionSource>(item.source),
+                              static_cast<MotionTarget>(item.target));
+    }
+    return true;
+}
+
 bool storageLoadProject(uint8_t slot) {
     if (masterRecorderIsBusy() || stemRecorderIsBusy() || loopEngineIsRecording() ||
         streamingSamplerBusy()) return false;
@@ -442,11 +475,13 @@ bool storageLoadProject(uint8_t slot) {
     g_samplerSlotBank.clear();
     g_samplerSequence.clear();
     g_eventLooper.clearAll();
+    motionResetMappings();
     memset(g_patterns, 0, sizeof(g_patterns));
     memset(g_song, SONG_EMPTY, sizeof(g_song));
 
-    if (version == 3 || version == 4 || version == 5) {
-        const ProjectFileV3& pf = version == 5 ? loaded.v5.base.base :
+    if (version == 3 || version == 4 || version == 5 || version == 6) {
+        const ProjectFileV3& pf = version == 6 ? loaded.v6.base.base.base :
+                                  version == 5 ? loaded.v5.base.base :
                                   version == 4 ? loaded.v4.base : loaded.v3;
         g_bpm = pf.bpm;
         g_songLoopStart = pf.songLoopStart;
@@ -463,7 +498,9 @@ bool storageLoadProject(uint8_t slot) {
                 }
             memcpy(g_patterns[p].drums, pf.drums[p], NUM_STEPS);
         }
-        ok = version == 5 ? (applySamplerV4(loaded.v5.base) && applyEventsV5(loaded.v5)) :
+        ok = version == 6 ? (applySamplerV4(loaded.v6.base.base) &&
+                             applyEventsV5(loaded.v6.base) && applyMotionV6(loaded.v6)) :
+             version == 5 ? (applySamplerV4(loaded.v5.base) && applyEventsV5(loaded.v5)) :
              version == 4 ? applySamplerV4(loaded.v4) : true;
     } else if (version == 2) {
         const ProjectFileV2& pf = loaded.v2;

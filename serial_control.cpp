@@ -10,6 +10,7 @@
 #include "loop_engine.h"
 #include "streaming_sampler.h"
 #include "event_looper.h"
+#include "motion.h"
 
 #include <Arduino.h>
 #include <string.h>
@@ -310,6 +311,47 @@ void dispatch(const ControlRequest& request) {
                               static_cast<unsigned>(request.arg1),
                               static_cast<unsigned>(request.arg2));
             else replyError(request.id, "event_bars_rejected");
+            break;
+
+        case CONTROL_MOTION_STATUS: {
+            const MotionSnapshot motion = motionSnapshot();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK available=%u samples=%lu gestures=%u "
+                          "tilt_x=%u tilt_y=%u accel=%u gyro=%u shake=%u slap=%u",
+                          request.id, motion.available ? 1u : 0u,
+                          static_cast<unsigned long>(motion.samples),
+                          static_cast<unsigned>(motion.gestures),
+                          static_cast<unsigned>(motion.values[MOTION_SOURCE_TILT_X]),
+                          static_cast<unsigned>(motion.values[MOTION_SOURCE_TILT_Y]),
+                          static_cast<unsigned>(motion.values[MOTION_SOURCE_ACCEL]),
+                          static_cast<unsigned>(motion.values[MOTION_SOURCE_GYRO]),
+                          static_cast<unsigned>(motion.values[MOTION_SOURCE_SHAKE]),
+                          static_cast<unsigned>(motion.values[MOTION_SOURCE_SLAP]));
+            for (uint8_t mapping = 0; mapping < MOTION_MAPPING_COUNT; ++mapping)
+                Serial.printf(" m%u=%s,%s", static_cast<unsigned>(mapping + 1),
+                              motionSourceName(motion.mappings[mapping].source),
+                              motionTargetName(motion.mappings[mapping].target));
+            Serial.println("");
+            break;
+        }
+
+        case CONTROL_MOTION_MAP:
+            if (motionSetMapping(static_cast<uint8_t>(request.arg1 - 1),
+                                 static_cast<MotionSource>(request.arg2),
+                                 static_cast<MotionTarget>(request.arg3)))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK motion=%u source=%s target=%s\n", request.id,
+                              static_cast<unsigned>(request.arg1),
+                              motionSourceName(request.arg2),
+                              motionTargetName(request.arg3));
+            else replyError(request.id, "motion_map_rejected");
+            break;
+
+        case CONTROL_MOTION_CLEAR:
+            motionClearMapping(static_cast<uint8_t>(request.arg1 - 1));
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK motion=%u state=cleared\n", request.id,
+                          static_cast<unsigned>(request.arg1));
             break;
 
         default:
