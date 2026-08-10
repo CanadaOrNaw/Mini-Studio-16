@@ -38,6 +38,13 @@ def build(output: Path) -> None:
         check=True,
     )
     if output.exists():
+        marker = output / "BUILD_INFO.json"
+        try:
+            prior = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raise SystemExit(f"refusing to replace unrecognized directory: {output}")
+        if prior.get("project") != "Mini Studio 16":
+            raise SystemExit(f"refusing to replace unrecognized directory: {output}")
         shutil.rmtree(output)
     shutil.copytree(SITE, output)
 

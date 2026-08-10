@@ -13,7 +13,6 @@ import argparse
 import json
 import math
 import struct
-import tempfile
 from pathlib import Path
 from xml.sax.saxutils import escape
 

@@ -77,6 +77,22 @@ class SiteBuildTests(unittest.TestCase):
         self.assertIn('fetch("assets/button-layout.json")', script)
         self.assertNotIn("innerHTML", script)
 
+    def test_builder_refuses_unrecognized_output_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "unrelated"
+            target.mkdir()
+            sentinel = target / "keep-me.txt"
+            sentinel.write_text("user data", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "tools" / "build_site.py"), "--output", str(target)],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertTrue(sentinel.exists())
+            self.assertIn("refusing to replace", result.stderr + result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
