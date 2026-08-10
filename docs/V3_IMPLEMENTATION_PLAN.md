@@ -26,6 +26,58 @@ open until the Cardputer-ADV arrives.
 - A future external interface for true line input and conventional Bluetooth
   A2DP audio, neither of which stock S3 firmware can create.
 
+## Expanded synthesis product pillar
+
+Synthesis is a first-class Mini Studio 16 pillar alongside long audio,
+sampling, sequencing, event looping, motion, MIDI, and recording. Every synth
+track selects a bounded engine through one render/note interface:
+
+| Engine | Product role | Hardware-independent scope |
+| --- | --- | --- |
+| `MG/303` | Exact original Microgroove voice | Existing oscillators, wavetable selection, SVF low-pass, decay envelopes, accent, slide, mono behavior, and 1–3 voice polyphony remain the original render path |
+| `MGX` | Expanded subtractive voice | ADSR amplitude and filter envelopes, LP/BP/HP SVF output, PWM, sub oscillator, one assignable LFO, velocity routing, and inexpensive bounded drive |
+| `FM4` | Four-operator phase/frequency-modulation voice | Eight useful fixed algorithms, ratios, per-operator ADSR/level, carriers/modulators, and bounded operator-4 feedback |
+
+This is additive, not a rewrite of `SynthVoice`. Versions GBX v1–v7 always
+migrate to `MG/303`, preserving their saved parameters and legacy note/slide
+semantics. The expanded engines have separate fixed-size patch and voice state;
+switching engines silences/reinitializes transient state but retains each
+engine's patch.
+
+The selected `MGX` feature set is intentionally coherent. ADSR, filter mode,
+PWM, sub, LFO, velocity, and drive extend a single subtractive signal path and
+fit the existing one-key performance model. Oscillator-level unison is not
+included in this pass: track polyphony already provides up to three voices,
+and multiplying oscillators again would consume the same real-time headroom
+needed by FM, SD streams, drums, and recording. That decision can be revisited
+only with device benchmark evidence.
+
+`FM4` uses genuine audio-rate phase modulation between operators. Operator
+phase is a wrapping fixed-width accumulator; a shared interpolated sine table
+replaces per-sample `sinf()`. Algorithms are fixed, acyclic routing graphs so
+render cost is bounded and inspectable, with the sole cycle being explicitly
+bounded one-sample feedback on operator 4. Ratios and control/envelope values
+remain single-precision because the current engine is already float DSP, while
+phase and lookup are integer/fixed-width.
+
+Research basis:
+
+- Chowning's original paper establishes audio-rate sinusoidal FM and evolving
+  modulation index as the actual spectral mechanism:
+  [The Synthesis of Complex Audio Spectra by Means of Frequency Modulation](https://yamahasynth.com/wp-content/uploads/images/fm_synthesispaper-2.pdf).
+- Espressif documents the ESP32-S3 single-precision FPU but recommends integer
+  representations and lookup/precomputation where practical, and warns that
+  double precision is software-emulated:
+  [ESP32-S3 speed optimization](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/performance/speed.html).
+- Exponential target behavior is a standard implementation basis for decay and
+  release portions of ADSR control:
+  [Web Audio parameter automation](https://webaudio.github.io/web-audio-api/#dom-audioparam-settargetattime).
+
+SOUND uses small banks rather than one unusable parameter list: engine/common,
+MG/303 legacy, MGX oscillator/filter/envelope/LFO, and FM global/operator
+banks. Serial control mirrors the same validated parameter IDs. No edit or
+protocol operation allocates or performs file I/O in the render path.
+
 ## Non-negotiable architecture boundaries
 
 1. The audio renderer performs no file open/read/write/seek/close operation.
@@ -45,6 +97,11 @@ open until the Cardputer-ADV arrives.
    work; callbacks never perform audio storage I/O.
 9. USB device and host are separate images because the S3 exposes one native
    USB PHY/role at a time.
+10. Synth engine state is fixed-size. The renderer calls one bounded track
+    interface and performs no heap allocation, file I/O, transcendental sine,
+    or algorithm graph construction per sample.
+11. `MG/303` output is a regression contract. New subtractive behavior lives
+    in `MGX`; old projects never opt into a new engine implicitly.
 
 ## Completed milestones
 
@@ -58,6 +115,7 @@ open until the Cardputer-ADV arrives.
 | M5 sampler/sequencer | 16 patterns, 128 chain, 16 streamed slots, 40-second quota, melodic/sliced, trim/params/locks, bus/mic recording, GBX v4+ | Layout, migration syntax, quota/slice/lock/voice tests | Reboot persistence and live latency |
 | M6 event/motion/MIDI | Five × 128-bar event tracks; BMI270 mappings/automation; BLE MIDI; composite USB device; alternate USB host | Event/motion/MIDI/BLE/USB descriptor tests; both images link | Gesture calibration, reconnect, enumeration, clock jitter |
 | M7 full duplex/expansion | Low-level experiment boundary, cap pin map, fixed PCM packet/CRC contract, and external hardware requirements | Packet layout/CRC/bounds host-tested; no safe analog/RF host-only substitute exists | ES8311 experiment; line/A2DP hardware |
+| M8 expanded synthesis | Per-track `MG/303`, `MGX`, and true four-operator `FM4`; banked UI/CLI; GBX v8 migration; render telemetry/benchmark | Legacy golden-vector regression; operator/algorithm/ratio/envelope/feedback/switch tests; deterministic offline PCM/spectral statistics; malformed patch validation; both images link under memory gates | Worst-case render time and safe simultaneous FM polyphony with loops/sampler/drums/recording |
 
 ## Hardware test sequence
 
@@ -80,7 +138,11 @@ Run in this order so a failing lower layer does not invalidate later results.
 9. Validate composite USB CDC+MIDI with a computer/DAW while the CLI runs.
 10. Flash the host image and validate Yamaha/CYD with the correct OTG/VBUS
     arrangement, including attach/detach and non-MIDI devices.
-11. Calibrate gesture thresholds and test lower-level ES8311 full duplex.
+11. Run the on-device synth benchmark for every engine/voice count, then repeat
+    FM4 at maximum software polyphony while loops, sampler, drums, master
+    recording, MIDI, and motion are active. Capture worst render block time and
+    missed audio deadlines.
+12. Calibrate gesture thresholds and test lower-level ES8311 full duplex.
 
 ## Initial pass criteria
 
@@ -97,6 +159,9 @@ Run in this order so a failing lower layer does not invalidate later results.
 | BLE/USB clock | 30 min each | repeatable transport; no stuck notes/reboot |
 | Attach/reconnect | 20 cycles | no leak, crash, or audio-task stall |
 | Power loss | 10 cycles | prior valid take survives; temp repaired/quarantined |
+| Synth offline regression | every host run | legacy golden vector unchanged; deterministic bounded finite MGX/FM4 output; FM modulation changes waveform and spectral energy |
+| Synth render deadline | each engine × 1–3 voices | worst 256-frame block remains below 11.61 ms with zero missed deadlines |
+| Full-load FM soak | 30 min | chosen FM polyphony plus loops/sampler/drums/recording has no audio deadline miss or reboot |
 
 These thresholds are starting gates, not product specifications. Measured
 latency distributions and free-heap telemetry determine any final buffer-size
