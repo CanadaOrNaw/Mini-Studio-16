@@ -7,7 +7,7 @@ Cardputer-ADV.
 
 The complete printable physical legend is
 [`hardware/mini-studio-16-button-layout.svg`](../hardware/mini-studio-16-button-layout.svg).
-The [project site](https://canadaornaw.github.io/Mini-Studio-16/) presents the
+The [project site](https://canadaornaw.github.io/MiniStudio.github.io/) presents the
 same 56 keys as an interactive page-by-page map. Both are generated from
 `hardware/button-layout.json`; this manual remains authoritative for detailed
 context behavior.

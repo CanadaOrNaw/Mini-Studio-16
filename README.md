@@ -5,9 +5,9 @@ controller, recorder, and MIDI firmware for the **M5Stack Cardputer-ADV**.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 [![Build v3 alpha](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml/badge.svg?branch=agent%2Fv3-alpha-sd-streaming)](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml)
-[![Pages](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/pages.yml/badge.svg?branch=agent%2Fv3-alpha-sd-streaming)](https://canadaornaw.github.io/Mini-Studio-16/)
+[![Pages](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/pages.yml/badge.svg?branch=agent%2Fv3-alpha-sd-streaming)](https://canadaornaw.github.io/MiniStudio.github.io/)
 
-**[Open the Mini Studio 16 project site →](https://canadaornaw.github.io/Mini-Studio-16/)**
+**[Open the Mini Studio 16 project site →](https://canadaornaw.github.io/MiniStudio.github.io/)**
 
 > **Pre-hardware validation alpha.** The complete software paths described
 > below are implemented and built in CI. They have not yet been flashed or
