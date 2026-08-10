@@ -109,6 +109,10 @@ protocol operation allocates or performs file I/O in the render path.
     or algorithm graph construction per sample.
 11. `MG/303` output is a regression contract. New subtractive behavior lives
     in `MGX`; old projects never opt into a new engine implicitly.
+12. A runtime USB-role change cannot interrupt an active recorder, pending mic
+    commit, loop clear, sampler mutation, or destructive SD diagnostic. The
+    blocker is decided before OTA data changes; read-only playback is not
+    treated as a data-corruption risk.
 
 ## Completed milestones
 
@@ -123,7 +127,7 @@ protocol operation allocates or performs file I/O in the render path.
 | M6 event/motion/MIDI | Five × 128-bar event tracks; BMI270 mappings/automation; BLE MIDI; composite USB device; alternate USB host | Event/motion/MIDI/BLE/USB descriptor tests; both images link | Gesture calibration, reconnect, enumeration, clock jitter |
 | M7 full duplex/expansion | Low-level experiment boundary, cap pin map, fixed PCM packet/CRC contract, and external hardware requirements | Packet layout/CRC/bounds host-tested; no safe analog/RF host-only substitute exists | ES8311 experiment; line/A2DP hardware |
 | M8 expanded synthesis | Per-track `MG/303`, `MGX`, and true four-operator `FM4`; banked UI/CLI; GBX v8 migration; render telemetry/benchmark | Legacy golden-vector regression; operator/algorithm/ratio/envelope/feedback/switch tests; deterministic offline PCM/spectral statistics; malformed patch validation; both images link under memory gates | Worst-case render time and safe simultaneous FM polyphony with loops/sampler/drums/recording |
-| M9 dual-role boot | Common pre-subsystem selector in both apps; `normal`/`usbhost` OTA slots; validated reboot switch; serial/CLI control; combined and standalone artifacts | Pure decision tests; malformed/missing/mismatched slot tests; strict partition-layout and merge-placement tests; both profiles link against the same partition table; combined artifact manifest | Flash combined image, switch both directions repeatedly, power-cut the selection write, and verify USB role/enumeration after every reboot |
+| M9 dual-role boot | Common pre-subsystem selector in both apps; `normal`/`usbhost` OTA slots; validated reboot switch; serial/CLI control; recording/mutation/diagnostic interlocks; combined and standalone artifacts | Pure role/runtime decision tests; malformed/missing/mismatched slot tests; all busy sources and blocker precedence; strict partition-layout and merge-placement tests; both profiles link against the same partition table; combined artifact manifest | Flash combined image, switch both directions repeatedly, power-cut the selection write, and verify USB role/enumeration after every reboot |
 
 ## Hardware test sequence
 
