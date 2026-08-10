@@ -25,6 +25,36 @@ READ_ONLY_PROBES: tuple[tuple[str, ...], ...] = (
     ("midi", "status"),
 )
 
+PROBE_REQUIRED: dict[str, tuple[str, ...]] = {
+    "ping": ("pong", "firmware"),
+    "status": ("playing", "bpm", "heapFree", "heapLargest", "battery", "project"),
+    "project status": ("project", "occupied"),
+    "loop status": ("available", "timeline", "errors"),
+    "sample status": ("available", "quota", "remaining", "errors"),
+    "event status": ("position", "count", "capacity"),
+    "motion status": ("available", "samples", "gestures"),
+    "midi status": ("usbAvailable", "bleAvailable", "queueDrops", "clockDrops"),
+}
+
+
+def validate_probe(command: str, response: Response) -> None:
+    missing = [key for key in PROBE_REQUIRED[command] if key not in response.values]
+    if missing:
+        raise RuntimeError(f"{command} missing telemetry: {', '.join(missing)}")
+    if command == "ping" and response.values["pong"] != "1":
+        raise RuntimeError("ping did not return pong=1")
+    if command in ("loop status", "sample status", "motion status") and \
+            response.values["available"] != "1":
+        raise RuntimeError(f"{command} subsystem unavailable")
+    if command == "midi status" and (response.values["usbAvailable"] != "1" or
+                                      response.values["bleAvailable"] != "1"):
+        raise RuntimeError("normal-profile USB/BLE MIDI subsystem unavailable")
+    if command == "status":
+        if int(response.values["heapFree"]) <= 0 or int(response.values["heapLargest"]) <= 0:
+            raise RuntimeError("invalid heap telemetry")
+        if not 0 <= int(response.values["battery"]) <= 100:
+            raise RuntimeError("invalid battery telemetry")
+
 
 def send_correlated(device, request_id: str, words: Iterable[object], timeout: float,
                     events: list[str]) -> Response:
@@ -85,6 +115,7 @@ def run_smoke(device, command_timeout: float = 3.0, run_sd_test: bool = False,
         probes.append(record)
         if not response.ok:
             raise RuntimeError(f"probe failed: {record}")
+        validate_probe(record["command"], response)
 
     sd_result: dict[str, str] | None = None
     if run_sd_test:

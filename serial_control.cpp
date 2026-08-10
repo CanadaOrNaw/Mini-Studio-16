@@ -18,6 +18,7 @@
 #include "storage.h"
 
 #include <Arduino.h>
+#include <M5Cardputer.h>
 #include <esp_heap_caps.h>
 #include <string.h>
 
@@ -44,7 +45,8 @@ void dispatch(const ControlRequest& request) {
                 "song=%u master=%s frames=%lu dropped=%lu path=%s midiDropped=%lu "
                 "recoveredFrames=%lu recoveredPath=%s stems=%s stemFrames=%lu "
                 "stemDropped=%lu stemPath=%s sdWaitMax=%lu sdHoldMax=%lu "
-                "sdContention=%lu heapFree=%lu heapLargest=%lu\n",
+                "sdCalls=%lu sdContention=%lu heapFree=%lu heapLargest=%lu "
+                "battery=%u uptimeMs=%lu project=%u\n",
                 request.id, g_playing ? 1u : 0u, static_cast<unsigned>(g_bpm),
                 static_cast<unsigned>(g_playPattern + 1),
                 static_cast<unsigned>(g_playStep + 1), g_songMode ? 1u : 0u,
@@ -61,11 +63,15 @@ void dispatch(const ControlRequest& request) {
                 stems.path[0] ? stems.path : "-",
                 static_cast<unsigned long>(sdIo.maxWaitUs),
                 static_cast<unsigned long>(sdIo.maxHoldUs),
+                static_cast<unsigned long>(sdIo.acquisitions),
                 static_cast<unsigned long>(sdIo.contentions),
                 static_cast<unsigned long>(heap_caps_get_free_size(
                     MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)),
                 static_cast<unsigned long>(heap_caps_get_largest_free_block(
-                    MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)));
+                    MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)),
+                static_cast<unsigned>(constrain(M5.Power.getBatteryLevel(), 0, 100)),
+                static_cast<unsigned long>(millis()),
+                static_cast<unsigned>(g_curProject + 1u));
             break;
         }
 

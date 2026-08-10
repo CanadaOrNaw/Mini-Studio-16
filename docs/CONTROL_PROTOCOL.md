@@ -21,7 +21,7 @@ bytes per main-loop iteration.
 | Request | Effect |
 | --- | --- |
 | `ping` | Liveness/protocol check |
-| `status` | Transport, recorder, stem, MIDI queue, and SD-arbiter summary |
+| `status` | Transport, recorder, stem, MIDI queue, SD arbiter, heap, battery, uptime, and project summary |
 | `transport start\|continue\|stop` | Internal transport |
 | `tempo BPM` | Set 40–300 BPM |
 | `note TRACK NOTE VELOCITY` | Synth track 1–3, MIDI note 24–107, velocity 1–127 |

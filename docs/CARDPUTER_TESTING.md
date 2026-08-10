@@ -8,14 +8,16 @@ duration, and complete serial output for every pass or failure.
 
 1. Back up the SD card and use FAT32 for the first pass.
 2. Build or download a CI artifact only after host, sanitizer, and firmware jobs
-   all pass.
+   all pass. Run `sha256sum -c SHA256SUMS.txt` from the extracted artifact
+   directory and retain `BUILD_INFO.txt` with the test evidence.
 3. Flash the normal merged image at offset `0x0`:
 
    ```bash
    esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
    ```
 
-4. Open a 115200-baud serial monitor and save the full boot log.
+4. Open a 115200-baud serial monitor, press any key to dismiss the inherited
+   splash screen, and save the full boot log.
 5. Confirm `BOOT_READY` reports `sd=1`, sensible `heapFree`/`heapLargest`, and
    `BOOT_SUBSYSTEM` reports loop, sampler, motion, BLE, and USB availability.
 6. Save all recovery and SD-arbiter lines. Do not accept a boot loop, watchdog,

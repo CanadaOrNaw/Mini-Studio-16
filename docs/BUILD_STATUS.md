@@ -20,6 +20,7 @@ false until a physical Cardputer-ADV produces measurements.
   per-step triggers and sparse locks, master-bus/mic streamed recording, and
   interruption recovery.
 - The sequencer has 16 patterns, 16 steps, A/B banks, and a 128-entry chain.
+  Sparse-start and entry-128 loop wrapping are covered by a pure chain test.
 - The event looper has five tracks, 1–128 bars, 2,048 bounded events, and
   note/drum/sample/control recording.
 - BMI270 motion filtering produces tilt X/Y, acceleration, gyro, shake, and
@@ -33,7 +34,7 @@ false until a physical Cardputer-ADV produces measurements.
   rings. The desktop splitter emits master, synth 1/2/3, and drums WAVs.
 - The bounded `MS16/1` control protocol and CLI expose status, transport,
   tempo, notes/drums, SD test, recorders, loops, sampler, event looper, motion,
-  and MIDI telemetry.
+  MIDI telemetry, and project status/save/load.
 - One recursive SD arbiter serializes all FatFS traffic and measures calls,
   contention, failures, and maximum hold time.
 - GBX v7 saves the expanded sequencer, sampler, locks, event data, motion
@@ -60,6 +61,8 @@ false until a physical Cardputer-ADV produces measurements.
 - WAV, master-session, stem-header/split, temporary-file recovery helpers,
   CLI framing, firmware merge commands, and ESP32 linker-section budgeting are
   tested.
+- A fake-serial test covers the machine-readable hardware-arrival smoke runner,
+  including correlated probes and terminal SD diagnostic pass/fail behavior.
 - GitHub runs the host suite and separate AddressSanitizer plus
   UndefinedBehaviorSanitizer jobs.
 - CI compiles and links both target profiles, enforces the DRAM/flash budgets,

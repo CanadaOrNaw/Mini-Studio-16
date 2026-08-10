@@ -83,6 +83,10 @@ CI also publishes merged 8 MB images that flash at offset `0x0`:
 esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
 ```
 
+Each artifact includes `SHA256SUMS.txt`, `BUILD_INFO.txt`, both application
+ELFs/images, both merged images, and both resource reports. Verify the extracted
+artifact with `sha256sum -c SHA256SUMS.txt` before flashing.
+
 The host image is named `microgroove-v3-alpha-usb-host.bin`. Flashing it
 replaces the normal CDC+MIDI image; the ESP32-S3's single native USB PHY cannot
 serve both device and host roles simultaneously.

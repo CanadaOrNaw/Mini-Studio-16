@@ -35,8 +35,19 @@ class FakeSerial:
                  "minHeap=80000 errors=0\n").encode()
             )
         else:
+            command_name = " ".join(command)
+            values = {
+                "ping": "pong=1 firmware=v3-alpha",
+                "status": "playing=0 bpm=128 heapFree=90000 heapLargest=70000 battery=75 project=1",
+                "project status": "project=1 occupied=0x01",
+                "loop status": "available=1 timeline=0 errors=0",
+                "sample status": "available=1 quota=0 remaining=882000 errors=0",
+                "event status": "position=0 count=0 capacity=2048",
+                "motion status": "available=1 samples=20 gestures=0",
+                "midi status": "usbAvailable=1 bleAvailable=1 queueDrops=0 clockDrops=0",
+            }[command_name]
             self.responses.append(
-                f"MS16/1 {request_id} OK probe=1\n".encode()
+                f"MS16/1 {request_id} OK {values}\n".encode()
             )
 
     def flush(self):
@@ -63,6 +74,11 @@ class HardwareSmokeTests(unittest.TestCase):
     def test_sd_failure_is_fatal(self):
         with self.assertRaises(RuntimeError):
             smoke.run_smoke(FakeSerial("FAIL"), 0.1, True, 0.1)
+
+    def test_missing_telemetry_is_fatal(self):
+        response = smoke.Response("x", True, {"available": "1"}, "")
+        with self.assertRaises(RuntimeError):
+            smoke.validate_probe("loop status", response)
 
 
 if __name__ == "__main__":

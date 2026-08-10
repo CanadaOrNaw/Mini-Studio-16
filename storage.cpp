@@ -418,13 +418,20 @@ static bool validateSynthRecord(const SaveSynth& synth) {
     return synth.oscMode < OSC_COUNT && isfinite(synth.cutoff) &&
            isfinite(synth.reso) && isfinite(synth.envAmt) &&
            isfinite(synth.ampDec) && isfinite(synth.filtDec) &&
-           isfinite(synth.volume);
+           isfinite(synth.volume) && synth.cutoff >= 0.0f && synth.cutoff <= 1.0f &&
+           synth.reso >= 0.0f && synth.reso <= 1.0f &&
+           synth.envAmt >= 0.0f && synth.envAmt <= 1.0f &&
+           synth.ampDec >= 0.9990f && synth.ampDec <= 0.99999f &&
+           synth.filtDec >= 0.9950f && synth.filtDec <= 0.99995f &&
+           synth.volume >= 0.0f && synth.volume <= 1.0f;
 }
 
 static bool validateLaneRecord(const SaveDrumLane& lane) {
     return lane.engine < ENG_COUNT && lane.type < DT_COUNT &&
-           lane.sampleName[SAMPLE_NAME_LEN - 1] == 0 &&
-           isfinite(lane.volume) && isfinite(lane.tune) && isfinite(lane.decay);
+           lane.chokeGroup < 4 && lane.sampleName[SAMPLE_NAME_LEN - 1] == 0 &&
+           isfinite(lane.volume) && lane.volume >= 0.0f && lane.volume <= 1.0f &&
+           isfinite(lane.tune) && lane.tune >= -12.0f && lane.tune <= 12.0f &&
+           isfinite(lane.decay) && lane.decay >= 0.4f && lane.decay <= 2.5f;
 }
 
 static bool validateCellRecord(const SaveCell& cell) {
@@ -439,6 +446,7 @@ static bool validateCellRecord(const SaveCell& cell) {
 }
 
 static bool validateBaseV3(const ProjectFileV3& pf) {
+    if (pf.bpm < 40 || pf.bpm > 300 || pf.songLoopStart >= SONG_LENGTH) return false;
     for (uint8_t synth = 0; synth < NUM_SYNTHS; ++synth)
         if (pf.voices[synth] < 1 || pf.voices[synth] > MAX_POLY ||
             !validateSynthRecord(pf.synths[synth])) return false;
@@ -454,6 +462,8 @@ static bool validateBaseV3(const ProjectFileV3& pf) {
 }
 
 static bool validateBaseV2(const ProjectFileV2& pf) {
+    if (pf.bpm < 40 || pf.bpm > 300 ||
+        pf.songLoopStart >= LEGACY_SONG_LENGTH) return false;
     for (uint8_t synth = 0; synth < NUM_SYNTHS; ++synth)
         if (pf.voices[synth] < 1 || pf.voices[synth] > MAX_POLY ||
             !validateSynthRecord(pf.synths[synth])) return false;
@@ -470,6 +480,8 @@ static bool validateBaseV2(const ProjectFileV2& pf) {
 }
 
 static bool validateBaseV1(const ProjectFileV1& pf) {
+    if (pf.bpm < 40 || pf.bpm > 300 ||
+        pf.songLoopStart >= LEGACY_SONG_LENGTH) return false;
     for (uint8_t synth = 0; synth < NUM_SYNTHS; ++synth)
         if (!validateSynthRecord(pf.synths[synth])) return false;
     for (uint8_t lane = 0; lane < NUM_DRUM_LANES; ++lane)
@@ -502,9 +514,13 @@ static bool stageSamplerV4(const ProjectFileV4& pf, SamplerStage& staged) {
     for (uint8_t index = 0; index < SAMPLER_SLOT_COUNT; ++index) {
         const SaveSamplerSlot& in = pf.samplerSlots[index];
         if (in.mode == SAMPLER_SLOT_EMPTY) continue;
+        const bool safeName = in.filename[0] != 0 &&
+            in.filename[SAMPLE_NAME_LEN - 1] == 0 &&
+            strchr(in.filename, '/') == nullptr && strchr(in.filename, '\\') == nullptr;
         if ((in.mode != SAMPLER_SLOT_MELODIC && in.mode != SAMPLER_SLOT_SLICED) ||
-            in.rootMidi > 127 || in.gainQ15 > 32767 || in.cutoffQ15 > 32767 ||
-            in.resonanceQ15 > 32767 ||
+            !safeName || in.rootMidi > 127 || in.pitchQ8 < -24 * 256 ||
+            in.pitchQ8 > 24 * 256 || in.gainQ15 > 32767 ||
+            in.cutoffQ15 > 32767 || in.resonanceQ15 > 32767 ||
             !bank.assign(index, in.filename, in.sourceFrames, in.sourceRate,
                          static_cast<SamplerSlotMode>(in.mode)) ||
             bank.slot(index).quotaFrames != in.quotaFrames ||
@@ -532,7 +548,8 @@ static bool stageSamplerV4(const ProjectFileV4& pf, SamplerStage& staged) {
                                SAMPLER_LOCK_FILTER | SAMPLER_LOCK_TRIM;
     for (uint16_t index = 0; index < pf.samplerLockCount; ++index) {
         const SaveSamplerLock& in = pf.samplerLocks[index];
-        if ((in.flags & ~knownFlags) != 0 || in.gainQ15 > 32767 ||
+        if ((in.flags & ~knownFlags) != 0 || in.pitchQ8 < -24 * 256 ||
+            in.pitchQ8 > 24 * 256 || in.gainQ15 > 32767 ||
             in.cutoffQ15 > 32767 || in.resonanceQ15 > 32767) return false;
         SamplerLockEntry out = {};
         out.pattern = in.pattern; out.step = in.step; out.slot = in.slot; out.flags = in.flags;
@@ -556,16 +573,23 @@ static bool validateEventsV5(const ProjectFileV5& pf) {
     for (uint16_t index = 0; index < pf.eventCount; ++index) {
         const EventLoopEvent& event = pf.events[index];
         if (event.track >= EVENT_LOOP_TRACKS ||
-            event.type < EVENT_LOOP_NOTE || event.type > EVENT_LOOP_CONTROL)
+            event.type < EVENT_LOOP_NOTE || event.type > EVENT_LOOP_CONTROL ||
+            event.flags != 0)
             return false;
         const uint16_t bars = pf.eventTracks[event.track].bars == 0
             ? 128 : pf.eventTracks[event.track].bars;
         if (event.step >= bars * EVENT_LOOP_STEPS_PER_BAR) return false;
         if ((event.type == EVENT_LOOP_NOTE &&
-             (event.target >= NUM_SYNTHS || event.value1 < 12 || event.value1 > 127)) ||
-            (event.type == EVENT_LOOP_DRUM && event.target >= NUM_DRUM_LANES) ||
+             (event.target >= NUM_SYNTHS || event.value1 < 12 || event.value1 > 127 ||
+              event.value2 > 127)) ||
+            (event.type == EVENT_LOOP_DRUM &&
+             (event.target >= NUM_DRUM_LANES || event.value1 > 127)) ||
             (event.type == EVENT_LOOP_SAMPLE &&
-             (event.target >= SAMPLER_SLOT_COUNT || event.value1 >= SAMPLER_SLICE_COUNT)))
+             (event.target >= SAMPLER_SLOT_COUNT || event.value1 >= SAMPLER_SLICE_COUNT ||
+              event.value2 > 127)) ||
+            (event.type == EVENT_LOOP_CONTROL &&
+             (event.target <= MOTION_TARGET_NONE || event.target >= MOTION_TARGET_COUNT ||
+              event.value1 > 127)))
             return false;
     }
 

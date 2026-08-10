@@ -24,17 +24,29 @@ class FactoryProjectTests(unittest.TestCase):
             offset += 26
             self.assertLess(oscillator, 5)
             self.assertTrue(all(math.isfinite(value) for value in values))
+            cutoff, resonance, envelope, amp_decay, filter_decay, volume = values
+            self.assertTrue(0.0 <= cutoff <= 1.0)
+            self.assertTrue(0.0 <= resonance <= 1.0)
+            self.assertTrue(0.0 <= envelope <= 1.0)
+            self.assertTrue(0.9990 <= amp_decay <= 0.99999)
+            self.assertTrue(0.9950 <= filter_decay <= 0.99995)
+            self.assertTrue(0.0 <= volume <= 1.0)
 
         for _ in range(8):
-            engine, drum_type, _choke, *values = struct.unpack_from(
+            engine, drum_type, choke, *values = struct.unpack_from(
                 "<BBB3f", project, offset)
             offset += 15
             sample_name = project[offset:offset + 32]
             offset += 32
             self.assertLess(engine, 3)
             self.assertLess(drum_type, 4)
+            self.assertLess(choke, 4)
             self.assertEqual(sample_name[-1], 0)
             self.assertTrue(all(math.isfinite(value) for value in values))
+            volume, tune, decay = values
+            self.assertTrue(0.0 <= volume <= 1.0)
+            self.assertTrue(-12.0 <= tune <= 12.0)
+            self.assertTrue(0.4 <= decay <= 2.5)
 
         for _ in range(8 * 3 * 16):
             note, octave, flags = struct.unpack_from("<BBB", project, offset)

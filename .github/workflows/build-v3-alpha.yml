@@ -52,6 +52,27 @@ jobs:
           python tools/merge_firmware.py \
             --build-dir .pio/build/m5stack-cardputer-adv-usb-host \
             --output .pio/build/m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin
+      - name: Create artifact manifest
+        run: |
+          cd .pio/build
+          sha256sum \
+            m5stack-cardputer-adv/microgroove-v3-alpha.bin \
+            m5stack-cardputer-adv/firmware.bin \
+            m5stack-cardputer-adv/firmware.elf \
+            m5stack-cardputer-adv/size-report.json \
+            m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin \
+            m5stack-cardputer-adv-usb-host/firmware.bin \
+            m5stack-cardputer-adv-usb-host/firmware.elf \
+            m5stack-cardputer-adv-usb-host/size-report.json \
+            > SHA256SUMS.txt
+          {
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "workflow_sha=$GITHUB_SHA"
+            echo "source_ref=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "platformio=6.1.19"
+            echo "espressif32=6.7.0"
+          } > BUILD_INFO.txt
       - uses: actions/upload-artifact@v4
         with:
           name: microgroove-v3-alpha-cardputer-adv
@@ -64,4 +85,6 @@ jobs:
             .pio/build/m5stack-cardputer-adv-usb-host/firmware.bin
             .pio/build/m5stack-cardputer-adv-usb-host/firmware.elf
             .pio/build/m5stack-cardputer-adv-usb-host/size-report.json
+            .pio/build/SHA256SUMS.txt
+            .pio/build/BUILD_INFO.txt
           if-no-files-found: error

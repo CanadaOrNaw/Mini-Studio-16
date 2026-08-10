@@ -5,9 +5,10 @@
 //     filter, accent, slide); each track switchable 1-3 voices
 //     (mono 303 or polyphonic chords)
 //   - 8 drum lanes: 808 synth / 909 synth / SD samples, choke groups
-//   - 16-step patterns x8, song chaining, live record with quantize
-//   - live mic sampling + engine resampling to microSD
-//   - project save/load to microSD (GBX v2; loads v1 transparently)
+//   - 16 patterns x 16 steps, 128-entry chain, live record with quantize
+//   - live mic sampling, SD-streamed sampler/looper, master/stem recording
+//   - BLE/USB MIDI, BMI270 motion, and USB serial control
+//   - project save/load to microSD (GBX v7; loads v1-v6 transparently)
 //
 // Portions of the synth voice, 808 drums, and audio task are derived
 // from qwertyuu/Cardputer-Adv-Tracker (MIT License) - see LICENSE.
