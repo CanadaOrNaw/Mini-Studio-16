@@ -9,32 +9,49 @@ false until a physical Cardputer-ADV produces measurements.
 
 ## Verified pre-hardware code checkpoint
 
-- Source head: `273380b05ee60fb599d5c585bf064ab1dcf09710`
-- GitHub Actions: [run 31354564512](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31354564512)
+- Firmware source head: `21725e82c4ae6636455f1cde2dc303d356031184`
+- GitHub Actions: [run 31379497311](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31379497311)
 - Host tests, AddressSanitizer, UndefinedBehaviorSanitizer, normal firmware,
   USB-host firmware, resource gates, merged-image generation, SD-card package,
   checksum manifest, and artifact upload: **passed**
-- Normal image: 179,104 bytes static DRAM; 921,529-byte flash estimate;
-  merged-image SHA-256 `9bb01e087349474dbb2c7ec701142b9fca6a7c6288ec2832cbea90fbddf1850c`
-- USB-host image: 167,512 bytes static DRAM; 940,005-byte flash estimate;
-  merged-image SHA-256 `ba698aedeaba4bd7e4ccad883df65aa0b51d36f6aa5ffe7380054e201a487eab`
-- Artifact ID `9050233082`; ZIP SHA-256
-  `36ae4d96a005656417603777ca9587cd3ffbc024d1ac1a58064c05a300ed835c`
+- Normal image: 181,424 bytes static DRAM; 935,317-byte flash estimate;
+  merged-image SHA-256 `ebb7feee85852a35f1cee3f8f6833767e9c8f92d2d07f4d280e6c7d227de7631`
+- USB-host image: 169,856 bytes static DRAM; 953,701-byte flash estimate;
+  merged-image SHA-256 `7a08cba7fe10e5f18641a1506c66faf1e1af6927be1632f86dd1c2718739d6d8`
+- [Artifact ID 9059387691](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31379497311/artifacts/9059387691);
+  ZIP SHA-256
+  `d74deaeab6baa5990cb73bac2cdf74af674d1ab819de278943574d434c055af5`
 - Starter SD ZIP SHA-256
-  `76123e5bc6607cbd8f1dfcc9a19d8901faab1f2f1884f3763c2660231623546c`
+  `708e868ea108fee26cbdcd150740ba96e665e31712bca774d4ededb40d174256`
 
-The downloaded 13-file artifact was independently extracted; all eleven
-payload entries passed `sha256sum -c SHA256SUMS.txt`, and the starter SD ZIP
-contained the factory project, license, and fourteen WAV assets. A later
-documentation-only head may produce a different outer artifact digest because
-`BUILD_INFO.txt` embeds its workflow SHA; the two merged image hashes above are
-the code checkpoint.
+The downloaded artifact was independently extracted; all eleven payload
+entries passed `sha256sum -c SHA256SUMS.txt`. The artifact contains both merged
+8 MB flash images, firmware binaries and ELFs, both resource reports, the
+starter SD ZIP, license, SD instructions, manifest, and build provenance. A
+later documentation-only head can produce a different outer ZIP digest because
+`BUILD_INFO.txt` embeds its workflow merge SHA; the two merged-image hashes
+above identify the firmware code checkpoint.
 
 ## Implemented
 
 - Original Microgroove synth, drums, keyboard, UI, short mic sampler, short
   master resampler, project slots, speaker, mic, headphone, and SD workflows
   are retained.
+- Each of the three synth tracks now selects one of three fixed-size engines:
+  exact original `MG/303`, expanded subtractive `MGX`, or true four-operator
+  `FM4`. Engine dispatch performs no heap allocation, file I/O, or per-sample
+  transcendental sine calls.
+- `MGX` adds amplitude/filter ADSR, LP/BP/HP SVF output, PWM, sub oscillator,
+  assignable LFO, velocity routing, and bounded drive without altering the
+  legacy `MG/303` render path.
+- `FM4` uses audio-rate phase modulation, a 256-entry interpolated sine table,
+  phase accumulators, eight fixed algorithms, operator ratios/levels/ADSR,
+  modulation index, and bounded operator-4 feedback. It is real FM rather than
+  detuned oscillators.
+- SOUND exposes engine/common, legacy, MGX, FM-global, and operator banks while
+  preserving the existing one-key editing/audition flow. The serial protocol
+  and desktop CLI expose the same validated engine/parameter model plus note
+  release and DSP timing telemetry.
 - Six SD-backed loop tracks implement exact Track-1 frame length, later-track
   boundary scheduling, record/play/mute/volume/clear, underrun silence,
   boundary re-prime, temporary-file publication, and boot recovery.
@@ -60,8 +77,9 @@ the code checkpoint.
   MIDI telemetry, and project status/save/load.
 - One recursive SD arbiter serializes all FatFS traffic and measures calls,
   contention, failures, and maximum hold time.
-- GBX v7 saves the expanded sequencer, sampler, locks, event data, motion
-  mappings, and loop mixer. GBX v1–v6 remain readable.
+- GBX v8 saves the expanded sequencer, sampler, locks, event data, motion
+  mappings, loop mixer, and all three synth engine patches. GBX v1–v7 remain
+  readable and explicitly migrate to the original `MG/303` engine.
 - Normal and USB-host merged 8 MB flash images are produced by CI.
 
 ## Verified by automated tests
@@ -75,6 +93,8 @@ the code checkpoint.
 - Sampler tests cover quota normalization, trim/slicing, locks, pitch, EOF,
   underrun, and four-voice stealing.
 - Event tests cover five tracks, 128 bars, ordering, bounds, and capacity.
+  Live and replayed note releases are recorded explicitly so ADSR engines do
+  not leave sustained voices stuck.
 - Motion tests cover filtering, range, gesture cooldown, and mappings.
 - MIDI tests cover running status, realtime interleave, velocity-zero note-off,
   queue overflow, 24-PPQN stepping, song position, and transport.
@@ -86,6 +106,18 @@ the code checkpoint.
   tested.
 - A fake-serial test covers the machine-readable hardware-arrival smoke runner,
   including correlated probes and terminal SD diagnostic pass/fail behavior.
+- Synthesis tests cover the original `MG/303` golden render, phase/ratio math,
+  ADSR state, all eight FM algorithms, operator modulation, feedback bounds,
+  deterministic voice reset/allocation, engine switching, validated parameter
+  ranges, SOUND bank behavior, and GBX v8 round-trip/migration/malformed input.
+- Offline render tests require finite, bounded, non-silent deterministic PCM.
+  They also verify that obvious FM modulation changes both waveform hashes and
+  sideband energy rather than merely detuning an oscillator.
+- The original `MG/303` golden hash is `a202afdc`; the known base and modulated
+  offline-render hashes are `ac9acded` and `96bd5991` respectively.
+- On-device DSP telemetry measures last/worst 256-frame render time, the
+  11.61 ms deadline, and missed deadlines; protocol status/reset commands and
+  the hardware smoke runner expose it for the arrival benchmark.
 - GitHub runs the host suite and separate AddressSanitizer plus
   UndefinedBehaviorSanitizer jobs.
 - CI compiles and links both target profiles, enforces the DRAM/flash budgets,
@@ -107,6 +139,22 @@ Boot telemetry reports internal free heap and largest block after subsystem
 initialization; only hardware can validate task stacks, library allocations,
 and the adaptive legacy sample pool together.
 
+Compared with the verified pre-synthesis checkpoint (`0a5c9ee...`), expanded
+synthesis adds 2,320 bytes normal-profile static DRAM and 13,788 bytes estimated
+flash; the USB-host profile adds 2,344 bytes static DRAM and 13,696 bytes flash.
+The resulting resource boundary is:
+
+| Profile | Static DRAM | Gate headroom | Flash estimate | Flash headroom |
+| --- | ---: | ---: | ---: | ---: |
+| USB CDC+MIDI device | 181,424 B | 23,376 B | 935,317 B | 2,064,683 B |
+| USB MIDI host | 169,856 B | 34,944 B | 953,701 B | 2,046,299 B |
+
+Fixed host-layout measurements are 60 bytes per original voice, 76 bytes per
+MGX voice, 124 bytes per FM voice, and 952 bytes for one `SynthTrack` containing
+all engine state. All three synth tracks therefore reserve 2,856 bytes of
+bounded engine state before target ABI differences. Hardware still determines
+the safe *active* FM polyphony under the complete audio/storage workload.
+
 ## Only remaining gates
 
 ### Stock Cardputer-ADV
@@ -124,6 +172,10 @@ and the adaptive legacy sample pool together.
 - Verify the USB-host profile with the Yamaha/CYD, correct OTG adapter, and safe
   VBUS power; test attach/detach and malformed/non-MIDI devices.
 - Calibrate BMI270 gestures and motion automation.
+- Run `MG/303`, `MGX`, and `FM4` at 1–3 voices, then repeat maximum FM software
+  polyphony with loops, sampler, drums, master recording, MIDI, event/motion
+  automation, and UI active. The worst render block must remain below 11.61 ms
+  with zero missed deadlines; measured results set the product's safe FM limit.
 
 ### Additional hardware
 
