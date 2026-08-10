@@ -669,10 +669,6 @@ bool streamingSamplerStopRecord() {
     return true;
 }
 
-void streamingSamplerCaptureBusFrame(int16_t frame) {
-    streamingSamplerRecordPush(STREAM_SAMPLE_INPUT_BUS, &frame, 1);
-}
-
 void streamingSamplerStopAll() {
     SamplerCommand command = {};
     command.type = COMMAND_STOP_ALL;

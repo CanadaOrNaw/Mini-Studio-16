@@ -17,6 +17,7 @@
 #include "sd_io_arbiter.h"
 
 #include <Arduino.h>
+#include <esp_heap_caps.h>
 #include <string.h>
 
 namespace {
@@ -42,7 +43,7 @@ void dispatch(const ControlRequest& request) {
                 "song=%u master=%s frames=%lu dropped=%lu path=%s midiDropped=%lu "
                 "recoveredFrames=%lu recoveredPath=%s stems=%s stemFrames=%lu "
                 "stemDropped=%lu stemPath=%s sdWaitMax=%lu sdHoldMax=%lu "
-                "sdContention=%lu\n",
+                "sdContention=%lu heapFree=%lu heapLargest=%lu\n",
                 request.id, g_playing ? 1u : 0u, static_cast<unsigned>(g_bpm),
                 static_cast<unsigned>(g_playPattern + 1),
                 static_cast<unsigned>(g_playStep + 1), g_songMode ? 1u : 0u,
@@ -59,7 +60,11 @@ void dispatch(const ControlRequest& request) {
                 stems.path[0] ? stems.path : "-",
                 static_cast<unsigned long>(sdIo.maxWaitUs),
                 static_cast<unsigned long>(sdIo.maxHoldUs),
-                static_cast<unsigned long>(sdIo.contentions));
+                static_cast<unsigned long>(sdIo.contentions),
+                static_cast<unsigned long>(heap_caps_get_free_size(
+                    MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)),
+                static_cast<unsigned long>(heap_caps_get_largest_free_block(
+                    MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)));
             break;
         }
 
@@ -409,12 +414,13 @@ void dispatch(const ControlRequest& request) {
             const BleMidiSnapshot ble = bleMidiSnapshot();
             const UsbMidiSnapshot usb = usbMidiSnapshot();
             Serial.printf(CONTROL_PROTOCOL_PREFIX
-                          " %s OK queueDrops=%lu usbAvailable=%u usbMounted=%u "
+                          " %s OK queueDrops=%lu usbAvailable=%u usbMounted=%u usbHost=%u "
                           "usbRx=%lu usbTx=%lu usbErrors=%lu bleAvailable=%u "
                           "bleConnected=%u bleRx=%lu bleTx=%lu bleMalformed=%lu "
                           "bleDrops=%lu\n",
                           request.id, static_cast<unsigned long>(midiInputDroppedEvents()),
                           usb.available ? 1u : 0u, usb.mounted ? 1u : 0u,
+                          usb.hostMode ? 1u : 0u,
                           static_cast<unsigned long>(usb.bytesReceived),
                           static_cast<unsigned long>(usb.messagesSent),
                           static_cast<unsigned long>(usb.sendErrors),

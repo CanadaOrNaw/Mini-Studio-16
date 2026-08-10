@@ -17,8 +17,17 @@ SampleInfo g_samples[MAX_SAMPLES];
 uint8_t    g_numSamples   = 0;
 
 bool samplerInit() {
-    // Allocate the pool once; shrink until it fits in free internal RAM.
-    uint32_t bytes = SAMPLE_POOL_BYTES;
+    // Worker stacks and the wireless stacks are created after this call.
+    // Preserve their boot reserve instead of letting the legacy RAM pool take
+    // every currently-free byte before those subsystems start.
+    constexpr uint32_t kBootReserveBytes = 112u * 1024u;
+    const uint32_t freeBytes = heap_caps_get_free_size(
+        MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+    uint32_t bytes = freeBytes > kBootReserveBytes
+        ? freeBytes - kBootReserveBytes : 0;
+    if (bytes > SAMPLE_POOL_BYTES) bytes = SAMPLE_POOL_BYTES;
+    bytes &= ~static_cast<uint32_t>(16u * 1024u - 1u);
+    if (bytes < 32u * 1024u) bytes = 32u * 1024u;
     while (bytes >= 32 * 1024) {
         g_samplePool = (int16_t*)heap_caps_malloc(bytes, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
         if (g_samplePool) break;
@@ -26,6 +35,11 @@ bool samplerInit() {
     }
     if (!g_samplePool) return false;
     g_poolCapacity = bytes / sizeof(int16_t);
+    Serial.printf("RAM_SAMPLE_POOL bytes=%lu free_after=%lu reserve=%lu\n",
+                  static_cast<unsigned long>(bytes),
+                  static_cast<unsigned long>(heap_caps_get_free_size(
+                      MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)),
+                  static_cast<unsigned long>(kBootReserveBytes));
     samplerClearAll();
 
     SdIoGuard guard;

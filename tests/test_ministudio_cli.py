@@ -72,6 +72,11 @@ class MiniStudioCliTests(unittest.TestCase):
                          ["sample", 16, "assign", "CHORD.wav", "melodic"])
         args = cli.parser().parse_args(["sample-trigger", "2", "16"])
         self.assertEqual(cli.command_words(args), ["sample", 2, "trigger", 16])
+        args = cli.parser().parse_args(["sample-record", "4", "bus", "sliced"])
+        self.assertEqual(cli.command_words(args),
+                         ["sample", 4, "record", "bus", "sliced"])
+        args = cli.parser().parse_args(["sample-stop", "4"])
+        self.assertEqual(cli.command_words(args), ["sample", 4, "stop"])
 
     def test_event_commands(self):
         args = cli.parser().parse_args(["event-status"])

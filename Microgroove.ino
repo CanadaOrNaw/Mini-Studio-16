@@ -15,6 +15,7 @@
 #include <M5Cardputer.h>
 #include <SPI.h>
 #include <SD.h>
+#include <esp_heap_caps.h>
 
 #include "config.h"
 #include "sequencer.h"
@@ -93,6 +94,22 @@ void setup() {
     inputInit();
     audioEngineStart();              // render task on core 0
     serialControlInit();
+
+    const LoopEngineSnapshot bootLoops = loopEngineSnapshot();
+    const StreamingSamplerSnapshot bootSampler = streamingSamplerSnapshot();
+    const MotionSnapshot bootMotion = motionSnapshot();
+    const BleMidiSnapshot bootBle = bleMidiSnapshot();
+    const UsbMidiSnapshot bootUsb = usbMidiSnapshot();
+    Serial.printf("BOOT_READY sd=%u heapFree=%lu heapLargest=%lu\n",
+                  s_sdOk ? 1u : 0u,
+                  static_cast<unsigned long>(heap_caps_get_free_size(
+                      MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)),
+                  static_cast<unsigned long>(heap_caps_get_largest_free_block(
+                      MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)));
+    Serial.printf("BOOT_SUBSYSTEM loop=%u sampler=%u motion=%u ble=%u usb=%u\n",
+                  bootLoops.available ? 1u : 0u, bootSampler.available ? 1u : 0u,
+                  bootMotion.available ? 1u : 0u, bootBle.available ? 1u : 0u,
+                  bootUsb.available ? 1u : 0u);
 
     if (!s_sdOk) uiStatus("NO SD CARD");
     g_needRedraw = true;

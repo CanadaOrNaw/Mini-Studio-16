@@ -50,7 +50,6 @@ bool streamingSamplerBeginRecord(uint8_t slot, SamplerSlotMode mode,
 size_t streamingSamplerRecordPush(StreamingSamplerInput input,
                                   const int16_t* frames, size_t count);
 bool streamingSamplerStopRecord();
-void streamingSamplerCaptureBusFrame(int16_t frame);
 void streamingSamplerStopAll();
 bool streamingSamplerBusy();
 bool streamingSamplerIsRecording();

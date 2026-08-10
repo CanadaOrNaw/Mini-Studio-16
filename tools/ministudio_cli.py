@@ -104,6 +104,10 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["sample", args.slot, "trigger", args.key]
     if args.command == "sample-clear":
         return ["sample", args.slot, "clear"]
+    if args.command == "sample-record":
+        return ["sample", args.slot, "record", args.input, args.mode]
+    if args.command == "sample-stop":
+        return ["sample", args.slot, "stop"]
     if args.command == "event-status":
         return ["event", "status"]
     if args.command == "event":
@@ -165,6 +169,13 @@ def parser() -> argparse.ArgumentParser:
     sample_trigger.add_argument("key", type=int, choices=range(1, 17))
     sample_clear = sub.add_parser("sample-clear")
     sample_clear.add_argument("slot", type=int, choices=range(1, 17))
+    sample_record = sub.add_parser("sample-record",
+                                   help="stream the master bus or microphone into a slot")
+    sample_record.add_argument("slot", type=int, choices=range(1, 17))
+    sample_record.add_argument("input", choices=("bus", "mic"))
+    sample_record.add_argument("mode", choices=("melodic", "sliced"))
+    sample_stop = sub.add_parser("sample-stop")
+    sample_stop.add_argument("slot", type=int, choices=range(1, 17))
     sub.add_parser("event-status", help="show five-part 128-bar event looper")
     event = sub.add_parser("event")
     event.add_argument("track", type=int, choices=range(1, 6),

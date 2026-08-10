@@ -93,6 +93,12 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 
 "$build_dir/test_ble_midi_codec"
 
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_usb_midi_host_descriptor.cpp" \
+  "$test_dir/../usb_midi_host_descriptor.cpp" -o "$build_dir/test_usb_midi_host_descriptor"
+
+"$build_dir/test_usb_midi_host_descriptor"
+
 g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
   "$test_dir/../sd_diagnostics.cpp"
@@ -140,3 +146,4 @@ PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_merge_firmware.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_ministudio_cli.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_split_stems.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_protocol_soak.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_check_firmware_size.py"

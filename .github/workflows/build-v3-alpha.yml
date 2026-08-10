@@ -16,6 +16,15 @@ jobs:
         # robust if an API-based publisher ever drops the executable bit.
         run: bash ./tests/run_host_tests.sh
 
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ASan and UBSan suites
+        env:
+          SANITIZER_SET: address,undefined
+        run: bash ./tests/run_sanitizers.sh
+
   firmware:
     runs-on: ubuntu-latest
     steps:
@@ -26,9 +35,23 @@ jobs:
       - name: Install build tools
         run: python -m pip install "platformio==6.1.19" "esptool==4.8.1"
       - name: Build firmware
-        run: pio run -e m5stack-cardputer-adv
+        run: pio run -e m5stack-cardputer-adv -e m5stack-cardputer-adv-usb-host
+      - name: Enforce firmware resource budget
+        run: >-
+          python tools/check_firmware_size.py
+          .pio/build/m5stack-cardputer-adv/firmware.elf
+          --report .pio/build/m5stack-cardputer-adv/size-report.json
+      - name: Enforce USB-host profile resource budget
+        run: >-
+          python tools/check_firmware_size.py
+          .pio/build/m5stack-cardputer-adv-usb-host/firmware.elf
+          --report .pio/build/m5stack-cardputer-adv-usb-host/size-report.json
       - name: Create merged 8 MB flash image
-        run: python tools/merge_firmware.py
+        run: |
+          python tools/merge_firmware.py
+          python tools/merge_firmware.py \
+            --build-dir .pio/build/m5stack-cardputer-adv-usb-host \
+            --output .pio/build/m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin
       - uses: actions/upload-artifact@v4
         with:
           name: microgroove-v3-alpha-cardputer-adv
@@ -36,4 +59,9 @@ jobs:
             .pio/build/m5stack-cardputer-adv/microgroove-v3-alpha.bin
             .pio/build/m5stack-cardputer-adv/firmware.bin
             .pio/build/m5stack-cardputer-adv/firmware.elf
+            .pio/build/m5stack-cardputer-adv/size-report.json
+            .pio/build/m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin
+            .pio/build/m5stack-cardputer-adv-usb-host/firmware.bin
+            .pio/build/m5stack-cardputer-adv-usb-host/firmware.elf
+            .pio/build/m5stack-cardputer-adv-usb-host/size-report.json
           if-no-files-found: error
