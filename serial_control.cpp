@@ -9,6 +9,7 @@
 #include "stem_recorder.h"
 #include "loop_engine.h"
 #include "streaming_sampler.h"
+#include "event_looper.h"
 
 #include <Arduino.h>
 #include <string.h>
@@ -233,12 +234,15 @@ void dispatch(const ControlRequest& request) {
 
         case CONTROL_SAMPLE_TRIGGER:
             if (streamingSamplerTrigger(static_cast<uint8_t>(request.arg1 - 1),
-                                        static_cast<uint8_t>(request.arg2 - 1)))
+                                        static_cast<uint8_t>(request.arg2 - 1))) {
+                eventLooperRecordSample(sequencerEventRecordStep(),
+                                        static_cast<uint8_t>(request.arg1 - 1),
+                                        static_cast<uint8_t>(request.arg2 - 1), 127);
                 Serial.printf(CONTROL_PROTOCOL_PREFIX
                               " %s OK sample=%u key=%u state=queued\n",
                               request.id, static_cast<unsigned>(request.arg1),
                               static_cast<unsigned>(request.arg2));
-            else
+            } else
                 replyError(request.id, "sample_trigger_rejected");
             break;
 
@@ -249,6 +253,63 @@ void dispatch(const ControlRequest& request) {
                               static_cast<unsigned>(request.arg1));
             else
                 replyError(request.id, "sample_clear_rejected");
+            break;
+
+        case CONTROL_EVENT_STATUS:
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK position=%u count=%u capacity=%u",
+                          request.id, static_cast<unsigned>(g_eventLoopPosition),
+                          static_cast<unsigned>(g_eventLooper.count()),
+                          static_cast<unsigned>(EVENT_LOOP_CAPACITY));
+            for (uint8_t track = 0; track < EVENT_LOOP_TRACKS; ++track) {
+                const EventLoopTrackState& state = g_eventLooper.track(track);
+                Serial.printf(" t%u=%s,%u,%u,%u,%u",
+                              static_cast<unsigned>(track + 1),
+                              eventLooperRoleName(track),
+                              static_cast<unsigned>(g_eventLooper.bars(track)),
+                              state.armed ? 1u : 0u, state.muted ? 1u : 0u,
+                              static_cast<unsigned>(g_eventLooper.count(track)));
+            }
+            Serial.println("");
+            break;
+
+        case CONTROL_EVENT_ARM:
+        case CONTROL_EVENT_DISARM: {
+            const bool armed = request.command == CONTROL_EVENT_ARM;
+            if (g_eventLooper.setArmed(static_cast<uint8_t>(request.arg1 - 1), armed))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK event=%u armed=%u\n", request.id,
+                              static_cast<unsigned>(request.arg1), armed ? 1u : 0u);
+            else replyError(request.id, "event_arm_rejected");
+            break;
+        }
+
+        case CONTROL_EVENT_MUTE:
+        case CONTROL_EVENT_UNMUTE: {
+            const bool muted = request.command == CONTROL_EVENT_MUTE;
+            if (g_eventLooper.setMuted(static_cast<uint8_t>(request.arg1 - 1), muted))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK event=%u muted=%u\n", request.id,
+                              static_cast<unsigned>(request.arg1), muted ? 1u : 0u);
+            else replyError(request.id, "event_mute_rejected");
+            break;
+        }
+
+        case CONTROL_EVENT_CLEAR:
+            if (g_eventLooper.clearTrack(static_cast<uint8_t>(request.arg1 - 1)))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK event=%u state=cleared\n", request.id,
+                              static_cast<unsigned>(request.arg1));
+            else replyError(request.id, "event_clear_rejected");
+            break;
+
+        case CONTROL_EVENT_BARS:
+            if (g_eventLooper.setBars(static_cast<uint8_t>(request.arg1 - 1), request.arg2))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK event=%u bars=%u\n", request.id,
+                              static_cast<unsigned>(request.arg1),
+                              static_cast<unsigned>(request.arg2));
+            else replyError(request.id, "event_bars_rejected");
             break;
 
         default:

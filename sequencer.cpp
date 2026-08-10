@@ -6,6 +6,7 @@
 #include <string.h>
 #include "sampler_slots.h"
 #include "streaming_sampler.h"
+#include "event_looper.h"
 
 Pattern    g_patterns[NUM_PATTERNS];
 uint8_t    g_song[SONG_LENGTH];
@@ -63,6 +64,7 @@ void sequencerInit() {
     // 909 hats choke each other by default
     g_drumLanes[6].chokeGroup = 1;
     g_drumLanes[7].chokeGroup = 1;
+    eventLooperInit();
 }
 
 // ---------- triggering ----------
@@ -104,6 +106,32 @@ static void triggerStep(uint8_t step) {
     }
 }
 
+static void triggerEvent(const EventLoopEvent& event) {
+    switch (event.type) {
+        case EVENT_LOOP_NOTE: {
+            if (event.target >= NUM_SYNTHS || event.value1 < 12 || event.value1 > 127)
+                break;
+            const uint8_t note = static_cast<uint8_t>((event.value1 % 12) + 1);
+            const uint8_t octave = static_cast<uint8_t>((event.value1 / 12) - 1);
+            g_synths[event.target].noteOn(noteToFreq(note, octave),
+                                          event.value2 >= 100, false);
+            break;
+        }
+        case EVENT_LOOP_DRUM:
+            triggerLane(event.target);
+            break;
+        case EVENT_LOOP_SAMPLE:
+            streamingSamplerTrigger(event.target, event.value1);
+            break;
+        case EVENT_LOOP_CONTROL:
+            // Motion/control targets are applied by motion.cpp. Keeping the event
+            // in the generic timeline makes old projects forward compatible.
+            break;
+        default:
+            break;
+    }
+}
+
 // ---------- transport ----------
 static void prepareStart(bool fromTop) {
     if (fromTop) {
@@ -112,6 +140,7 @@ static void prepareStart(bool fromTop) {
             g_songPos = g_songLoopStart;
             if (g_song[g_songPos] != SONG_EMPTY) g_playPattern = g_song[g_songPos];
         }
+        eventLooperResetTransport();
     }
     if (!g_songMode) g_playPattern = g_curPattern;
     g_playing = true;
@@ -127,6 +156,7 @@ void sequencerStop() {
     s_externalClock = false;
     g_playing = false;
     g_playStep = 0;
+    eventLooperResetTransport();
 }
 
 static void songAdvance() {
@@ -143,6 +173,8 @@ static void songAdvance() {
 
 static void advanceOneStep() {
     triggerStep(g_playStep);
+    g_eventLooper.forStep(g_eventLoopPosition, triggerEvent);
+    eventLooperAdvance();
     g_playStep++;
     if (g_playStep >= NUM_STEPS) {
         g_playStep = 0;
@@ -177,7 +209,16 @@ void sequencerExternalSongPosition(uint16_t position) {
         g_songPos = static_cast<uint8_t>((position / NUM_STEPS) % SONG_LENGTH);
         if (g_song[g_songPos] != SONG_EMPTY) g_playPattern = g_song[g_songPos];
     }
+    eventLooperSetPosition(position);
     g_needRedraw = true;
+}
+
+uint16_t sequencerEventRecordStep() {
+    uint16_t previous = g_eventLoopPosition == 0
+        ? EVENT_LOOP_MAX_STEPS - 1 : g_eventLoopPosition - 1;
+    if (s_externalClock) return previous;
+    return (micros() - s_lastStepUs > s_stepPeriod() / 2)
+        ? g_eventLoopPosition : previous;
 }
 
 // ---------- live input ----------
@@ -196,6 +237,9 @@ void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent, boo
     bool poly = (g_synths[track].voices > 1);
     // poly: legato means "chord", not slide
     g_synths[track].noteOn(noteToFreq(note, octave), accent, !poly && legato);
+    const uint8_t midi = static_cast<uint8_t>((octave + 1u) * 12u + note - 1u);
+    eventLooperRecordSynth(sequencerEventRecordStep(), track, midi,
+                           accent ? 127 : 96);
 
     if (g_recEnabled) {
         if (g_playing) {
@@ -220,6 +264,7 @@ void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent, boo
 
 void liveDrumHit(uint8_t lane) {
     triggerLane(lane);
+    eventLooperRecordDrum(sequencerEventRecordStep(), lane, 127);
     if (g_recEnabled) {
         if (g_playing) {
             g_patterns[g_playPattern].drums[quantizedStep()] |= (1 << lane);

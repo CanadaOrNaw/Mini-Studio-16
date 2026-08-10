@@ -1,5 +1,6 @@
 #include "control_protocol.h"
 #include "sampler_slots.h"
+#include "event_looper_core.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -165,6 +166,31 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
                 request.command = CONTROL_SAMPLE_CLEAR;
             } else {
                 return CONTROL_PARSE_BAD_ARGUMENTS;
+            }
+        }
+    } else if (sameWord(verb, "event")) {
+        char* trackOrStatus = nextToken(cursor);
+        if (!trackOrStatus) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(trackOrStatus, "status")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_EVENT_STATUS;
+        } else {
+            if (!parseNumber(trackOrStatus, 1, EVENT_LOOP_TRACKS, request.arg1))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            char* action = nextToken(cursor);
+            if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
+            if (sameWord(action, "bars")) {
+                if (!parseNumber(nextToken(cursor), 1, EVENT_LOOP_MAX_BARS, request.arg2) ||
+                    !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.command = CONTROL_EVENT_BARS;
+            } else {
+                if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+                if (sameWord(action, "arm")) request.command = CONTROL_EVENT_ARM;
+                else if (sameWord(action, "disarm")) request.command = CONTROL_EVENT_DISARM;
+                else if (sameWord(action, "mute")) request.command = CONTROL_EVENT_MUTE;
+                else if (sameWord(action, "unmute")) request.command = CONTROL_EVENT_UNMUTE;
+                else if (sameWord(action, "clear")) request.command = CONTROL_EVENT_CLEAR;
+                else return CONTROL_PARSE_BAD_ARGUMENTS;
             }
         }
     } else {

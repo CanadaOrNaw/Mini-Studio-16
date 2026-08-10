@@ -12,7 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run host tests
-        run: ./tests/run_host_tests.sh
+        # Invoke through bash as well as retaining mode 100755. This keeps CI
+        # robust if an API-based publisher ever drops the executable bit.
+        run: bash ./tests/run_host_tests.sh
 
   firmware:
     runs-on: ubuntu-latest

@@ -117,6 +117,7 @@ void sequencerExternalStart(bool fromTop);
 void sequencerExternalStop();
 void sequencerExternalStep();
 void sequencerExternalSongPosition(uint16_t position);
+uint16_t sequencerEventRecordStep();
 
 // Live input -> sound + optional record
 void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent, bool legato);

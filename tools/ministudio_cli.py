@@ -104,6 +104,17 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["sample", args.slot, "trigger", args.key]
     if args.command == "sample-clear":
         return ["sample", args.slot, "clear"]
+    if args.command == "event-status":
+        return ["event", "status"]
+    if args.command == "event":
+        if args.action == "bars" and args.bars is None:
+            raise ValueError("event bars requires a bar count")
+        if args.action != "bars" and args.bars is not None:
+            raise ValueError("bar count is only valid with event bars")
+        words: List[object] = ["event", args.track, args.action]
+        if args.bars is not None:
+            words.append(args.bars)
+        return words
     raise ValueError(f"unsupported command: {args.command}")
 
 
@@ -146,6 +157,13 @@ def parser() -> argparse.ArgumentParser:
     sample_trigger.add_argument("key", type=int, choices=range(1, 17))
     sample_clear = sub.add_parser("sample-clear")
     sample_clear.add_argument("slot", type=int, choices=range(1, 17))
+    sub.add_parser("event-status", help="show five-part 128-bar event looper")
+    event = sub.add_parser("event")
+    event.add_argument("track", type=int, choices=range(1, 6),
+                       help="1=drum 2=bass 3=chord 4=lead 5=sample/control")
+    event.add_argument("action",
+                       choices=("arm", "disarm", "mute", "unmute", "clear", "bars"))
+    event.add_argument("bars", type=int, nargs="?", choices=range(1, 129))
     sub.add_parser("ports", help="list serial ports without opening one")
     monitor = sub.add_parser("monitor", help="print asynchronous device output")
     monitor.add_argument("--seconds", type=float, default=0.0, help="0 means run until interrupted")

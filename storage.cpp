@@ -10,13 +10,14 @@
 #include "loop_engine.h"
 #include "sampler_slots.h"
 #include "streaming_sampler.h"
+#include "event_looper.h"
 #include <SD.h>
 #include <string.h>
 
 uint8_t g_curProject = 0;
 
 #define GBX_MAGIC   0x31584247u   // "GBX1"
-#define GBX_VERSION 4             // v4: sampler slots, triggers and sparse locks
+#define GBX_VERSION 5             // v5: five-part 128-bar event looper
 #define LEGACY_NUM_PATTERNS 8
 #define LEGACY_SONG_LENGTH  64
 
@@ -115,11 +116,24 @@ struct __attribute__((packed)) ProjectFileV4 {
     SaveSamplerLock samplerLocks[SAMPLER_LOCK_CAPACITY];
 };
 
+struct __attribute__((packed)) SaveEventTrack {
+    uint8_t bars;                  // 0 encodes 128
+    uint8_t flags;                 // bit0 armed, bit1 muted
+};
+
+struct __attribute__((packed)) ProjectFileV5 {
+    ProjectFileV4 base;
+    SaveEventTrack eventTracks[EVENT_LOOP_TRACKS];
+    uint16_t eventCount;
+    EventLoopEvent events[EVENT_LOOP_CAPACITY];
+};
+
 union ProjectBuffer {
     ProjectFileV1 v1;
     ProjectFileV2 v2;
     ProjectFileV3 v3;
     ProjectFileV4 v4;
+    ProjectFileV5 v5;
 };
 
 static_assert(sizeof(ProjectFileV1) == 1807, "GBX v1 layout changed");
@@ -128,6 +142,11 @@ static_assert(sizeof(ProjectFileV3) == 6226, "unexpected GBX v3 layout");
 static_assert(sizeof(SaveSamplerSlot) == 190, "sampler slot layout changed");
 static_assert(sizeof(SaveSamplerLock) == 16, "sampler lock layout changed");
 static_assert(sizeof(ProjectFileV4) == 15412, "unexpected GBX v4 layout");
+static_assert(sizeof(ProjectFileV5) == 31808, "unexpected GBX v5 layout");
+
+// Project I/O is serialized on the main task. Reusing one static buffer avoids
+// retaining separate 31 KiB save and load copies in the S3's limited SRAM.
+static ProjectBuffer s_projectBuffer;
 
 static bool readProjectFile(const char* path, ProjectBuffer& loaded, uint16_t& version) {
     File f = SD.open(path, FILE_READ);
@@ -147,10 +166,12 @@ static bool readProjectFile(const char* path, ProjectBuffer& loaded, uint16_t& v
     void* destination = version == 1 ? static_cast<void*>(&loaded.v1) :
                         version == 2 ? static_cast<void*>(&loaded.v2) :
                         version == 3 ? static_cast<void*>(&loaded.v3) :
-                                       static_cast<void*>(&loaded.v4);
+                        version == 4 ? static_cast<void*>(&loaded.v4) :
+                                       static_cast<void*>(&loaded.v5);
     const size_t expected = version == 1 ? sizeof(loaded.v1) :
                             version == 2 ? sizeof(loaded.v2) :
-                            version == 3 ? sizeof(loaded.v3) : sizeof(loaded.v4);
+                            version == 3 ? sizeof(loaded.v3) :
+                            version == 4 ? sizeof(loaded.v4) : sizeof(loaded.v5);
     const size_t got = f.read(static_cast<uint8_t*>(destination), expected);
     f.close();
     return got == expected;
@@ -173,10 +194,11 @@ bool storageProjectExists(uint8_t slot) {
 bool storageSaveProject(uint8_t slot) {
     if (masterRecorderIsBusy() || stemRecorderIsBusy() || loopEngineIsRecording() ||
         streamingSamplerBusy()) return false;
-    static ProjectFileV4 pf;   // static: too big for stack
+    ProjectFileV5& pf = s_projectBuffer.v5;
     memset(&pf, 0, sizeof(pf));
 
-    ProjectFileV3& base = pf.base;
+    ProjectFileV4& v4 = pf.base;
+    ProjectFileV3& base = v4.base;
 
     base.magic = GBX_MAGIC;
     base.version = GBX_VERSION;
@@ -212,7 +234,7 @@ bool storageSaveProject(uint8_t slot) {
 
     for (uint8_t slot = 0; slot < SAMPLER_SLOT_COUNT; ++slot) {
         const SamplerSlot& in = g_samplerSlotBank.slot(slot);
-        SaveSamplerSlot& out = pf.samplerSlots[slot];
+        SaveSamplerSlot& out = v4.samplerSlots[slot];
         out.mode = in.mode;
         memcpy(out.filename, in.filename, sizeof(out.filename));
         out.sourceFrames = in.sourceFrames;
@@ -233,17 +255,28 @@ bool storageSaveProject(uint8_t slot) {
     for (uint8_t pattern = 0; pattern < NUM_PATTERNS; ++pattern)
         for (uint8_t step = 0; step < NUM_STEPS; ++step)
             for (uint8_t slot = 0; slot < SAMPLER_SLOT_COUNT; ++slot)
-                pf.samplerKeys[pattern][step][slot] =
+                v4.samplerKeys[pattern][step][slot] =
                     g_samplerSequence.eventKey(pattern, step, slot);
-    pf.samplerLockCount = g_samplerSequence.lockCount();
-    for (uint16_t index = 0; index < pf.samplerLockCount; ++index) {
+    v4.samplerLockCount = g_samplerSequence.lockCount();
+    for (uint16_t index = 0; index < v4.samplerLockCount; ++index) {
         const SamplerLockEntry& in = g_samplerSequence.lock(index);
-        SaveSamplerLock& out = pf.samplerLocks[index];
+        SaveSamplerLock& out = v4.samplerLocks[index];
         out.pattern = in.pattern; out.step = in.step; out.slot = in.slot; out.flags = in.flags;
         out.pitchQ8 = in.pitchQ8; out.gainQ15 = in.gainQ15;
         out.cutoffQ15 = in.cutoffQ15; out.resonanceQ15 = in.resonanceQ15;
         out.trimStartQ15 = in.trimStartQ15; out.trimLengthQ15 = in.trimLengthQ15;
     }
+
+    for (uint8_t track = 0; track < EVENT_LOOP_TRACKS; ++track) {
+        const EventLoopTrackState& state = g_eventLooper.track(track);
+        pf.eventTracks[track].bars = static_cast<uint8_t>(
+            g_eventLooper.bars(track) == 128 ? 0 : g_eventLooper.bars(track));
+        pf.eventTracks[track].flags = static_cast<uint8_t>(
+            (state.armed ? 1u : 0u) | (state.muted ? 2u : 0u));
+    }
+    pf.eventCount = g_eventLooper.count();
+    for (uint16_t index = 0; index < pf.eventCount; ++index)
+        pf.events[index] = g_eventLooper.event(index);
 
     char path[64]; slotPath(slot, path, sizeof(path));
     char tempPath[72], backupPath[72];
@@ -351,11 +384,48 @@ static bool applySamplerV4(const ProjectFileV4& pf) {
     return true;
 }
 
+static bool applyEventsV5(const ProjectFileV5& pf) {
+    if (pf.eventCount > EVENT_LOOP_CAPACITY) return false;
+    for (uint8_t track = 0; track < EVENT_LOOP_TRACKS; ++track) {
+        const uint16_t bars = pf.eventTracks[track].bars == 0
+            ? 128 : pf.eventTracks[track].bars;
+        if (bars == 0 || bars > EVENT_LOOP_MAX_BARS ||
+            (pf.eventTracks[track].flags & ~3u) != 0) return false;
+    }
+    for (uint16_t index = 0; index < pf.eventCount; ++index) {
+        const EventLoopEvent& event = pf.events[index];
+        if (event.track >= EVENT_LOOP_TRACKS ||
+            event.type < EVENT_LOOP_NOTE || event.type > EVENT_LOOP_CONTROL)
+            return false;
+        const uint16_t bars = pf.eventTracks[event.track].bars == 0
+            ? 128 : pf.eventTracks[event.track].bars;
+        if (event.step >= bars * EVENT_LOOP_STEPS_PER_BAR) return false;
+        if ((event.type == EVENT_LOOP_NOTE &&
+             (event.target >= NUM_SYNTHS || event.value1 < 12 || event.value1 > 127)) ||
+            (event.type == EVENT_LOOP_DRUM && event.target >= NUM_DRUM_LANES) ||
+            (event.type == EVENT_LOOP_SAMPLE &&
+             (event.target >= SAMPLER_SLOT_COUNT || event.value1 >= SAMPLER_SLICE_COUNT)))
+            return false;
+    }
+
+    g_eventLooper.clearAll();
+    for (uint8_t track = 0; track < EVENT_LOOP_TRACKS; ++track) {
+        const uint16_t bars = pf.eventTracks[track].bars == 0
+            ? 128 : pf.eventTracks[track].bars;
+        g_eventLooper.setBars(track, bars);
+        g_eventLooper.setArmed(track, (pf.eventTracks[track].flags & 1u) != 0);
+        g_eventLooper.setMuted(track, (pf.eventTracks[track].flags & 2u) != 0);
+    }
+    for (uint16_t index = 0; index < pf.eventCount; ++index)
+        if (!g_eventLooper.appendLoaded(pf.events[index])) return false;
+    return true;
+}
+
 bool storageLoadProject(uint8_t slot) {
     if (masterRecorderIsBusy() || stemRecorderIsBusy() || loopEngineIsRecording() ||
         streamingSamplerBusy()) return false;
     char path[64]; slotPath(slot, path, sizeof(path));
-    static ProjectBuffer loaded;
+    ProjectBuffer& loaded = s_projectBuffer;
     uint16_t version = 0;
     if (!readProjectFile(path, loaded, version)) {
         // A truncated/corrupt primary is treated the same as a missing one.
@@ -371,11 +441,13 @@ bool storageLoadProject(uint8_t slot) {
     samplerClearAll();
     g_samplerSlotBank.clear();
     g_samplerSequence.clear();
+    g_eventLooper.clearAll();
     memset(g_patterns, 0, sizeof(g_patterns));
     memset(g_song, SONG_EMPTY, sizeof(g_song));
 
-    if (version == 3 || version == 4) {
-        const ProjectFileV3& pf = version == 4 ? loaded.v4.base : loaded.v3;
+    if (version == 3 || version == 4 || version == 5) {
+        const ProjectFileV3& pf = version == 5 ? loaded.v5.base.base :
+                                  version == 4 ? loaded.v4.base : loaded.v3;
         g_bpm = pf.bpm;
         g_songLoopStart = pf.songLoopStart;
         memcpy(g_song, pf.song, SONG_LENGTH);
@@ -391,7 +463,8 @@ bool storageLoadProject(uint8_t slot) {
                 }
             memcpy(g_patterns[p].drums, pf.drums[p], NUM_STEPS);
         }
-        ok = version == 4 ? applySamplerV4(loaded.v4) : true;
+        ok = version == 5 ? (applySamplerV4(loaded.v5.base) && applyEventsV5(loaded.v5)) :
+             version == 4 ? applySamplerV4(loaded.v4) : true;
     } else if (version == 2) {
         const ProjectFileV2& pf = loaded.v2;
         g_bpm = pf.bpm;

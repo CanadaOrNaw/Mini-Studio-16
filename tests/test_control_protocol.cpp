@@ -48,6 +48,13 @@ int main() {
     request = parseOk("MS16/1 13 sample 2 trigger 16");
     assert(request.command == CONTROL_SAMPLE_TRIGGER && request.arg1 == 2 &&
            request.arg2 == 16);
+    request = parseOk("MS16/1 14 event status");
+    assert(request.command == CONTROL_EVENT_STATUS);
+    request = parseOk("MS16/1 15 event 5 bars 128");
+    assert(request.command == CONTROL_EVENT_BARS && request.arg1 == 5 &&
+           request.arg2 == 128);
+    request = parseOk("MS16/1 16 event 3 arm");
+    assert(request.command == CONTROL_EVENT_ARM && request.arg1 == 3);
 
     ControlRequest invalid = {};
     assert(controlParseLine("", invalid) == CONTROL_PARSE_EMPTY);
@@ -62,6 +69,8 @@ int main() {
     assert(controlParseLine("MS16/1 1 sample 17 clear", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 sample 1 trigger 0", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 sample 1 assign x.wav stereo", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 event 6 arm", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 event 1 bars 129", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 wat", invalid) == CONTROL_PARSE_UNKNOWN_COMMAND);
     assert(controlParseLine("MS16/1 1 ping extra", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
 

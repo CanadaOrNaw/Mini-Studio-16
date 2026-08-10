@@ -73,6 +73,14 @@ class MiniStudioCliTests(unittest.TestCase):
         args = cli.parser().parse_args(["sample-trigger", "2", "16"])
         self.assertEqual(cli.command_words(args), ["sample", 2, "trigger", 16])
 
+    def test_event_commands(self):
+        args = cli.parser().parse_args(["event-status"])
+        self.assertEqual(cli.command_words(args), ["event", "status"])
+        args = cli.parser().parse_args(["event", "5", "bars", "128"])
+        self.assertEqual(cli.command_words(args), ["event", 5, "bars", 128])
+        args = cli.parser().parse_args(["event", "3", "arm"])
+        self.assertEqual(cli.command_words(args), ["event", 3, "arm"])
+
 
 if __name__ == "__main__":
     unittest.main()
