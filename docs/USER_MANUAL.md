@@ -5,6 +5,13 @@ SD looper, streamed sampler, event/motion pages, recorders, and MIDI/control
 paths. Hardware-dependent behavior is still alpha until validated on a physical
 Cardputer-ADV.
 
+The complete printable physical legend is
+[`hardware/mini-studio-16-button-layout.svg`](../hardware/mini-studio-16-button-layout.svg).
+The [project site](https://canadaornaw.github.io/Mini-Studio-16/) presents the
+same 56 keys as an interactive page-by-page map. Both are generated from
+`hardware/button-layout.json`; this manual remains authoritative for detailed
+context behavior.
+
 ## Interaction rule
 
 Most labeled keys have a tap action and a 450 ms hold action. A footer progress

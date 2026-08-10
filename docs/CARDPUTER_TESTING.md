@@ -4,6 +4,28 @@ Use this guide when the physical device arrives. Record the firmware commit,
 board revision, SD make/model/capacity/filesystem/cluster size, exact command,
 duration, and complete serial output for every pass or failure.
 
+## 0. Mechanical intake and first print
+
+Before flashing, photograph the unopened/stock Cardputer-ADV and record its
+board/product revision. Measure the real device width, height, and maximum body
+thickness with calipers at three points. Print
+`hardware/stl/mini-studio-16-bench-cradle.stl` flat in PLA using the settings in
+`hardware/README.md`, then measure the finished cavity before inserting the
+device.
+
+Lower the Cardputer straight down without force. Require:
+
+- the body enters and leaves without bowing either part;
+- corner guides prevent obvious lateral movement but do not press keys;
+- USB, headphone, Grove/expansion, SD, power and reset access remain clear;
+- the base sits flat and does not obstruct speaker/mic openings or cooling;
+- ten insertion/removal cycles leave no marks or cracks.
+
+Record CAD clearance, measured part/device dimensions, printer, nozzle,
+material, layer height, slicer and photos. If the fit fails, adjust the paired
+clearance constants documented in `hardware/README.md`, regenerate the STL,
+commit the measurement and rerun the topology test before printing again.
+
 ## 1. Prepare and flash
 
 1. Back up the SD card and use FAT32 for the first pass.

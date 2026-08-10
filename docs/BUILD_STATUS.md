@@ -101,6 +101,14 @@ SHA; the three image hashes above identify this firmware code checkpoint.
   readable and explicitly migrate to the original `MG/303` engine.
 - CI produces both standalone merged recovery images plus one combined
   dual-role image with a validated OTA partition layout.
+- A canonical 56-key JSON map generates the print-ready Mini Studio SVG and
+  drives the responsive interactive project site, so global/page highlights
+  cannot silently diverge from the downloadable legend.
+- An original parameterized Cardputer-ADV open cradle is checked in as OpenSCAD
+  source and deterministic binary STL. It uses M5Stack's published envelope;
+  no upstream Microgroove/MakerWorld mesh is redistributed.
+- A dedicated Pages workflow validates, packages, and deploys the static site,
+  printable legend, editable CAD source, and STL downloads.
 
 ## Verified by automated tests
 
@@ -147,6 +155,10 @@ SHA; the three image hashes above identify this firmware code checkpoint.
 - CI compiles and links both target profiles, enforces the DRAM/flash budgets,
   generates both standalone images and the dual-role image, validates slot
   alignment/capacity/content, and uploads image/ELF/layout/size reports.
+- Product-layer tests require exactly 56 unique keys, valid page-context
+  references, deterministic generated outputs, a 336-triangle STL with every
+  edge incident to exactly two faces and exact 88 × 58 × 6 mm bounds, and a
+  static Pages artifact with no missing internal links or duplicate HTML IDs.
 
 ## Resource boundary
 
@@ -205,6 +217,10 @@ the safe *active* FM polyphony under the complete audio/storage workload.
   polyphony with loops, sampler, drums, master recording, MIDI, event/motion
   automation, and UI active. The worst render block must remain below 11.61 ms
   with zero missed deadlines; measured results set the product's safe FM limit.
+- Print the Mini Studio cradle, measure the real Cardputer and finished part,
+  validate port access/retention/comfort, then tune the documented 0.30 mm per
+  side clearance. Photograph the real device before replacing the site's
+  original vector mockup with product photography.
 
 ### Additional hardware
 

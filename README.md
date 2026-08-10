@@ -4,6 +4,10 @@ SD-backed groovebox, multi-engine synthesizer, sampler, looper, motion
 controller, recorder, and MIDI firmware for the **M5Stack Cardputer-ADV**.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
+[![Build v3 alpha](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml/badge.svg?branch=agent%2Fv3-alpha-sd-streaming)](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml)
+[![Pages](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/pages.yml/badge.svg?branch=agent%2Fv3-alpha-sd-streaming)](https://canadaornaw.github.io/Mini-Studio-16/)
+
+**[Open the Mini Studio 16 project site →](https://canadaornaw.github.io/Mini-Studio-16/)**
 
 > **Pre-hardware validation alpha.** The complete software paths described
 > below are implemented and built in CI. They have not yet been flashed or
@@ -15,6 +19,24 @@ Mini Studio 16 is an independent fork of
 [Microgroove](https://github.com/matoslav/MicroGroove). It retains the original
 instrument and adds the requested long-audio and control systems; it is not an
 official Microgroove or lebiro.studio release.
+
+![Mini Studio 16 complete 56-key button layout](hardware/mini-studio-16-button-layout.svg)
+
+## Print it. Flash it. Play it.
+
+1. **Print:** download the original
+   [Mini Studio 16 bench-cradle STL](hardware/stl/mini-studio-16-bench-cradle.stl)
+   and [full-resolution SVG key legend](hardware/mini-studio-16-button-layout.svg).
+2. **Flash:** build locally or download the verified GitHub Actions artifact;
+   write the combined image once at offset `0x0`.
+3. **Play:** insert a FAT32 microSD card and choose computer-facing USB Device
+   or controller-facing USB Host at startup. Switching roles requires a reboot,
+   not another flash.
+
+The cradle and label are deterministic checked-in assets. Their topology,
+dimensions, references, and site downloads are tested on every host run. The
+first physical print/fit remains a hardware gate; see
+[`hardware/README.md`](hardware/README.md) before printing.
 
 ## Implemented instrument
 
@@ -65,6 +87,11 @@ stems without removing any inherited standalone workflow.
 
 The exact evidence boundary is maintained in
 [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md).
+
+The static project site is source-controlled in [`site/`](site/) and built by
+GitHub Actions. Its interactive keyboard and the printable legend share
+[`hardware/button-layout.json`](hardware/button-layout.json), preventing the
+two maps from drifting independently.
 
 ## Build and flash
 

@@ -1,0 +1,71 @@
+name: Build and deploy Pages
+
+on:
+  push:
+    branches: ["main", "agent/v3-alpha-sd-streaming"]
+    paths:
+      - "site/**"
+      - "hardware/**"
+      - "tools/build_site.py"
+      - "tools/generate_hardware_assets.py"
+      - "tests/test_hardware_assets.py"
+      - "tests/test_site_build.py"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - "hardware/**"
+      - "tools/build_site.py"
+      - "tools/generate_hardware_assets.py"
+      - "tests/test_hardware_assets.py"
+      - "tests/test_site_build.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
+      - name: Verify generated hardware assets
+        run: python tools/generate_hardware_assets.py --check
+      - name: Run CAD and site tests
+        run: python -m unittest tests/test_hardware_assets.py tests/test_site_build.py
+      - name: Build static site
+        run: python tools/build_site.py --output build/pages
+      - uses: actions/upload-artifact@v6
+        with:
+          name: mini-studio-16-pages
+          path: build/pages
+          if-no-files-found: error
+      - uses: actions/upload-pages-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          path: build/pages
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
