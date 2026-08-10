@@ -57,6 +57,7 @@ static void audioTask(void*) {
             // soft clip
             if (mix > 1.0f) mix = 1.0f; else if (mix < -1.0f) mix = -1.0f;
             buf[i] = toPcm(mix);
+            streamingSamplerCaptureBusFrame(buf[i]);
             s_stemBuf[i].master = buf[i];
             s_stemBuf[i].synth1 = toPcm(synthBus[0]);
             s_stemBuf[i].synth2 = toPcm(synthBus[1]);

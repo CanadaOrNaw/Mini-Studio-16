@@ -80,10 +80,12 @@ struct ImuStub {
     bool update() { return false; }
     m5::imu_data_t getImuData() const { return {}; }
 };
+struct PowerStub { int getBatteryLevel() const { return 75; } };
 
 struct M5Stub {
     struct Config {};
     ImuStub Imu;
+    PowerStub Power;
     Config config() const { return {}; }
 };
 static M5Stub M5;

@@ -1,7 +1,12 @@
 #include "streaming_sampler.h"
 
 #include "config.h"
+#include "loop_engine.h"
+#include "master_recorder.h"
+#include "mic_sampler.h"
 #include "pcm_ring.h"
+#include "sd_diagnostics.h"
+#include "stem_recorder.h"
 #include "wav_file.h"
 
 #include <Arduino.h>
@@ -13,6 +18,8 @@ namespace {
 constexpr uint32_t kRingFrames = 2048;
 constexpr uint32_t kPrimeFrames = 1536;
 constexpr size_t kReadFrames = 256;
+constexpr uint32_t kRecordRingFrames = 8192;
+constexpr size_t kWriteFrames = 1024;
 constexpr uint8_t kCommandCapacity = 32;
 
 using FirmwareSampleCore = SampleStreamCore<STREAMING_SAMPLE_VOICES, kRingFrames>;
@@ -22,6 +29,7 @@ enum CommandType : uint8_t {
     COMMAND_ASSIGN,
     COMMAND_CLEAR,
     COMMAND_STOP_ALL,
+    COMMAND_RECORD_START,
 };
 
 struct SamplerCommand {
@@ -33,6 +41,8 @@ struct SamplerCommand {
     SamplerLockEntry lock;
     bool hasLock;
     char filename[SAMPLE_NAME_LEN];
+    uint32_t sourceRate;
+    uint32_t targetFrames;
 };
 
 struct WorkerVoice {
@@ -44,7 +54,15 @@ struct WorkerVoice {
 
 FirmwareSampleCore s_core;
 SpscRing<SamplerCommand, kCommandCapacity> s_commands;
+SpscRing<int16_t, kRecordRingFrames> s_recordRing;
 WorkerVoice s_workers[STREAMING_SAMPLE_VOICES];
+File s_recordFile;
+char s_recordTempPath[80] = "";
+char s_recordFinalPath[80] = "";
+char s_recordFilename[SAMPLE_NAME_LEN] = "";
+uint32_t s_recordFramesWritten = 0;
+uint32_t s_recordSourceRate = 0;
+uint8_t s_recordMode = SAMPLER_SLOT_MELODIC;
 TaskHandle_t s_task = nullptr;
 bool s_sdMounted = false;
 alignas(4) uint32_t s_pendingCommands = 0;
@@ -52,6 +70,21 @@ alignas(4) uint32_t s_commandDrops = 0;
 alignas(4) uint32_t s_starts = 0;
 alignas(4) uint32_t s_errors = 0;
 alignas(4) uint32_t s_maxReadUs = 0;
+alignas(4) uint32_t s_recordState = STREAM_SAMPLE_REC_IDLE;
+alignas(4) uint32_t s_recordInput = STREAM_SAMPLE_INPUT_NONE;
+alignas(4) uint32_t s_recordSlot = 0;
+alignas(4) uint32_t s_recordFrames = 0;
+alignas(4) uint32_t s_recordTargetFrames = 0;
+alignas(4) uint32_t s_recordDropped = 0;
+
+StreamingSamplerRecordState recordState() {
+    return static_cast<StreamingSamplerRecordState>(
+        __atomic_load_n(&s_recordState, __ATOMIC_ACQUIRE));
+}
+
+void setRecordState(StreamingSamplerRecordState state) {
+    __atomic_store_n(&s_recordState, static_cast<uint32_t>(state), __ATOMIC_RELEASE);
+}
 
 void updateMaximum(uint32_t* value, uint32_t candidate) {
     uint32_t current = __atomic_load_n(value, __ATOMIC_RELAXED);
@@ -64,6 +97,184 @@ void noteError() { __atomic_add_fetch(&s_errors, 1u, __ATOMIC_RELAXED); }
 
 void samplePath(const char* filename, char* output, size_t capacity) {
     snprintf(output, capacity, "%s/%s", DIR_SAMPLES, filename);
+}
+
+void recordTempPath(uint8_t slot, char* output, size_t capacity) {
+    snprintf(output, capacity, "%s/.S%02u.tmp", DIR_SAMPLES,
+             static_cast<unsigned>(slot + 1u));
+}
+
+bool selectRecordPath(uint8_t slot, char* path, size_t pathCapacity,
+                      char* filename, size_t filenameCapacity) {
+    for (uint16_t number = 1; number <= 999; ++number) {
+        snprintf(filename, filenameCapacity, "S%02u_%03u.wav",
+                 static_cast<unsigned>(slot + 1u), static_cast<unsigned>(number));
+        samplePath(filename, path, pathCapacity);
+        if (!SD.exists(path)) return true;
+    }
+    return false;
+}
+
+void resetRecordWorker() {
+    if (s_recordFile) s_recordFile.close();
+    s_recordTempPath[0] = 0;
+    s_recordFinalPath[0] = 0;
+    s_recordFilename[0] = 0;
+    s_recordFramesWritten = 0;
+    s_recordSourceRate = 0;
+    s_recordMode = SAMPLER_SLOT_MELODIC;
+}
+
+void failRecording(bool quarantine) {
+    if (s_recordFile) s_recordFile.close();
+    bool quarantined = false;
+    if (quarantine && s_recordTempPath[0] && SD.exists(s_recordTempPath)) {
+        char badPath[96];
+        snprintf(badPath, sizeof(badPath), "%s/S%02u_DROPPED.bad", DIR_SAMPLES,
+                 static_cast<unsigned>(
+                     __atomic_load_n(&s_recordSlot, __ATOMIC_RELAXED) + 1u));
+        SD.remove(badPath);
+        quarantined = SD.rename(s_recordTempPath, badPath);
+    }
+    if (!quarantined && s_recordTempPath[0]) SD.remove(s_recordTempPath);
+    noteError();
+    setRecordState(STREAM_SAMPLE_REC_ERROR);
+    __atomic_store_n(&s_recordInput, STREAM_SAMPLE_INPUT_NONE, __ATOMIC_RELEASE);
+    resetRecordWorker();
+}
+
+bool beginRecordWorker(const SamplerCommand& command) {
+    const StreamingSamplerRecordState state = recordState();
+    if (state != STREAM_SAMPLE_REC_STARTING && state != STREAM_SAMPLE_REC_STOPPING)
+        return false;
+    resetRecordWorker();
+    recordTempPath(command.slot, s_recordTempPath, sizeof(s_recordTempPath));
+    if (SD.exists(s_recordTempPath) ||
+        !selectRecordPath(command.slot, s_recordFinalPath, sizeof(s_recordFinalPath),
+                          s_recordFilename, sizeof(s_recordFilename)))
+        return false;
+    SD.remove(s_recordTempPath);
+    s_recordFile = SD.open(s_recordTempPath, FILE_WRITE);
+    uint8_t header[WAV_PCM_HEADER_BYTES];
+    wavBuildMono16Header(header, command.sourceRate, 0);
+    if (!s_recordFile ||
+        s_recordFile.write(header, sizeof(header)) != sizeof(header)) {
+        if (s_recordFile) s_recordFile.close();
+        SD.remove(s_recordTempPath);
+        resetRecordWorker();
+        return false;
+    }
+    s_recordFramesWritten = 0;
+    s_recordSourceRate = command.sourceRate;
+    s_recordMode = command.mode;
+    if (state == STREAM_SAMPLE_REC_STARTING)
+        setRecordState(STREAM_SAMPLE_REC_RECORDING);
+    return true;
+}
+
+bool pumpRecording() {
+    const StreamingSamplerRecordState state = recordState();
+    if (!s_recordFile || (state != STREAM_SAMPLE_REC_RECORDING &&
+                          state != STREAM_SAMPLE_REC_STOPPING))
+        return true;
+
+    int16_t frames[kWriteFrames];
+    const size_t count = s_recordRing.pop(frames, kWriteFrames);
+    if (count) {
+        const uint32_t started = micros();
+        const size_t bytes = count * sizeof(int16_t);
+        const bool ok = s_recordFile.write(reinterpret_cast<uint8_t*>(frames), bytes) == bytes;
+        updateMaximum(&s_maxReadUs, micros() - started);
+        if (!ok) {
+            failRecording(true);
+            return false;
+        }
+        s_recordFramesWritten += static_cast<uint32_t>(count);
+    }
+
+    if (recordState() != STREAM_SAMPLE_REC_STOPPING || s_recordRing.size() != 0)
+        return true;
+    if (__atomic_load_n(&s_recordDropped, __ATOMIC_RELAXED) != 0 ||
+        s_recordFramesWritten < SAMPLER_SLICE_COUNT) {
+        failRecording(true);
+        return false;
+    }
+
+    uint8_t header[WAV_PCM_HEADER_BYTES];
+    wavBuildMono16Header(header, s_recordSourceRate, s_recordFramesWritten);
+    bool ok = s_recordFile.seek(0) &&
+              s_recordFile.write(header, sizeof(header)) == sizeof(header);
+    if (ok) s_recordFile.flush();
+    s_recordFile.close();
+    if (ok) ok = SD.rename(s_recordTempPath, s_recordFinalPath);
+    const uint8_t slot = static_cast<uint8_t>(
+        __atomic_load_n(&s_recordSlot, __ATOMIC_RELAXED));
+    if (ok) {
+        ok = g_samplerSlotBank.assign(slot, s_recordFilename, s_recordFramesWritten,
+                                      s_recordSourceRate,
+                                      static_cast<SamplerSlotMode>(s_recordMode));
+    }
+    if (!ok) {
+        if (SD.exists(s_recordFinalPath)) SD.remove(s_recordFinalPath);
+        failRecording(false);
+        return false;
+    }
+    setRecordState(STREAM_SAMPLE_REC_COMPLETE);
+    __atomic_store_n(&s_recordInput, STREAM_SAMPLE_INPUT_NONE, __ATOMIC_RELEASE);
+    Serial.printf("SAMPLE_RECORD state=complete slot=%u file=%s frames=%lu rate=%lu\n",
+                  static_cast<unsigned>(slot + 1u), s_recordFilename,
+                  static_cast<unsigned long>(s_recordFramesWritten),
+                  static_cast<unsigned long>(s_recordSourceRate));
+    resetRecordWorker();
+    return true;
+}
+
+void recoverInterruptedRecordings() {
+    for (uint8_t slot = 0; slot < SAMPLER_SLOT_COUNT; ++slot) {
+        char tempPath[80];
+        recordTempPath(slot, tempPath, sizeof(tempPath));
+        if (!SD.exists(tempPath)) continue;
+        File file = SD.open(tempPath, "r+");
+        bool ok = static_cast<bool>(file);
+        uint32_t sourceRate = SAMPLE_RATE;
+        uint32_t frames = 0;
+        if (ok) {
+            uint8_t oldHeader[WAV_PCM_HEADER_BYTES];
+            WavMono16Info info = {};
+            ok = file.seek(0) &&
+                 file.read(oldHeader, sizeof(oldHeader)) == static_cast<int>(sizeof(oldHeader)) &&
+                 wavParseCanonicalMono16Header(oldHeader, info);
+            if (ok) sourceRate = info.sampleRate;
+            const WavRecoveryPlan plan = wavPlanMono16Recovery(
+                static_cast<uint32_t>(file.size()));
+            ok = ok && plan.recoverable;
+            frames = plan.frames;
+            if (ok) {
+                uint8_t header[WAV_PCM_HEADER_BYTES];
+                wavBuildMono16Header(header, sourceRate, frames);
+                ok = file.seek(0) && file.write(header, sizeof(header)) == sizeof(header);
+                if (ok) file.flush();
+            }
+            file.close();
+        }
+        char recoveredPath[96];
+        char recoveredName[SAMPLE_NAME_LEN];
+        bool havePath = selectRecordPath(slot, recoveredPath, sizeof(recoveredPath),
+                                         recoveredName, sizeof(recoveredName));
+        if (ok && havePath) ok = SD.rename(tempPath, recoveredPath);
+        if (!ok) {
+            char badPath[96];
+            snprintf(badPath, sizeof(badPath), "%s/S%02u_RECOVER.bad", DIR_SAMPLES,
+                     static_cast<unsigned>(slot + 1u));
+            SD.remove(badPath);
+            if (!SD.rename(tempPath, badPath)) noteError();
+        }
+        Serial.printf("SAMPLE_RECOVERY state=%s slot=%u frames=%lu rate=%lu\n",
+                      ok ? "recovered" : "quarantined",
+                      static_cast<unsigned>(slot + 1u),
+                      static_cast<unsigned long>(frames),
+                      static_cast<unsigned long>(sourceRate));
+    }
 }
 
 bool readHeader(File& file, WavMono16Info& info) {
@@ -228,9 +439,13 @@ void processCommand(const SamplerCommand& command) {
         case COMMAND_ASSIGN: ok = assignSlot(command); break;
         case COMMAND_CLEAR: ok = g_samplerSlotBank.remove(command.slot); break;
         case COMMAND_STOP_ALL: stopAllVoices(); break;
+        case COMMAND_RECORD_START: ok = beginRecordWorker(command); break;
         default: ok = false; break;
     }
-    if (!ok) noteError();
+    if (!ok) {
+        if (command.type == COMMAND_RECORD_START) failRecording(false);
+        else noteError();
+    }
     __atomic_sub_fetch(&s_pendingCommands, 1u, __ATOMIC_ACQ_REL);
 }
 
@@ -238,6 +453,7 @@ void storageTask(void*) {
     while (true) {
         SamplerCommand command = {};
         while (s_commands.popOne(command)) processCommand(command);
+        pumpRecording();
         for (uint8_t voice = 0; voice < STREAMING_SAMPLE_VOICES; ++voice) {
             const SampleStreamState state = s_core.voiceState(voice);
             if (state == SAMPLE_STREAM_COMPLETE || state == SAMPLE_STREAM_UNDERRUN ||
@@ -266,6 +482,8 @@ void streamingSamplerInit(bool sdMounted) {
     s_sdMounted = sdMounted;
     s_core.reset();
     s_commands.reset();
+    s_recordRing.reset();
+    resetRecordWorker();
     for (uint8_t voice = 0; voice < STREAMING_SAMPLE_VOICES; ++voice) {
         s_workers[voice].remainingFrames = 0;
         s_workers[voice].generation = 0;
@@ -276,7 +494,16 @@ void streamingSamplerInit(bool sdMounted) {
     __atomic_store_n(&s_starts, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_errors, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_maxReadUs, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordState,
+                     sdMounted ? STREAM_SAMPLE_REC_IDLE : STREAM_SAMPLE_REC_ERROR,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordInput, STREAM_SAMPLE_INPUT_NONE, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordSlot, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordFrames, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordTargetFrames, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordDropped, 0u, __ATOMIC_RELEASE);
     if (!sdMounted) return;
+    recoverInterruptedRecordings();
     if (xTaskCreatePinnedToCore(storageTask, "sample_sd", 6144, nullptr, 1,
                                 &s_task, 1) != pdPASS) {
         s_task = nullptr;
@@ -307,7 +534,10 @@ bool streamingSamplerAssign(uint8_t slot, const char* filename,
     if (slot >= SAMPLER_SLOT_COUNT || !filename || !filename[0] ||
         strlen(filename) >= SAMPLE_NAME_LEN || strchr(filename, '/') ||
         strchr(filename, '\\') ||
-        (mode != SAMPLER_SLOT_MELODIC && mode != SAMPLER_SLOT_SLICED))
+        (mode != SAMPLER_SLOT_MELODIC && mode != SAMPLER_SLOT_SLICED) ||
+        (recordState() == STREAM_SAMPLE_REC_STARTING ||
+         recordState() == STREAM_SAMPLE_REC_RECORDING ||
+         recordState() == STREAM_SAMPLE_REC_STOPPING))
         return false;
     SamplerCommand command = {};
     command.type = COMMAND_ASSIGN;
@@ -318,11 +548,91 @@ bool streamingSamplerAssign(uint8_t slot, const char* filename,
 }
 
 bool streamingSamplerClear(uint8_t slot) {
-    if (slot >= SAMPLER_SLOT_COUNT) return false;
+    const StreamingSamplerRecordState state = recordState();
+    if (slot >= SAMPLER_SLOT_COUNT || state == STREAM_SAMPLE_REC_STARTING ||
+        state == STREAM_SAMPLE_REC_RECORDING || state == STREAM_SAMPLE_REC_STOPPING)
+        return false;
     SamplerCommand command = {};
     command.type = COMMAND_CLEAR;
     command.slot = slot;
     return queueCommand(command);
+}
+
+bool streamingSamplerBeginRecord(uint8_t slot, SamplerSlotMode mode,
+                                 uint32_t sourceRate, StreamingSamplerInput input) {
+    const StreamingSamplerRecordState state = recordState();
+    if (!s_sdMounted || !s_task || slot >= SAMPLER_SLOT_COUNT || sourceRate == 0 ||
+        (mode != SAMPLER_SLOT_MELODIC && mode != SAMPLER_SLOT_SLICED) ||
+        (input != STREAM_SAMPLE_INPUT_BUS && input != STREAM_SAMPLE_INPUT_MIC) ||
+        state == STREAM_SAMPLE_REC_STARTING || state == STREAM_SAMPLE_REC_RECORDING ||
+        state == STREAM_SAMPLE_REC_STOPPING || masterRecorderIsBusy() ||
+        stemRecorderIsBusy() || sdDiagnosticsIsRunning() || loopEngineIsRecording() ||
+        (input == STREAM_SAMPLE_INPUT_BUS && micRecActive()))
+        return false;
+
+    const SamplerSlot& previous = g_samplerSlotBank.slot(slot);
+    const uint32_t availableQuota = g_samplerSlotBank.quotaRemainingFrames() +
+                                    previous.quotaFrames;
+    const uint64_t scaled = static_cast<uint64_t>(availableQuota) * sourceRate;
+    const uint32_t target = static_cast<uint32_t>(scaled / SAMPLE_RATE);
+    if (target < SAMPLER_SLICE_COUNT) return false;
+
+    SamplerCommand command = {};
+    command.type = COMMAND_RECORD_START;
+    command.slot = slot;
+    command.mode = mode;
+    command.sourceRate = sourceRate;
+    command.targetFrames = target;
+    s_recordRing.reset();
+    __atomic_store_n(&s_recordSlot, slot, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordInput, input, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordFrames, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordTargetFrames, target, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordDropped, 0u, __ATOMIC_RELEASE);
+    setRecordState(STREAM_SAMPLE_REC_STARTING);
+    if (queueCommand(command)) return true;
+    setRecordState(STREAM_SAMPLE_REC_ERROR);
+    __atomic_store_n(&s_recordInput, STREAM_SAMPLE_INPUT_NONE, __ATOMIC_RELEASE);
+    return false;
+}
+
+size_t streamingSamplerRecordPush(StreamingSamplerInput input,
+                                  const int16_t* frames, size_t count) {
+    if (!frames || count == 0 ||
+        __atomic_load_n(&s_recordInput, __ATOMIC_ACQUIRE) != input)
+        return 0;
+    const StreamingSamplerRecordState state = recordState();
+    if (state != STREAM_SAMPLE_REC_STARTING && state != STREAM_SAMPLE_REC_RECORDING)
+        return 0;
+    const uint32_t produced = __atomic_load_n(&s_recordFrames, __ATOMIC_RELAXED);
+    const uint32_t target = __atomic_load_n(&s_recordTargetFrames, __ATOMIC_RELAXED);
+    if (produced >= target) {
+        setRecordState(STREAM_SAMPLE_REC_STOPPING);
+        return 0;
+    }
+    const size_t wanted = min<size_t>(count, target - produced);
+    const size_t pushed = s_recordRing.push(frames, wanted);
+    __atomic_add_fetch(&s_recordFrames, static_cast<uint32_t>(pushed), __ATOMIC_RELAXED);
+    if (pushed < wanted) {
+        __atomic_add_fetch(&s_recordDropped, static_cast<uint32_t>(wanted - pushed),
+                           __ATOMIC_RELAXED);
+        setRecordState(STREAM_SAMPLE_REC_STOPPING);
+    } else if (produced + pushed >= target) {
+        setRecordState(STREAM_SAMPLE_REC_STOPPING);
+    }
+    return pushed;
+}
+
+bool streamingSamplerStopRecord() {
+    const StreamingSamplerRecordState state = recordState();
+    if (state != STREAM_SAMPLE_REC_STARTING && state != STREAM_SAMPLE_REC_RECORDING)
+        return false;
+    setRecordState(STREAM_SAMPLE_REC_STOPPING);
+    return true;
+}
+
+void streamingSamplerCaptureBusFrame(int16_t frame) {
+    streamingSamplerRecordPush(STREAM_SAMPLE_INPUT_BUS, &frame, 1);
 }
 
 void streamingSamplerStopAll() {
@@ -332,6 +642,10 @@ void streamingSamplerStopAll() {
 }
 
 bool streamingSamplerBusy() {
+    const StreamingSamplerRecordState record = recordState();
+    if (record == STREAM_SAMPLE_REC_STARTING || record == STREAM_SAMPLE_REC_RECORDING ||
+        record == STREAM_SAMPLE_REC_STOPPING)
+        return true;
     if (__atomic_load_n(&s_pendingCommands, __ATOMIC_ACQUIRE) != 0) return true;
     for (uint8_t voice = 0; voice < STREAMING_SAMPLE_VOICES; ++voice) {
         const SampleStreamState state = s_core.voiceState(voice);
@@ -348,6 +662,14 @@ StreamingSamplerSnapshot streamingSamplerSnapshot() {
     result.starts = __atomic_load_n(&s_starts, __ATOMIC_RELAXED);
     result.errors = __atomic_load_n(&s_errors, __ATOMIC_RELAXED);
     result.maxReadUs = __atomic_load_n(&s_maxReadUs, __ATOMIC_RELAXED);
+    result.recordState = recordState();
+    result.recordInput = static_cast<StreamingSamplerInput>(
+        __atomic_load_n(&s_recordInput, __ATOMIC_ACQUIRE));
+    result.recordSlot = static_cast<uint8_t>(
+        __atomic_load_n(&s_recordSlot, __ATOMIC_RELAXED));
+    result.recordFrames = __atomic_load_n(&s_recordFrames, __ATOMIC_RELAXED);
+    result.recordTargetFrames = __atomic_load_n(&s_recordTargetFrames, __ATOMIC_RELAXED);
+    result.recordDroppedFrames = __atomic_load_n(&s_recordDropped, __ATOMIC_RELAXED);
     for (uint8_t voice = 0; voice < STREAMING_SAMPLE_VOICES; ++voice)
         result.voices[voice] = s_core.snapshot(voice);
     return result;

@@ -15,12 +15,25 @@
 #include "audio_engine.h"
 #include "sd_diagnostics.h"
 #include "master_recorder.h"
+#include "mic_sampler.h"
 #include "stem_recorder.h"
+#include "sampler_slots.h"
+#include "streaming_sampler.h"
+#include "loop_engine.h"
+#include "event_looper.h"
+#include "motion.h"
+#include "ble_midi.h"
+#include "usb_midi.h"
 
 Page    g_curPage    = PAGE_PATTERN;
 bool    g_needRedraw = true;
 uint8_t g_soundParam = 0;
 uint8_t g_songCursor = 0;
+uint8_t g_streamSampleSlot = 0;
+uint8_t g_streamSampleMode = SAMPLER_SLOT_MELODIC;
+uint8_t g_loopCursor = 0;
+uint8_t g_eventCursor = 0;
+uint8_t g_motionCursor = 0;
 float   g_holdProg   = 0.0f;
 char    g_holdLabel[16] = "";
 
@@ -81,7 +94,9 @@ static void drawHeader() {
     canvas.fillRect(0, 0, SCREEN_W, 11, COL_GRID);
     canvas.setTextColor(COL_TEXT);
     canvas.setCursor(2, 2);
-    static const char* pageNames[] = {"PATTERN","SOUND","SAMPLE","SONG","SD TEST","HELP"};
+    static const char* pageNames[] = {
+        "PATTERN","SOUND","SAMPLE","LOOPS","EVENT","MOTION","SONG","SD TEST","HELP"
+    };
     canvas.print(pageNames[g_curPage]);
 
     canvas.setCursor(60, 2);
@@ -93,7 +108,9 @@ static void drawHeader() {
 
     canvas.setTextColor(COL_DIM);
     canvas.setCursor(158, 2);
-    canvas.printf("%c P%u O%u", g_patternBank ? 'B' : 'A', g_curProject + 1, g_curOctave);
+    const int battery = M5.Power.getBatteryLevel();
+    canvas.printf("%cP%u O%u B%u", g_patternBank ? 'B' : 'A', g_curProject + 1,
+                  g_curOctave, static_cast<unsigned>(constrain(battery, 0, 100)));
 
     // transport
     if (g_playing) { canvas.setTextColor(COL_SYNTH2); canvas.setCursor(206, 2); canvas.print(">"); }
@@ -280,19 +297,39 @@ static void drawSoundPage() {
 
 // ---------- SAMPLE page ----------
 static void drawSamplePage() {
+    const StreamingSamplerSnapshot sampler = streamingSamplerSnapshot();
     canvas.setTextColor(COL_TEXT);
     canvas.setCursor(2, 14);
-    canvas.printf("SD SAMPLES (%u)", g_fileCount);
+    canvas.printf("SLOT %u %s  FILES %u", g_streamSampleSlot + 1,
+                  g_streamSampleMode == SAMPLER_SLOT_SLICED ? "SLICE" : "MELO",
+                  g_fileCount);
 
     // pool usage
-    float use = g_poolCapacity ? (float)g_poolUsed / g_poolCapacity : 0;
+    float use = static_cast<float>(g_samplerSlotBank.quotaUsedFrames()) /
+                static_cast<float>(SAMPLER_QUOTA_FRAMES);
     canvas.setCursor(130, 14);
     canvas.setTextColor(COL_DIM);
-    canvas.printf("RAM %2d%%", (int)(use * 100));
+    canvas.printf("40s %2d%%", (int)(use * 100));
     canvas.drawRect(180, 13, 58, 8, COL_GRID);
     canvas.fillRect(181, 14, (int)(56 * use), 6, use > 0.9f ? COL_REC : COL_SYNTH2);
 
-    if (g_fileCount == 0) {
+    const bool recording = sampler.recordState == STREAM_SAMPLE_REC_STARTING ||
+                           sampler.recordState == STREAM_SAMPLE_REC_RECORDING ||
+                           sampler.recordState == STREAM_SAMPLE_REC_STOPPING;
+    if (recording) {
+        canvas.setCursor(2, 25);
+        canvas.setTextColor(COL_REC);
+        canvas.printf("REC S%u %s %4.1f/%4.1fs drop:%lu",
+                      sampler.recordSlot + 1,
+                      sampler.recordInput == STREAM_SAMPLE_INPUT_MIC ? "MIC" : "BUS",
+                      sampler.recordFrames / static_cast<float>(
+                          sampler.recordInput == STREAM_SAMPLE_INPUT_MIC ? MIC_RATE : SAMPLE_RATE),
+                      sampler.recordTargetFrames / static_cast<float>(
+                          sampler.recordInput == STREAM_SAMPLE_INPUT_MIC ? MIC_RATE : SAMPLE_RATE),
+                      static_cast<unsigned long>(sampler.recordDroppedFrames));
+    }
+
+    if (g_fileCount == 0 && !recording) {
         canvas.setTextColor(COL_DIM);
         canvas.setCursor(2, 40);
         canvas.print("Put .wav files in");
@@ -303,11 +340,18 @@ static void drawSamplePage() {
         return;
     }
 
-    // scrolling list, 8 rows
+    const SamplerSlot& streamSlot = g_samplerSlotBank.slot(g_streamSampleSlot);
+    canvas.setCursor(2, recording ? 37 : 25);
+    canvas.setTextColor(streamSlot.mode == SAMPLER_SLOT_EMPTY ? COL_GRID : COL_SYNTH2);
+    canvas.printf("STREAM: %s", streamSlot.mode == SAMPLER_SLOT_EMPTY
+                  ? "(empty)" : streamSlot.filename);
+
+    // scrolling list, 7 rows
     int first = (g_fileSel > 3) ? g_fileSel - 3 : 0;
     if (first + 8 > g_fileCount) first = max(0, (int)g_fileCount - 8);
-    int y = 26;
-    for (int i = first; i < first + 8 && i < g_fileCount; i++) {
+    int y = recording ? 50 : 38;
+    const int rows = recording ? 6 : 7;
+    for (int i = first; i < first + rows && i < g_fileCount; i++) {
         bool sel = (i == g_fileSel);
         bool loaded = samplerFindByName(g_fileList[i]) >= 0;
         canvas.setTextColor(sel ? COL_TEXT : COL_DIM);
@@ -315,6 +359,72 @@ static void drawSamplePage() {
         canvas.printf("%s%s", sel ? ">" : " ", g_fileList[i]);
         if (loaded) { canvas.setTextColor(COL_SYNTH2); canvas.setCursor(210, y); canvas.print("RAM"); }
         y += 12;
+    }
+}
+
+static void drawLoopsPage() {
+    const LoopEngineSnapshot loops = loopEngineSnapshot();
+    canvas.setTextColor(COL_TEXT);
+    canvas.setCursor(2, 15);
+    canvas.printf("6 AUDIO LOOPS  %.1fs", loops.timelineFrames /
+                  static_cast<float>(SAMPLE_RATE));
+    canvas.setTextColor(COL_DIM);
+    canvas.setCursor(145, 15);
+    canvas.printf("R/W %lu/%lu", static_cast<unsigned long>(loops.maxReadUs / 1000),
+                  static_cast<unsigned long>(loops.maxWriteUs / 1000));
+    for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
+        const LoopStreamTrackSnapshot& item = loops.tracks[track];
+        const int y = 30 + track * 15;
+        canvas.setTextColor(track == g_loopCursor ? COL_TEXT : COL_DIM);
+        canvas.setCursor(2, y);
+        canvas.printf("%c L%u %-10s %5.1fs U%lu D%lu",
+                      track == g_loopCursor ? '>' : ' ', track + 1,
+                      loopEngineStateName(item.state),
+                      item.lengthFrames / static_cast<float>(SAMPLE_RATE),
+                      static_cast<unsigned long>(item.underruns),
+                      static_cast<unsigned long>(item.droppedFrames));
+    }
+}
+
+static void drawEventPage() {
+    canvas.setTextColor(COL_TEXT);
+    canvas.setCursor(2, 15);
+    canvas.printf("5-PART EVENT LOOP  %u/%u", g_eventLooper.count(),
+                  EVENT_LOOP_CAPACITY);
+    for (uint8_t track = 0; track < EVENT_LOOP_TRACKS; ++track) {
+        const EventLoopTrackState& state = g_eventLooper.track(track);
+        const int y = 32 + track * 17;
+        canvas.setTextColor(track == g_eventCursor ? COL_TEXT : COL_DIM);
+        canvas.setCursor(2, y);
+        canvas.printf("%c %u %-7s %3ubar %4uev %s%s",
+                      track == g_eventCursor ? '>' : ' ', track + 1,
+                      eventLooperRoleName(track), g_eventLooper.bars(track),
+                      g_eventLooper.count(track), state.armed ? "REC " : "",
+                      state.muted ? "MUTE" : "");
+    }
+}
+
+static void drawMotionPage() {
+    const MotionSnapshot motion = motionSnapshot();
+    const UsbMidiSnapshot usb = usbMidiSnapshot();
+    const BleMidiSnapshot ble = bleMidiSnapshot();
+    canvas.setTextColor(motion.available ? COL_SYNTH2 : COL_REC);
+    canvas.setCursor(2, 15);
+    canvas.printf("BMI270 %s  USB:%s BLE:%s", motion.available ? "ON" : "OFF",
+                  usb.mounted ? "MIDI" : "--", ble.connected ? "MIDI" : "--");
+    canvas.setTextColor(COL_DIM);
+    canvas.setCursor(2, 28);
+    canvas.printf("X%3u Y%3u A%3u G%3u gesture:%02X",
+                  motion.values[MOTION_SOURCE_TILT_X], motion.values[MOTION_SOURCE_TILT_Y],
+                  motion.values[MOTION_SOURCE_ACCEL], motion.values[MOTION_SOURCE_GYRO],
+                  motion.gestures);
+    for (uint8_t mapping = 0; mapping < MOTION_MAPPING_COUNT; ++mapping) {
+        const int y = 48 + mapping * 18;
+        canvas.setTextColor(mapping == g_motionCursor ? COL_TEXT : COL_DIM);
+        canvas.setCursor(2, y);
+        canvas.printf("%c M%u %-7s > %s", mapping == g_motionCursor ? '>' : ' ',
+                      mapping + 1, motionSourceName(motion.mappings[mapping].source),
+                      motionTargetName(motion.mappings[mapping].target));
     }
 }
 
@@ -409,7 +519,13 @@ void uiDraw() {
         case PAGE_SOUND:   drawSoundPage();
             drawFooter("v c row  x b adjust  m=fine"); break;
         case PAGE_SAMPLE:  drawSamplePage();
-            drawFooter(".:preview  4..-:assign lane"); break;
+            drawFooter("hold .=mic  hold n=bus rec  /=assign"); break;
+        case PAGE_LOOPS:   drawLoopsPage();
+            drawFooter("v/c:track /=record .:mute z:clear"); break;
+        case PAGE_EVENT:   drawEventPage();
+            drawFooter("v/c:track x/b:bars /=arm .:mute"); break;
+        case PAGE_MOTION:  drawMotionPage();
+            drawFooter("v/c:map x/b:source .:target z:clear"); break;
         case PAGE_SONG:    drawSongPage();
             drawFooter("4..-:set z:clr .:loop n:mode"); break;
         case PAGE_DIAG:    drawDiagPage();

@@ -11,6 +11,7 @@
 // ============================================================
 #pragma once
 #include "config.h"
+#include "sampler_slots.h"
 
 #define MIC_RATE          16000        // capture rate (stored native, voice retunes)
 #define SCRATCH_FRAMES    42000        // ~2.6s mic / ~1.9s resample @22.05k
@@ -21,6 +22,7 @@ bool micSamplerInit();                 // alloc scratch - call BEFORE samplerIni
 void micSamplerUpdate();               // pump capture; call every loop()
 
 bool micRecStart(uint8_t lane);        // pauses transport+speaker, starts capture
+bool micStreamRecStart(uint8_t slot, SamplerSlotMode mode);
 void micRecStop();                     // trim, commit, assign lane, resume audio
 bool micRecActive();
 

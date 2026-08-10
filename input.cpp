@@ -18,6 +18,11 @@
 #include "ui.h"
 #include "mic_sampler.h"
 #include "sd_diagnostics.h"
+#include "loop_engine.h"
+#include "sampler_slots.h"
+#include "streaming_sampler.h"
+#include "event_looper.h"
+#include "motion.h"
 
 void inputInit();
 void inputUpdate();
@@ -153,6 +158,39 @@ static void arrow(uint8_t act, const KeySnap& now) {
         case PAGE_SAMPLE:
             if (dy < 0 && g_fileSel > 0) g_fileSel--;
             if (dy > 0 && g_fileSel + 1 < g_fileCount) g_fileSel++;
+            if (dx) g_streamSampleSlot = static_cast<uint8_t>(
+                (g_streamSampleSlot + SAMPLER_SLOT_COUNT + dx) % SAMPLER_SLOT_COUNT);
+            break;
+
+        case PAGE_LOOPS:
+            if (dy) g_loopCursor = static_cast<uint8_t>(
+                (g_loopCursor + LOOP_STREAM_TRACKS + dy) % LOOP_STREAM_TRACKS);
+            break;
+
+        case PAGE_EVENT:
+            if (dy) g_eventCursor = static_cast<uint8_t>(
+                (g_eventCursor + EVENT_LOOP_TRACKS + dy) % EVENT_LOOP_TRACKS);
+            if (dx) {
+                const int bars = constrain(
+                    static_cast<int>(g_eventLooper.bars(g_eventCursor)) + dx,
+                    1, static_cast<int>(EVENT_LOOP_MAX_BARS));
+                g_eventLooper.setBars(g_eventCursor, static_cast<uint16_t>(bars));
+            }
+            break;
+
+        case PAGE_MOTION:
+            if (dy) g_motionCursor = static_cast<uint8_t>(
+                (g_motionCursor + MOTION_MAPPING_COUNT + dy) % MOTION_MAPPING_COUNT);
+            if (dx) {
+                const MotionSnapshot motion = motionSnapshot();
+                int source = motion.mappings[g_motionCursor].source;
+                source = (source + (MOTION_SOURCE_COUNT - 1) + dx) %
+                         (MOTION_SOURCE_COUNT - 1) + 1;
+                uint8_t target = motion.mappings[g_motionCursor].target;
+                if (target == MOTION_TARGET_NONE) target = MOTION_TARGET_SYNTH1_CUTOFF;
+                motionSetMapping(g_motionCursor, static_cast<MotionSource>(source),
+                                 static_cast<MotionTarget>(target));
+            }
             break;
 
         case PAGE_SONG:
@@ -185,6 +223,22 @@ static void doImmediate(uint8_t act, const KeySnap& now) {
         case ACT_REC:
             if (g_curPage == PAGE_DIAG) {
                 uiStatus(sdDiagnosticsStart() ? "SD TEST STARTED" : "SD TEST BUSY");
+            } else if (g_curPage == PAGE_SAMPLE) {
+                if (g_fileCount && streamingSamplerAssign(
+                        g_streamSampleSlot, g_fileList[g_fileSel],
+                        static_cast<SamplerSlotMode>(g_streamSampleMode)))
+                    uiStatus("STREAM SLOT QUEUED");
+                else uiStatus("ASSIGN FAILED");
+            } else if (g_curPage == PAGE_LOOPS) {
+                const LoopEngineSnapshot loops = loopEngineSnapshot();
+                if (loops.recordTrack == g_loopCursor)
+                    uiStatus(loopEngineStopRecording(g_loopCursor) ? "FINALIZING" : "STOP FAILED");
+                else
+                    uiStatus(loopEngineRequestRecord(g_loopCursor) ? "LOOP ARMED" : "RECORD FAILED");
+            } else if (g_curPage == PAGE_EVENT) {
+                const bool armed = !g_eventLooper.track(g_eventCursor).armed;
+                g_eventLooper.setArmed(g_eventCursor, armed);
+                uiStatus(armed ? "EVENT REC ARMED" : "EVENT REC OFF");
             } else {
                 g_recEnabled = !g_recEnabled;
                 uiStatus(g_recEnabled ? "REC ON" : "REC OFF");
@@ -211,7 +265,13 @@ static void doShort(uint8_t act) {
     // pattern keys: context
     if (act >= ACT_PAT1 && act <= ACT_PAT8) {
         uint8_t keyIndex = (uint8_t)(act - ACT_PAT1);
-        if (g_curPage == PAGE_SAMPLE) {
+        if (g_curPage == PAGE_LOOPS) {
+            if (keyIndex < LOOP_STREAM_TRACKS) g_loopCursor = keyIndex;
+            g_needRedraw = true;
+        } else if (g_curPage == PAGE_EVENT) {
+            if (keyIndex < EVENT_LOOP_TRACKS) g_eventCursor = keyIndex;
+            g_needRedraw = true;
+        } else if (g_curPage == PAGE_SAMPLE) {
             if (g_fileCount) {
                 int slot = samplerLoad(g_fileList[g_fileSel]);
                 if (slot >= 0) {
@@ -264,21 +324,56 @@ static void doShort(uint8_t act) {
             g_needRedraw = true; break;
 
         case ACT_CLR:
-            if (g_curPage == PAGE_SONG) g_song[g_songCursor] = SONG_EMPTY;
+            if (g_curPage == PAGE_SAMPLE) {
+                uiStatus(streamingSamplerClear(g_streamSampleSlot)
+                         ? "SLOT CLEAR QUEUED" : "CLEAR FAILED");
+            } else if (g_curPage == PAGE_LOOPS) {
+                uiStatus(loopEngineClear(g_loopCursor) ? "LOOP CLEAR QUEUED" : "CLEAR FAILED");
+            } else if (g_curPage == PAGE_EVENT) {
+                g_eventLooper.clearTrack(g_eventCursor); uiStatus("EVENTS CLEARED");
+            } else if (g_curPage == PAGE_MOTION) {
+                motionClearMapping(g_motionCursor); uiStatus("MAPPING CLEARED");
+            } else if (g_curPage == PAGE_SONG) g_song[g_songCursor] = SONG_EMPTY;
             else clearCellAtCursor();
             g_needRedraw = true; break;
 
         case ACT_SONG:
-            g_songMode = !g_songMode;
-            uiStatus(g_songMode ? "SONG MODE" : "PATTERN MODE");
+            if (g_curPage == PAGE_SAMPLE) {
+                g_streamSampleMode = g_streamSampleMode == SAMPLER_SLOT_MELODIC
+                    ? SAMPLER_SLOT_SLICED : SAMPLER_SLOT_MELODIC;
+                uiStatus(g_streamSampleMode == SAMPLER_SLOT_SLICED ? "SLICE MODE" : "MELODIC MODE");
+            } else {
+                g_songMode = !g_songMode;
+                uiStatus(g_songMode ? "SONG MODE" : "PATTERN MODE");
+            }
             g_needRedraw = true; break;
 
         case ACT_AUX:
             if (g_curPage == PAGE_SAMPLE && g_fileCount) {
-                int slot = samplerLoad(g_fileList[g_fileSel]);
-                if (slot >= 0) g_previewVoice.trigger(slot, 1.0f, 0.9f);
-                else uiStatus("LOAD FAILED");
+                if (!streamingSamplerTrigger(g_streamSampleSlot, 0)) {
+                    int slot = samplerLoad(g_fileList[g_fileSel]);
+                    if (slot >= 0) g_previewVoice.trigger(slot, 1.0f, 0.9f);
+                    else uiStatus("LOAD FAILED");
+                }
                 g_needRedraw = true;
+            } else if (g_curPage == PAGE_LOOPS) {
+                const LoopStreamState state = loopEngineSnapshot().tracks[g_loopCursor].state;
+                const bool muted = state != LOOP_STREAM_MUTED;
+                uiStatus(loopEngineSetMuted(g_loopCursor, muted)
+                         ? (muted ? "LOOP MUTED" : "LOOP PLAYING") : "MUTE FAILED");
+            } else if (g_curPage == PAGE_EVENT) {
+                const bool muted = !g_eventLooper.track(g_eventCursor).muted;
+                g_eventLooper.setMuted(g_eventCursor, muted);
+                uiStatus(muted ? "EVENT MUTED" : "EVENT PLAYING");
+            } else if (g_curPage == PAGE_MOTION) {
+                const MotionSnapshot motion = motionSnapshot();
+                uint8_t source = motion.mappings[g_motionCursor].source;
+                if (source == MOTION_SOURCE_NONE) source = MOTION_SOURCE_TILT_X;
+                int target = motion.mappings[g_motionCursor].target;
+                target = target % (MOTION_TARGET_COUNT - 1) + 1;
+                motionSetMapping(g_motionCursor, static_cast<MotionSource>(source),
+                                 static_cast<MotionTarget>(target));
+                uiStatus("TARGET CHANGED");
             } else if (g_curPage == PAGE_SONG) {
                 g_songLoopStart = g_songCursor;
                 uiStatus("LOOP SET"); g_needRedraw = true;
@@ -304,7 +399,9 @@ static void doLong(uint8_t act) {
         g_needRedraw = true; return;
     }
     if (act >= ACT_PAT1 && act <= ACT_PAT8) {
-        if (g_curPage == PAGE_SAMPLE || g_curPage == PAGE_SONG) return;
+        if (g_curPage == PAGE_SAMPLE || g_curPage == PAGE_LOOPS ||
+            g_curPage == PAGE_EVENT || g_curPage == PAGE_MOTION ||
+            g_curPage == PAGE_SONG) return;
         uint8_t k = (uint8_t)(g_patternBank * 8 + (act - ACT_PAT1));
         clonePatternTo(k);
         g_curPattern = k;
@@ -324,8 +421,11 @@ static void doLong(uint8_t act) {
         case ACT_PLAY:
             sequencerStart(true); g_needRedraw = true; break;
         case ACT_CLR:
-            memset(&g_patterns[g_curPattern], 0, sizeof(Pattern));
-            uiStatus("PATTERN CLEARED"); g_needRedraw = true; break;
+            if (g_curPage == PAGE_PATTERN || g_curPage == PAGE_SOUND) {
+                memset(&g_patterns[g_curPattern], 0, sizeof(Pattern));
+                uiStatus("PATTERN CLEARED"); g_needRedraw = true;
+            }
+            break;
         case ACT_BPM_DN:
             if (g_curPage == PAGE_SONG) {
                 if (g_curProject > 0) g_curProject--;
@@ -340,13 +440,33 @@ static void doLong(uint8_t act) {
             g_needRedraw = true; break;
 
         case ACT_SONG:                        // long SONG = resample the mix
-            if (g_playing) resampleArm();
+            if (g_curPage == PAGE_SAMPLE) {
+                const StreamingSamplerSnapshot snapshot = streamingSamplerSnapshot();
+                if (snapshot.recordInput == STREAM_SAMPLE_INPUT_BUS &&
+                    (snapshot.recordState == STREAM_SAMPLE_REC_STARTING ||
+                     snapshot.recordState == STREAM_SAMPLE_REC_RECORDING)) {
+                    uiStatus(streamingSamplerStopRecord() ? "SAMPLE SAVING..." : "STOP FAILED");
+                } else {
+                    uiStatus(streamingSamplerBeginRecord(
+                                 g_streamSampleSlot,
+                                 static_cast<SamplerSlotMode>(g_streamSampleMode),
+                                 SAMPLE_RATE, STREAM_SAMPLE_INPUT_BUS)
+                             ? "BUS SAMPLING..." : "SAMPLE BUSY");
+                }
+            } else if (g_playing) resampleArm();
             else uiStatus("PLAY, THEN HOLD");
             break;
 
         case ACT_AUX:                         // long AUX = mic record
-            if (micRecStart(g_curDrumLane)) g_recPadKc = (uint8_t)'.';
-            else uiStatus("MIC BUSY");
+            if (g_curPage == PAGE_PATTERN || g_curPage == PAGE_SOUND ||
+                g_curPage == PAGE_SAMPLE) {
+                const bool started = g_curPage == PAGE_SAMPLE
+                    ? micStreamRecStart(g_streamSampleSlot,
+                                        static_cast<SamplerSlotMode>(g_streamSampleMode))
+                    : micRecStart(g_curDrumLane);
+                if (started) g_recPadKc = (uint8_t)'.';
+                else uiStatus("MIC BUSY");
+            }
             break;
         default: break;
     }

@@ -7,6 +7,9 @@
 #include "ui.h"
 #include "master_recorder.h"
 #include "stem_recorder.h"
+#include "loop_engine.h"
+#include "sd_diagnostics.h"
+#include "streaming_sampler.h"
 #include <M5Cardputer.h>
 #include <SD.h>
 #include <esp_heap_caps.h>
@@ -17,6 +20,7 @@ volatile uint32_t g_rsmpRemain = 0;
 volatile uint32_t g_scratchWr  = 0;
 
 static bool     s_recActive   = false;
+static bool     s_streamingMic = false;
 static uint8_t  s_recLane     = 0;
 static bool     s_rsmpPending = false;
 static uint32_t s_rsmpFrames  = 0;
@@ -100,15 +104,35 @@ static bool commitToLane(uint8_t lane, const char* base, uint8_t& counter,
 
 // ---------- mic recording ----------
 bool micRecStart(uint8_t lane) {
-    if (s_recActive || !g_scratch) return false;
+    if (s_recActive || !g_scratch || masterRecorderIsBusy() || stemRecorderIsBusy() ||
+        sdDiagnosticsIsRunning() || loopEngineIsRecording()) return false;
     sequencerStop();
     M5Cardputer.Speaker.end();          // ES8311: avoid duplex contention (verify on hw)
     M5Cardputer.Mic.begin();
-    s_recLane = lane; s_recActive = true;
+    s_recLane = lane; s_recActive = true; s_streamingMic = false;
     g_scratchWr = 0; s_curChunk = 0; s_level = 0;
     M5Cardputer.Mic.record(s_chunk[0], CHUNK, MIC_RATE);
     M5Cardputer.Mic.record(s_chunk[1], CHUNK, MIC_RATE);
     uiStatus("SAMPLING...");
+    return true;
+}
+
+bool micStreamRecStart(uint8_t slot, SamplerSlotMode mode) {
+    if (s_recActive || masterRecorderIsBusy() || stemRecorderIsBusy() ||
+        sdDiagnosticsIsRunning() || loopEngineIsRecording() ||
+        !streamingSamplerBeginRecord(slot, mode, MIC_RATE, STREAM_SAMPLE_INPUT_MIC))
+        return false;
+    sequencerStop();
+    M5Cardputer.Speaker.end();
+    M5Cardputer.Mic.begin();
+    s_recLane = 0;
+    s_recActive = true;
+    s_streamingMic = true;
+    s_curChunk = 0;
+    s_level = 0;
+    M5Cardputer.Mic.record(s_chunk[0], CHUNK, MIC_RATE);
+    M5Cardputer.Mic.record(s_chunk[1], CHUNK, MIC_RATE);
+    uiStatus("STREAM MIC...");
     return true;
 }
 
@@ -118,16 +142,25 @@ void micSamplerUpdate() {
         while (!M5Cardputer.Mic.isRecording() ||
                M5Cardputer.Mic.isRecording() == 1 /*one buf left*/) {
             int16_t* done = s_chunk[s_curChunk];
-            uint32_t room = SCRATCH_FRAMES - g_scratchWr;
+            uint32_t room = s_streamingMic ? CHUNK : SCRATCH_FRAMES - g_scratchWr;
             uint32_t n = (room < CHUNK) ? room : CHUNK;
             if (n) {
-                memcpy(g_scratch + g_scratchWr, done, n * 2);
-                g_scratchWr += n;
+                if (s_streamingMic) {
+                    streamingSamplerRecordPush(STREAM_SAMPLE_INPUT_MIC, done, n);
+                } else {
+                    memcpy(g_scratch + g_scratchWr, done, n * 2);
+                    g_scratchWr += n;
+                }
                 int16_t pk = 0;
                 for (uint32_t i = 0; i < n; i++) { int16_t a = abs(done[i]); if (a > pk) pk = a; }
                 s_level = s_level * 0.6f + (pk / 32768.0f) * 0.4f;
             }
-            if (g_scratchWr >= SCRATCH_FRAMES) { micRecStop(); return; }
+            if ((!s_streamingMic && g_scratchWr >= SCRATCH_FRAMES) ||
+                (s_streamingMic &&
+                 streamingSamplerSnapshot().recordState == STREAM_SAMPLE_REC_STOPPING)) {
+                micRecStop();
+                return;
+            }
             M5Cardputer.Mic.record(done, CHUNK, MIC_RATE);   // re-queue
             s_curChunk ^= 1;
             if (M5Cardputer.Mic.isRecording() >= 2) break;
@@ -151,6 +184,14 @@ void micRecStop() {
     M5Cardputer.Mic.end();
     M5Cardputer.Speaker.begin();
     g_holdProg = 0; g_holdLabel[0] = 0;
+
+    if (s_streamingMic) {
+        s_streamingMic = false;
+        streamingSamplerStopRecord();
+        uiStatus("SAMPLE SAVING...");
+        g_needRedraw = true;
+        return;
+    }
 
     uint32_t start, len;
     trimScratch(g_scratchWr, MIC_RATE, start, len);
