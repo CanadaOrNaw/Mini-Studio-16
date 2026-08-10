@@ -515,9 +515,15 @@ void dispatch(const ControlRequest& request) {
 
         case CONTROL_BOOT_NORMAL:
         case CONTROL_BOOT_USB_HOST: {
-            if (masterRecorderIsBusy() || stemRecorderIsBusy() || micRecActive() ||
-                loopEngineIsRecording() || streamingSamplerIsRecording()) {
-                replyError(request.id, "boot_recording_busy");
+            const BootRuntimeActivity activity = {
+                masterRecorderIsBusy(), stemRecorderIsBusy(), micRecActive(),
+                loopEngineIsRecording(), streamingSamplerIsRecording(),
+                micSamplerHasPendingCommit(), loopEngineHasPendingClear(),
+                streamingSamplerHasPendingMutation(), sdDiagnosticsIsRunning(),
+            };
+            const BootRuntimeBlocker blocker = bootEvaluateRuntime(activity);
+            if (blocker != BOOT_RUNTIME_READY) {
+                replyError(request.id, bootRuntimeBlockerName(blocker));
                 break;
             }
             const BootRole target = request.command == CONTROL_BOOT_USB_HOST

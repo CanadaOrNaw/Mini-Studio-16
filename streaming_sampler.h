@@ -55,5 +55,6 @@ bool streamingSamplerStopRecord();
 void streamingSamplerStopAll();
 bool streamingSamplerBusy();
 bool streamingSamplerIsRecording();
+bool streamingSamplerHasPendingMutation();
 StreamingSamplerSnapshot streamingSamplerSnapshot();
 const char* sampleStreamStateName(SampleStreamState state);

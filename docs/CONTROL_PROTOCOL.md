@@ -143,6 +143,9 @@ of final filenames and zero-drop/error evidence. A synchronous `OK` means the
 request was accepted, not that hardware validation passed.
 
 USB-role changes additionally refuse to reboot while master, stem, microphone,
-loop, or streamed-sample recording is active. The target image is validated by
-ESP-IDF before OTA data changes. USB Host mode may not expose CDC, so return to
-Normal with `Tab` on the common startup screen.
+loop, or streamed-sample recording is active (`boot_recording_busy`), while a
+microphone commit, loop clear, or sampler metadata mutation is pending
+(`boot_storage_busy`), or while the destructive SD diagnostic is running
+(`boot_diagnostic_busy`). The target image is validated by ESP-IDF before OTA
+data changes. USB Host mode may not expose CDC, so return to Normal with `Tab`
+on the common startup screen.

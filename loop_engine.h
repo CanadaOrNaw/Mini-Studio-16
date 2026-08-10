@@ -23,6 +23,7 @@ bool loopEngineSetMuted(uint8_t track, bool muted);
 bool loopEngineSetVolume(uint8_t track, uint8_t percent);
 bool loopEngineClear(uint8_t track);
 bool loopEngineIsRecording();
+bool loopEngineHasPendingClear();
 bool loopEngineHasActiveIo();
 LoopEngineSnapshot loopEngineSnapshot();
 const char* loopEngineStateName(LoopStreamState state);

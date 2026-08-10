@@ -63,12 +63,14 @@ trips and require the displayed role and actual USB enumeration to agree every
 time without reflashing.
 
 While each recorder type is active, confirm `boot normal|host` returns
-`boot_recording_busy` and the take remains valid. On a disposable test setup,
-cut power ten times during role-selection/reboot timing; every restart must boot
-one valid role and retain access to the startup selector. Also flash each
-standalone image once and verify it continues to start while correctly refusing
-dual-role switching when the other valid labelled slot is absent or the build
-is deliberately in the recovery slot.
+`boot_recording_busy` and the take remains valid. Queue a loop clear and sampler
+assign/clear and confirm `boot_storage_busy`; while SD TEST runs, confirm
+`boot_diagnostic_busy`. After each operation drains, switching must succeed.
+On a disposable test setup, cut power ten times during role-selection/reboot
+timing; every restart must boot one valid role and retain access to the startup
+selector. Also flash each standalone image once and verify it continues to
+start while correctly refusing dual-role switching when the other valid
+labelled slot is absent or the build is deliberately in the recovery slot.
 
 ## 2. Inherited-function regression
 

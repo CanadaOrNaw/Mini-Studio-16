@@ -69,6 +69,7 @@ uint8_t s_recordMode = SAMPLER_SLOT_MELODIC;
 TaskHandle_t s_task = nullptr;
 bool s_sdMounted = false;
 alignas(4) uint32_t s_pendingCommands = 0;
+alignas(4) uint32_t s_pendingMutations = 0;
 alignas(4) uint32_t s_commandDrops = 0;
 alignas(4) uint32_t s_starts = 0;
 alignas(4) uint32_t s_errors = 0;
@@ -505,6 +506,8 @@ void processCommand(const SamplerCommand& command) {
         if (command.type == COMMAND_RECORD_START) failRecording(false);
         else noteError();
     }
+    if (command.type == COMMAND_ASSIGN || command.type == COMMAND_CLEAR)
+        __atomic_sub_fetch(&s_pendingMutations, 1u, __ATOMIC_ACQ_REL);
     __atomic_sub_fetch(&s_pendingCommands, 1u, __ATOMIC_ACQ_REL);
 }
 
@@ -528,11 +531,24 @@ void storageTask(void*) {
 }
 
 bool queueCommand(const SamplerCommand& command) {
-    if (!s_sdMounted || !s_task || !s_commands.pushOne(command)) {
+    if (!s_sdMounted || !s_task) {
         __atomic_add_fetch(&s_commandDrops, 1u, __ATOMIC_RELAXED);
         return false;
     }
+    const bool mutation = command.type == COMMAND_ASSIGN ||
+                          command.type == COMMAND_CLEAR;
+    // Publish the counters before the command becomes visible to the worker.
+    // Otherwise a fast worker can pop/decrement a just-pushed command before
+    // this producer increments the corresponding count.
     __atomic_add_fetch(&s_pendingCommands, 1u, __ATOMIC_ACQ_REL);
+    if (mutation) __atomic_add_fetch(&s_pendingMutations, 1u, __ATOMIC_ACQ_REL);
+    if (!s_commands.pushOne(command)) {
+        if (mutation)
+            __atomic_sub_fetch(&s_pendingMutations, 1u, __ATOMIC_ACQ_REL);
+        __atomic_sub_fetch(&s_pendingCommands, 1u, __ATOMIC_ACQ_REL);
+        __atomic_add_fetch(&s_commandDrops, 1u, __ATOMIC_RELAXED);
+        return false;
+    }
     return true;
 }
 }  // namespace
@@ -549,6 +565,7 @@ void streamingSamplerInit(bool sdMounted) {
         s_workers[voice].active = false;
     }
     __atomic_store_n(&s_pendingCommands, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_pendingMutations, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_commandDrops, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_starts, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_errors, 0u, __ATOMIC_RELEASE);
@@ -740,6 +757,10 @@ bool streamingSamplerIsRecording() {
     const StreamingSamplerRecordState state = recordState();
     return state == STREAM_SAMPLE_REC_STARTING || state == STREAM_SAMPLE_REC_RECORDING ||
            state == STREAM_SAMPLE_REC_STOPPING;
+}
+
+bool streamingSamplerHasPendingMutation() {
+    return __atomic_load_n(&s_pendingMutations, __ATOMIC_ACQUIRE) != 0;
 }
 
 StreamingSamplerSnapshot streamingSamplerSnapshot() {

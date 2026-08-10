@@ -59,3 +59,25 @@ const char* bootSwitchDecisionName(BootSwitchDecision decision) {
         default: return "switch_error";
     }
 }
+
+BootRuntimeBlocker bootEvaluateRuntime(const BootRuntimeActivity& activity) {
+    if (activity.masterRecording || activity.stemRecording ||
+        activity.microphoneRecording || activity.loopRecording ||
+        activity.sampleRecording)
+        return BOOT_RUNTIME_RECORDING_BUSY;
+    if (activity.microphoneCommitPending || activity.loopClearPending ||
+        activity.sampleMutationPending)
+        return BOOT_RUNTIME_STORAGE_BUSY;
+    if (activity.sdDiagnosticRunning) return BOOT_RUNTIME_DIAGNOSTIC_BUSY;
+    return BOOT_RUNTIME_READY;
+}
+
+const char* bootRuntimeBlockerName(BootRuntimeBlocker blocker) {
+    switch (blocker) {
+        case BOOT_RUNTIME_READY: return "ready";
+        case BOOT_RUNTIME_RECORDING_BUSY: return "boot_recording_busy";
+        case BOOT_RUNTIME_STORAGE_BUSY: return "boot_storage_busy";
+        case BOOT_RUNTIME_DIAGNOSTIC_BUSY: return "boot_diagnostic_busy";
+        default: return "boot_activity_error";
+    }
+}

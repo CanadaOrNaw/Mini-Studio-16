@@ -65,10 +65,13 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode normal
 ```
 
 A role change is rejected while any master, stem, microphone, loop, or streamed
-sample recording is active. On success the response is flushed, transport is
-stopped, the validated slot is committed, and the Cardputer reboots. USB Host
-mode may not expose USB CDC, so the startup selector is always the recovery
-path back to Normal mode.
+sample recording is active (`boot_recording_busy`), while a microphone commit,
+loop clear, or sampler assignment/clear is pending (`boot_storage_busy`), or
+while the destructive SD diagnostic owns its temporary files
+(`boot_diagnostic_busy`). Read-only loop/sample playback does not block a role
+change. On success the response is flushed, transport is stopped, the validated
+slot is committed, and the Cardputer reboots. USB Host mode may not expose USB
+CDC, so the startup selector is always the recovery path back to Normal mode.
 
 ## Automated and physical verification boundary
 

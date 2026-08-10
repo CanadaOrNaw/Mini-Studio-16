@@ -30,6 +30,7 @@ uint32_t s_recordFileFrames = 0;
 alignas(4) uint32_t s_recordFileTrack = LOOP_NO_TRACK;
 alignas(4) uint32_t s_recordRequests = 0;
 alignas(4) uint32_t s_clearRequests = 0;
+alignas(4) uint32_t s_clearOutstanding = 0;
 portMUX_TYPE s_metricsMux = portMUX_INITIALIZER_UNLOCKED;
 TaskHandle_t s_task = nullptr;
 bool s_sdMounted = false;
@@ -290,8 +291,10 @@ bool finalizeRecording(uint8_t track) {
 }
 
 void processClearRequests() {
-    uint32_t requests = __atomic_exchange_n(&s_clearRequests, 0u, __ATOMIC_ACQ_REL);
-    if (!requests) return;
+    const uint32_t rawRequests =
+        __atomic_exchange_n(&s_clearRequests, 0u, __ATOMIC_ACQ_REL);
+    if (!rawRequests) return;
+    uint32_t requests = rawRequests;
     if (requests & 1u) requests = (1u << LOOP_STREAM_TRACKS) - 1u;
     for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
         if ((requests & (1u << track)) == 0) continue;
@@ -302,6 +305,9 @@ void processClearRequests() {
         SdIoGuard guard;
         if (SD.exists(path) && !SD.remove(path)) noteError();
     }
+    __atomic_sub_fetch(&s_clearOutstanding,
+                       static_cast<uint32_t>(__builtin_popcount(rawRequests)),
+                       __ATOMIC_ACQ_REL);
 }
 
 void storageTask(void*) {
@@ -373,6 +379,7 @@ void loopEngineInit(bool sdMounted) {
     __atomic_store_n(&s_recordFileTrack, LOOP_NO_TRACK, __ATOMIC_RELEASE);
     __atomic_store_n(&s_recordRequests, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_clearRequests, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_clearOutstanding, 0u, __ATOMIC_RELEASE);
     portENTER_CRITICAL(&s_metricsMux);
     s_maxReadUs = s_maxWriteUs = s_errors = 0;
     portEXIT_CRITICAL(&s_metricsMux);
@@ -415,7 +422,14 @@ bool loopEngineSetVolume(uint8_t track, uint8_t percent) {
 
 bool loopEngineClear(uint8_t track) {
     if (track >= LOOP_STREAM_TRACKS || loopEngineIsRecording()) return false;
-    __atomic_fetch_or(&s_clearRequests, 1u << track, __ATOMIC_ACQ_REL);
+    const uint32_t request = 1u << track;
+    // Count before publishing the request so the storage task cannot finish
+    // and decrement an operation that the producer has not counted yet.
+    __atomic_add_fetch(&s_clearOutstanding, 1u, __ATOMIC_ACQ_REL);
+    const uint32_t previous =
+        __atomic_fetch_or(&s_clearRequests, request, __ATOMIC_ACQ_REL);
+    if ((previous & request) != 0)
+        __atomic_sub_fetch(&s_clearOutstanding, 1u, __ATOMIC_ACQ_REL);
     return true;
 }
 
@@ -423,6 +437,10 @@ bool loopEngineIsRecording() {
     return __atomic_load_n(&s_recordFileTrack, __ATOMIC_ACQUIRE) != LOOP_NO_TRACK ||
            s_core.recordTrack() != LOOP_NO_TRACK ||
            __atomic_load_n(&s_recordRequests, __ATOMIC_ACQUIRE) != 0;
+}
+
+bool loopEngineHasPendingClear() {
+    return __atomic_load_n(&s_clearOutstanding, __ATOMIC_ACQUIRE) != 0;
 }
 
 bool loopEngineHasActiveIo() {

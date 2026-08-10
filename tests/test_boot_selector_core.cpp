@@ -44,6 +44,42 @@ int main() {
     assert(std::strcmp(bootSwitchDecisionName(BOOT_SWITCH_SET_FAILED),
                        "set_failed") == 0);
 
-    std::cout << "boot_selector_core: roles, recovery and bounds passed\n";
+    BootRuntimeActivity activity = {};
+    assert(bootEvaluateRuntime(activity) == BOOT_RUNTIME_READY);
+    assert(std::strcmp(bootRuntimeBlockerName(BOOT_RUNTIME_READY), "ready") == 0);
+
+    bool* recordingFlags[] = {
+        &activity.masterRecording, &activity.stemRecording,
+        &activity.microphoneRecording, &activity.loopRecording,
+        &activity.sampleRecording,
+    };
+    for (bool* flag : recordingFlags) {
+        *flag = true;
+        assert(bootEvaluateRuntime(activity) == BOOT_RUNTIME_RECORDING_BUSY);
+        *flag = false;
+    }
+
+    bool* mutationFlags[] = {
+        &activity.microphoneCommitPending, &activity.loopClearPending,
+        &activity.sampleMutationPending,
+    };
+    for (bool* flag : mutationFlags) {
+        *flag = true;
+        assert(bootEvaluateRuntime(activity) == BOOT_RUNTIME_STORAGE_BUSY);
+        *flag = false;
+    }
+
+    activity.sdDiagnosticRunning = true;
+    assert(bootEvaluateRuntime(activity) == BOOT_RUNTIME_DIAGNOSTIC_BUSY);
+    activity.masterRecording = true;
+    assert(bootEvaluateRuntime(activity) == BOOT_RUNTIME_RECORDING_BUSY);
+    assert(std::strcmp(bootRuntimeBlockerName(BOOT_RUNTIME_RECORDING_BUSY),
+                       "boot_recording_busy") == 0);
+    assert(std::strcmp(bootRuntimeBlockerName(BOOT_RUNTIME_STORAGE_BUSY),
+                       "boot_storage_busy") == 0);
+    assert(std::strcmp(bootRuntimeBlockerName(BOOT_RUNTIME_DIAGNOSTIC_BUSY),
+                       "boot_diagnostic_busy") == 0);
+
+    std::cout << "boot_selector_core: roles, recovery, runtime safety and bounds passed\n";
     return 0;
 }
