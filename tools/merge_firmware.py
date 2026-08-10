@@ -21,7 +21,9 @@ def find_boot_app0(core_dir: Path) -> Path:
     return candidates[-1]
 
 
-def build_command(build_dir: Path, output: Path, boot_app0: Path) -> list[str]:
+def build_command(build_dir: Path, output: Path, boot_app0: Path,
+                  chip: str = "esp32s3", flash_size: str = "8MB",
+                  flash_freq: str = "80m") -> list[str]:
     inputs = {
         "bootloader": build_dir / "bootloader.bin",
         "partitions": build_dir / "partitions.bin",
@@ -33,22 +35,23 @@ def build_command(build_dir: Path, output: Path, boot_app0: Path) -> list[str]:
         raise FileNotFoundError("missing build input(s): " + ", ".join(missing))
 
     output.parent.mkdir(parents=True, exist_ok=True)
+    bootloader_offset = "0x1000" if chip == "esp32" else "0x0000"
     return [
         sys.executable,
         "-m",
         "esptool",
         "--chip",
-        "esp32s3",
+        chip,
         "merge_bin",
         "-o",
         str(output),
         "--flash_mode",
         "dio",
         "--flash_freq",
-        "80m",
+        flash_freq,
         "--flash_size",
-        "8MB",
-        "0x0000",
+        flash_size,
+        bootloader_offset,
         str(inputs["bootloader"]),
         "0x8000",
         str(inputs["partitions"]),
@@ -72,11 +75,15 @@ def main() -> int:
         default=Path(".pio/build/m5stack-cardputer-adv/microgroove-v3-alpha.bin"),
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--chip", choices=("esp32", "esp32s3"), default="esp32s3")
+    parser.add_argument("--flash-size", choices=("4MB", "8MB"), default="8MB")
+    parser.add_argument("--flash-freq", choices=("40m", "80m"), default="80m")
     args = parser.parse_args()
 
     configured_core = os.environ.get("PLATFORMIO_CORE_DIR")
     core_dir = Path(configured_core) if configured_core else Path.home() / ".platformio"
-    command = build_command(args.build_dir, args.output, find_boot_app0(core_dir))
+    command = build_command(args.build_dir, args.output, find_boot_app0(core_dir),
+                            args.chip, args.flash_size, args.flash_freq)
     if args.dry_run:
         print(" ".join(command))
         return 0
@@ -86,4 +93,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

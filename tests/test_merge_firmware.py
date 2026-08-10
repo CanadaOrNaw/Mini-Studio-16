@@ -34,7 +34,22 @@ class MergeFirmwareTests(unittest.TestCase):
             self.assertEqual(command[command.index("0xe000") + 1], str(boot_app0))
             self.assertEqual(command[command.index("0x10000") + 1], str(build / "firmware.bin"))
 
+    def test_original_esp32_cap_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            build = root / "cap"
+            build.mkdir()
+            for name in ("bootloader.bin", "partitions.bin", "firmware.bin"):
+                (build / name).write_bytes(b"test")
+            boot_app0 = root / "boot_app0.bin"
+            boot_app0.write_bytes(b"test")
+            command = build_command(build, root / "cap.bin", boot_app0,
+                                    "esp32", "4MB", "40m")
+            self.assertEqual(command[command.index("--chip") + 1], "esp32")
+            self.assertEqual(command[command.index("--flash_size") + 1], "4MB")
+            self.assertEqual(command[command.index("--flash_freq") + 1], "40m")
+            self.assertEqual(command[command.index("4MB") + 1], "0x1000")
+
 
 if __name__ == "__main__":
     unittest.main()
-

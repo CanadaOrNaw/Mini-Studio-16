@@ -72,13 +72,10 @@ jobs:
             --build-dir .pio/build/m5stack-cardputer-adv-usb-host \
             --output .pio/build/m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin
           python tools/merge_dual_firmware.py
-          python -m esptool --chip esp32 merge_bin -o \
-            .pio/build/mini-studio-audio-cap/mini-studio-audio-cap-rev-a.bin \
-            --flash_mode dio --flash_freq 40m --flash_size 4MB \
-            0x1000 .pio/build/mini-studio-audio-cap/bootloader.bin \
-            0x8000 .pio/build/mini-studio-audio-cap/partitions.bin \
-            0xe000 .pio/build/mini-studio-audio-cap/boot_app0.bin \
-            0x10000 .pio/build/mini-studio-audio-cap/firmware.bin
+          python tools/merge_firmware.py \
+            --build-dir .pio/build/mini-studio-audio-cap \
+            --output .pio/build/mini-studio-audio-cap/mini-studio-audio-cap-rev-a.bin \
+            --chip esp32 --flash-size 4MB --flash-freq 40m
       - name: Create artifact manifest
         run: |
           python tools/package_sd.py \
