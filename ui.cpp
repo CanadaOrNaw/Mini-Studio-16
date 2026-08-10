@@ -27,6 +27,7 @@
 #include "sd_io_arbiter.h"
 #include "synth_parameters.h"
 #include "synth_ui_model.h"
+#include "boot_selector.h"
 
 Page    g_curPage    = PAGE_PATTERN;
 bool    g_needRedraw = true;
@@ -671,17 +672,45 @@ void uiDraw() {
 }
 
 void uiSplash() {
+    const BootSelectorSnapshot boot = bootSelectorSnapshot();
+    const BootRole current = boot.layout.compiledRole;
+    const BootRole other = bootOtherRole(current);
+    const bool otherValid = other == BOOT_ROLE_NORMAL
+        ? boot.layout.normalValid : boot.layout.usbHostValid;
     canvas.fillSprite(COL_BG);
     canvas.setTextSize(2);
-    canvas.setTextColor(COL_SYNTH1); canvas.setCursor(15, 16); canvas.print("MICRO");
-    canvas.setTextColor(COL_DRUMS);  canvas.setCursor(78, 16); canvas.print("GROOVE");
+    canvas.setTextColor(COL_SYNTH1); canvas.setCursor(15, 12); canvas.print("MINI STUDIO");
+    canvas.setTextColor(COL_DRUMS);  canvas.setCursor(173, 12); canvas.print("16");
     canvas.setTextSize(1);
     canvas.setTextColor(COL_DIM);
-    canvas.setCursor(15, 40);  canvas.print("lebiro.studio");
-    canvas.setCursor(15, 60);  canvas.print("3 acid synths + 8 drum lanes");
-    canvas.setCursor(15, 72);  canvas.print("808 / 909 / SD samples / mic");
-    canvas.setCursor(15, 84);  canvas.print("wavetables / song mode");
+    canvas.setCursor(15, 37); canvas.print("Microgroove engine + expanded studio");
+    canvas.setTextColor(current == BOOT_ROLE_USB_HOST ? COL_DRUMS : COL_SYNTH2);
+    canvas.setCursor(15, 56);
+    canvas.printf("MODE: %s", current == BOOT_ROLE_USB_HOST ? "USB MIDI HOST" : "NORMAL USB DEVICE");
+    canvas.setTextColor(COL_DIM);
+    canvas.setCursor(15, 72);
+    if (!boot.layoutMatchesBuild) {
+        canvas.print("Standalone/recovery image; switching disabled");
+    } else if (!otherValid) {
+        canvas.print("Other role is not installed in flash");
+    } else {
+        canvas.printf("TAB: switch to %s + reboot",
+                      other == BOOT_ROLE_USB_HOST ? "USB HOST" : "NORMAL");
+    }
     canvas.setTextColor(COL_ACCENT);
-    canvas.setCursor(15, 110); canvas.print("Press any key...");
+    canvas.setCursor(15, 108); canvas.print("Any other key: start");
+    canvas.pushSprite(0, 0);
+}
+
+void uiBootMessage(const char* title, const char* detail) {
+    canvas.fillSprite(COL_BG);
+    canvas.setTextSize(2);
+    canvas.setTextColor(COL_ACCENT);
+    canvas.setCursor(15, 24);
+    canvas.print(title ? title : "BOOT");
+    canvas.setTextSize(1);
+    canvas.setTextColor(COL_TEXT);
+    canvas.setCursor(15, 62);
+    canvas.print(detail ? detail : "");
     canvas.pushSprite(0, 0);
 }

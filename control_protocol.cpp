@@ -294,6 +294,14 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
             else if (sameWord(action, "load")) request.command = CONTROL_PROJECT_LOAD;
             else return CONTROL_PARSE_BAD_ARGUMENTS;
         }
+    } else if (sameWord(verb, "boot")) {
+        char* action = nextToken(cursor);
+        if (!action || !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(action, "status")) request.command = CONTROL_BOOT_STATUS;
+        else if (sameWord(action, "normal")) request.command = CONTROL_BOOT_NORMAL;
+        else if (sameWord(action, "host") || sameWord(action, "usb_host"))
+            request.command = CONTROL_BOOT_USB_HOST;
+        else return CONTROL_PARSE_BAD_ARGUMENTS;
     } else if (sameWord(verb, "synth")) {
         char* trackOrAction = nextToken(cursor);
         if (!trackOrAction) return CONTROL_PARSE_BAD_ARGUMENTS;

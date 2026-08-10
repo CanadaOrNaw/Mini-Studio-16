@@ -44,6 +44,8 @@ build_run motion "$test_dir/test_motion_core.cpp"
 build_run ble_codec "$test_dir/test_ble_midi_codec.cpp"
 build_run usb_midi_host "$test_dir/test_usb_midi_host_descriptor.cpp" \
     "$test_dir/../usb_midi_host_descriptor.cpp"
+build_run boot_selector "$test_dir/test_boot_selector_core.cpp" \
+    "$test_dir/../boot_selector_core.cpp"
 build_run synth_engine "$test_dir/test_synth_engine.cpp" "${synth_sources[@]}"
 build_run synth_offline "$test_dir/test_synth_offline_render.cpp" "${synth_sources[@]}"
 build_run synth_project "$test_dir/test_synth_project.cpp" \

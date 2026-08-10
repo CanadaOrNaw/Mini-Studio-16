@@ -122,6 +122,14 @@ class MiniStudioCliTests(unittest.TestCase):
         args = cli.parser().parse_args(["synth-dsp-reset"])
         self.assertEqual(cli.command_words(args), ["synth", "dsp_reset"])
 
+    def test_boot_commands(self):
+        args = cli.parser().parse_args(["boot-status"])
+        self.assertEqual(cli.command_words(args), ["boot", "status"])
+        args = cli.parser().parse_args(["boot-mode", "host"])
+        self.assertEqual(cli.command_words(args), ["boot", "host"])
+        args = cli.parser().parse_args(["boot-mode", "normal"])
+        self.assertEqual(cli.command_words(args), ["boot", "normal"])
+
 
 if __name__ == "__main__":
     unittest.main()

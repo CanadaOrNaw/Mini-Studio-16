@@ -26,7 +26,7 @@ official Microgroove or lebiro.studio release.
 | Sequencer | 16 patterns × 16 steps and a 128-entry chain | Keyboard/UI usability pass |
 | Event looper | Five role-mapped drum/bass/chord/lead/sample-control tracks, 1–128 bars, 2,048 events, arm/mute/clear | Long-run timing and live workflow |
 | Motion | BMI270 filtering, tilt/accel/gyro/shake/slap sources, four mappings, synth cutoff/resonance targets, MIDI CC, and recordable automation | IMU calibration and gesture thresholds |
-| MIDI | BLE MIDI input/output; composite USB CDC+MIDI device image; separate direct USB-MIDI host image; notes, CC, clock, song position, start/continue/stop | Enumeration, reconnect, clock jitter, OTG/VBUS behavior |
+| MIDI/boot | BLE MIDI input/output; composite USB CDC+MIDI device app; direct USB-MIDI host app; combined dual-slot image with validated on-device role selector and reboot; notes, CC, clock, song position, start/continue/stop | Bidirectional role switching, enumeration, reconnect, clock jitter, OTG/VBUS behavior |
 | Recording | Long master WAVs and optional five-bus master/synth1/synth2/synth3/drums stem containers on SD | Zero-drop 30-minute captures and power-cut cycles |
 | Control | Bounded `MS16/1` USB serial protocol, desktop CLI, JSON, monitor, discovery, fuzzing, and soak client | Device-side 10,000-command soak |
 | Existing Microgroove | Original `SynthVoice` DSP and workflow remain the default `MG/303` engine; three synth tracks, eight drum lanes, keyboard, short sampler/resampler gestures, speaker, mic, headphones, projects, and factory content retained; samples use adaptive RAM or transparent SD-stream fallback | Regression pass on hardware |
@@ -46,7 +46,8 @@ stems without removing any inherited standalone workflow.
   descriptor parsing, WAV/stem recovery, project layouts, protocol fuzzing,
   CLI behavior, concurrent ring ordering, the exact legacy synth PCM vector,
   ADSR/operator/algorithm/ratio/feedback/engine switching, GBX v8 synthesis
-  migration, and deterministic offline FM waveform/spectrum statistics.
+  migration, deterministic offline FM waveform/spectrum statistics, dual-role
+  selection/recovery decisions, partition bounds, and exact image placement.
 - GitHub runs the host suite plus AddressSanitizer and UndefinedBehaviorSanitizer.
 - Firmware size is checked from the ESP32 linker sections using the same DRAM
   accounting rules as PlatformIO, with a 200 KiB static-DRAM ceiling so runtime
@@ -85,21 +86,28 @@ Upload the normal image over USB:
 pio run -e m5stack-cardputer-adv -t upload --upload-port /dev/ttyACM0
 ```
 
-CI also publishes merged 8 MB images that flash at offset `0x0`:
+CI publishes a combined dual-role image that flashes at offset `0x0`:
 
 ```bash
-esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
+esptool.py --chip esp32s3 write_flash 0x0 mini-studio-16-dual-role.bin
 ```
 
+On the startup screen, press `Tab` to validate/select the other USB role and
+reboot; press any other key to continue. Normal mode is selected after the
+initial flash. See [`docs/DUAL_BOOT.md`](docs/DUAL_BOOT.md).
+
 Each artifact includes `SHA256SUMS.txt`, `BUILD_INFO.txt`, both application
-ELFs/images, both merged images, both resource reports, the license, and a
-`Mini-Studio-16_SD.zip` starter card image. Verify the extracted artifact with
+ELFs/images, both standalone merged images, the combined image and layout
+report, both resource reports, the license, and a `Mini-Studio-16_SD.zip`
+starter card image. Verify the extracted artifact with
 `sha256sum -c SHA256SUMS.txt` before flashing. The starter image is packaged
 with normalized metadata so identical source trees produce identical ZIPs.
 
-The host image is named `microgroove-v3-alpha-usb-host.bin`. Flashing it
-replaces the normal CDC+MIDI image; the ESP32-S3's single native USB PHY cannot
-serve both device and host roles simultaneously.
+The standalone `microgroove-v3-alpha.bin` and
+`microgroove-v3-alpha-usb-host.bin` remain available for recovery and
+profile-specific debugging. The ESP32-S3's single native USB PHY still cannot
+serve both roles simultaneously, so selecting a role always reboots into its
+separately compiled slot.
 
 Run all desktop checks:
 
@@ -117,6 +125,7 @@ Tap `ctrl` to cycle through the original and new pages.
 
 | Page | Controls |
 | --- | --- |
+| Startup selector | `Tab` validates/selects the other installed USB role and reboots; any other key starts the displayed role |
 | SOUND synth | `tab` cycles the selected engine's small parameter banks; `v/c` selects a row; `x/b` edits; hold `m` for fine edits; COMMON selects `MG/303`, `MGX`, or `FM4` |
 | SAMPLE browser | `x/b` chooses slot, `v/c` chooses WAV, `/` assigns; hold `.` records mic; hold `n` records master bus |
 | SAMPLE performance | 16 white/performance keys trigger pitches or slices; REC writes quantized events |
@@ -150,6 +159,8 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 --json midi-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 1 fm4
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.op2.ratio 200
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 boot-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode host
 python tools/hardware_smoke.py --port /dev/ttyACM0 --sd-test \
   --output cardputer-smoke.json
 ```
@@ -193,8 +204,9 @@ No additional software-only milestone is intentionally deferred. The next
 required evidence depends on the physical Cardputer-ADV, the exact SD card, or
 external expansion hardware:
 
-1. flash, boot, heap/stack telemetry, display, keyboard, speaker, mic, and
-   headphone regression;
+1. flash the combined image; verify twenty Normal/USB-host round trips,
+   selection-state power cuts, boot, heap/stack telemetry, display, keyboard,
+   speaker, mic, and headphone regression;
 2. SD throughput/stall diagnostics, six-stream playback, concurrent recording,
    long master/stem captures, and power-cut recovery;
 3. BLE MIDI and USB device/host enumeration, reconnect, timing, cable, and VBUS;

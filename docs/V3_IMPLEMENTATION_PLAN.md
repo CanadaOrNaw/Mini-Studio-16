@@ -16,8 +16,12 @@ open until the Cardputer-ADV arrives.
 - Five event tracks over 128 bars.
 - BMI270 motion mapping, MIDI CC, and recorded automation.
 - BLE MIDI input/output and clock/transport.
-- Composite USB CDC+MIDI device mode plus a separately flashed direct
-  class-compliant USB-MIDI host mode.
+- Composite USB CDC+MIDI device application plus a separately compiled direct
+  class-compliant USB-MIDI host application.
+- One combined offset-zero flash image containing both USB-role applications,
+  with an on-device startup selector that changes roles by validated OTA-slot
+  selection and reboot instead of requiring a reflash. The two standalone
+  images remain available as recovery and diagnostic artifacts.
 - Long master WAV recording, optional five-bus stem export, and the inherited
   short resampler.
 - A bounded serial command protocol and CLI for diagnostics/automation.
@@ -98,7 +102,8 @@ protocol operation allocates or performs file I/O in the render path.
 8. USB serial parsing is bounded/non-allocating and only requests subsystem
    work; callbacks never perform audio storage I/O.
 9. USB device and host are separate images because the S3 exposes one native
-   USB PHY/role at a time.
+   USB PHY/role at a time. They share a startup selector and occupy separate
+   OTA app slots in the combined artifact; selecting a role always reboots.
 10. Synth engine state is fixed-size. The renderer calls one bounded track
     interface and performs no heap allocation, file I/O, transcendental sine,
     or algorithm graph construction per sample.
@@ -118,33 +123,37 @@ protocol operation allocates or performs file I/O in the render path.
 | M6 event/motion/MIDI | Five × 128-bar event tracks; BMI270 mappings/automation; BLE MIDI; composite USB device; alternate USB host | Event/motion/MIDI/BLE/USB descriptor tests; both images link | Gesture calibration, reconnect, enumeration, clock jitter |
 | M7 full duplex/expansion | Low-level experiment boundary, cap pin map, fixed PCM packet/CRC contract, and external hardware requirements | Packet layout/CRC/bounds host-tested; no safe analog/RF host-only substitute exists | ES8311 experiment; line/A2DP hardware |
 | M8 expanded synthesis | Per-track `MG/303`, `MGX`, and true four-operator `FM4`; banked UI/CLI; GBX v8 migration; render telemetry/benchmark | Legacy golden-vector regression; operator/algorithm/ratio/envelope/feedback/switch tests; deterministic offline PCM/spectral statistics; malformed patch validation; both images link under memory gates | Worst-case render time and safe simultaneous FM polyphony with loops/sampler/drums/recording |
+| M9 dual-role boot | Common pre-subsystem selector in both apps; `normal`/`usbhost` OTA slots; validated reboot switch; serial/CLI control; combined and standalone artifacts | Pure decision tests; malformed/missing/mismatched slot tests; strict partition-layout and merge-placement tests; both profiles link against the same partition table; combined artifact manifest | Flash combined image, switch both directions repeatedly, power-cut the selection write, and verify USB role/enumeration after every reboot |
 
 ## Hardware test sequence
 
 Run in this order so a failing lower layer does not invalidate later results.
 
-1. Flash normal image; collect boot/heap/subsystem telemetry; regress display,
+1. Flash the combined image at offset zero. Verify the startup selector reports
+   both images, defaults to Normal, switches Normal -> USB Host -> Normal for
+   twenty cycles without reflashing, and refuses any invalid/missing target.
+2. Collect boot/heap/subsystem telemetry in Normal mode; regress display,
    keyboard, speaker, headphones, mic, synths, drums, save/load, and short
    sampling.
-2. Cold-mount the FAT32 card ten times. Run SD diagnostics three times while
+3. Cold-mount the FAT32 card ten times. Run SD diagnostics three times while
    audio plays, then a ten-minute storage soak.
-3. Exercise loop L1 alone, then L1–L6, then L1–L6 plus one new recording.
-4. Fill all 16 sampler slots to the 40-second quota; test pitch/slices/locks;
+4. Exercise loop L1 alone, then L1–L6, then L1–L6 plus one new recording.
+5. Fill all 16 sampler slots to the 40-second quota; test pitch/slices/locks;
    save, reboot, and reload.
-5. Run five event tracks and motion automation through 128 bars.
-6. Capture 1-, 10-, and 30-minute master/stem sessions; inspect frames, drops,
+6. Run five event tracks and motion automation through 128 bars.
+7. Capture 1-, 10-, and 30-minute master/stem sessions; inspect frames, drops,
    WAV/container structure, and split stems.
-7. Perform intentional recording power cuts on a disposable SD card and verify
+8. Perform intentional recording power cuts on a disposable SD card and verify
    recovery/quarantine behavior.
-8. Pair BLE MIDI and run reconnect plus 30-minute external-clock tests.
-9. Validate composite USB CDC+MIDI with a computer/DAW while the CLI runs.
-10. Flash the host image and validate Yamaha/CYD with the correct OTG/VBUS
-    arrangement, including attach/detach and non-MIDI devices.
-11. Run the on-device synth benchmark for every engine/voice count, then repeat
+9. Pair BLE MIDI and run reconnect plus 30-minute external-clock tests.
+10. Validate composite USB CDC+MIDI with a computer/DAW while the CLI runs.
+11. Select USB Host from the startup menu and validate Yamaha/CYD with the
+    correct OTG/VBUS arrangement, including attach/detach and non-MIDI devices.
+12. Run the on-device synth benchmark for every engine/voice count, then repeat
     FM4 at maximum software polyphony while loops, sampler, drums, master
     recording, MIDI, and motion are active. Capture worst render block time and
     missed audio deadlines.
-12. Calibrate gesture thresholds and test lower-level ES8311 full duplex.
+13. Calibrate gesture thresholds and test lower-level ES8311 full duplex.
 
 ## Initial pass criteria
 
@@ -160,6 +169,8 @@ Run in this order so a failing lower layer does not invalidate later results.
 | Serial protocol | 10,000 commands | correlated replies; no reboot/audio stall |
 | BLE/USB clock | 30 min each | repeatable transport; no stuck notes/reboot |
 | Attach/reconnect | 20 cycles | no leak, crash, or audio-task stall |
+| USB-role switch | 20 round trips | no reflash, wrong-role boot, corrupt selection state, or selector lockout |
+| Selection power loss | 10 cuts on disposable setup | boots one valid role and retains access to the startup selector |
 | Power loss | 10 cycles | prior valid take survives; temp repaired/quarantined |
 | Synth offline regression | every host run | legacy golden vector unchanged; deterministic bounded finite MGX/FM4 output; FM modulation changes waveform and spectral energy |
 | Synth render deadline | each engine × 1–3 voices | worst 256-frame block remains below 11.61 ms with zero missed deadlines |

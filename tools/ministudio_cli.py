@@ -140,6 +140,10 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["project", "status"]
     if args.command == "project":
         return ["project", args.slot, args.action]
+    if args.command == "boot-status":
+        return ["boot", "status"]
+    if args.command == "boot-mode":
+        return ["boot", args.mode]
     if args.command == "synth-status":
         return ["synth", "status"]
     if args.command == "synth-engine":
@@ -225,6 +229,9 @@ def parser() -> argparse.ArgumentParser:
     project = sub.add_parser("project", help="save or load a complete GBX project")
     project.add_argument("slot", type=int, choices=range(1, 9))
     project.add_argument("action", choices=("save", "load"))
+    sub.add_parser("boot-status", help="show installed USB-role images and selected slot")
+    boot_mode = sub.add_parser("boot-mode", help="select a USB role and reboot")
+    boot_mode.add_argument("mode", choices=("normal", "host"))
     sub.add_parser("synth-status", help="show engines and audio render deadlines")
     synth_engine = sub.add_parser("synth-engine", help="select a per-track synth engine")
     synth_engine.add_argument("track", type=int, choices=range(1, 4))

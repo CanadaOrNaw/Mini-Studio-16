@@ -233,9 +233,12 @@ Synth input mapping:
 - Cardputer synth-key releases emit note-off so a connected DAW does not retain
   stuck notes.
 
-The separately flashed `usb-host` image accepts a direct class-compliant
-USB-MIDI controller and is input-only for its first hardware pass. It disables
-CDC because USB host and device roles cannot share the S3 PHY.
+The combined image stores Normal and USB Host as separate applications because
+the S3 PHY cannot serve both roles simultaneously. At the common startup
+screen, press `Tab` to validate/select the other role and reboot, or any other
+key to continue. The USB-host application accepts a direct class-compliant
+USB-MIDI controller and is input-only for its first hardware pass; it disables
+CDC. Standalone images remain available for recovery/debugging.
 
 ## Serial CLI
 
@@ -255,6 +258,8 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 1 fm4
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.algorithm 5
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.op2.ratio 200
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 boot-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode host
 ```
 
 See `CONTROL_PROTOCOL.md` for the full command table.

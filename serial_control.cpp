@@ -18,6 +18,7 @@
 #include "storage.h"
 #include "audio_engine.h"
 #include "synth_parameters.h"
+#include "boot_selector.h"
 
 #include <Arduino.h>
 #include <M5Cardputer.h>
@@ -493,6 +494,52 @@ void dispatch(const ControlRequest& request) {
                               " %s OK project=%u state=loaded\n", request.id,
                               static_cast<unsigned>(request.arg1));
             } else replyError(request.id, "project_load_rejected");
+            break;
+        }
+
+        case CONTROL_BOOT_STATUS: {
+            const BootSelectorSnapshot boot = bootSelectorSnapshot();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK compiled=%s running=%s configured=%s "
+                          "normal=%u host=%u layout=%u pending=%u platformError=%ld\n",
+                          request.id, bootRoleName(boot.layout.compiledRole),
+                          bootRoleName(boot.layout.runningSlotRole),
+                          bootRoleName(boot.configuredBootRole),
+                          boot.layout.normalValid ? 1u : 0u,
+                          boot.layout.usbHostValid ? 1u : 0u,
+                          boot.layoutMatchesBuild ? 1u : 0u,
+                          boot.switchPending ? 1u : 0u,
+                          static_cast<long>(boot.lastPlatformError));
+            break;
+        }
+
+        case CONTROL_BOOT_NORMAL:
+        case CONTROL_BOOT_USB_HOST: {
+            if (masterRecorderIsBusy() || stemRecorderIsBusy() || micRecActive() ||
+                loopEngineIsRecording() || streamingSamplerIsRecording()) {
+                replyError(request.id, "boot_recording_busy");
+                break;
+            }
+            const BootRole target = request.command == CONTROL_BOOT_USB_HOST
+                ? BOOT_ROLE_USB_HOST : BOOT_ROLE_NORMAL;
+            const BootSwitchDecision decision = bootSelectorPrepare(target);
+            if (decision == BOOT_SWITCH_ALREADY_ACTIVE) {
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK boot=%s state=active\n", request.id,
+                              bootRoleName(target));
+                break;
+            }
+            if (decision != BOOT_SWITCH_READY) {
+                replyError(request.id, bootSwitchDecisionName(decision));
+                break;
+            }
+            sequencerStop();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK boot=%s state=restarting\n", request.id,
+                          bootRoleName(target));
+            Serial.flush();
+            delay(100);
+            bootSelectorRestart();
             break;
         }
 

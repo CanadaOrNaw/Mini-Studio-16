@@ -1,8 +1,8 @@
 # Mini Studio 16 USB serial control
 
-The normal firmware exposes a bounded line protocol over USB CDC at 115200
+The Normal application exposes a bounded line protocol over USB CDC at 115200
 baud. Cardputer keyboard/UI control remains active while a computer or agent
-sends commands. The separately flashed USB-host profile has CDC disabled.
+sends commands. The separately compiled USB-host slot has CDC disabled.
 
 Request and response framing:
 
@@ -48,6 +48,8 @@ bytes per main-loop iteration.
 | `midi status` | MIDI queue, BLE, USB role/mount, byte/message/error, and dropped output-clock counters |
 | `project status` | Current slot and occupied-slot bit mask |
 | `project SLOT save\|load` | Save or load complete GBX v8 project slot 1–8; v1–v7 remain readable |
+| `boot status` | Report compiled/running/configured role, installed-image validity, layout match, pending switch, and platform error |
+| `boot normal\|host` | Validate/select that OTA application and reboot; rejected while any audio recording is active |
 | `synth status` | Per-track engine/voices/volume/control summary plus render-block deadline telemetry |
 | `synth TRACK engine mg\|mgx\|fm4` | Select a track engine without deleting the other engine patches |
 | `synth TRACK set PARAM VALUE` | Set a validated named synth parameter using integer wire units |
@@ -116,6 +118,8 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 master stop
 python tools/ministudio_cli.py --port /dev/ttyACM0 --json midi-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 project-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 project 2 save
+python tools/ministudio_cli.py --port /dev/ttyACM0 boot-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode host
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 1 mgx
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 mgx.amp.attack 25
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 2 fm4
@@ -137,3 +141,8 @@ recorder/diagnostic/project operation is active. `stop` requests drain their
 rings and publish headers asynchronously; status/monitor output is the source
 of final filenames and zero-drop/error evidence. A synchronous `OK` means the
 request was accepted, not that hardware validation passed.
+
+USB-role changes additionally refuse to reboot while master, stem, microphone,
+loop, or streamed-sample recording is active. The target image is validated by
+ESP-IDF before OTA data changes. USB Host mode may not expose CDC, so return to
+Normal with `Tab` on the common startup screen.

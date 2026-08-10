@@ -81,6 +81,12 @@ int main() {
     assert(request.command == CONTROL_PROJECT_SAVE && request.arg1 == 8);
     request = parseOk("MS16/1 22 project 1 load");
     assert(request.command == CONTROL_PROJECT_LOAD && request.arg1 == 1);
+    request = parseOk("MS16/1 bs boot status");
+    assert(request.command == CONTROL_BOOT_STATUS);
+    request = parseOk("MS16/1 bn boot normal");
+    assert(request.command == CONTROL_BOOT_NORMAL);
+    request = parseOk("MS16/1 bh boot host");
+    assert(request.command == CONTROL_BOOT_USB_HOST);
     request = parseOk("MS16/1 sy synth status");
     assert(request.command == CONTROL_SYNTH_STATUS);
     request = parseOk("MS16/1 se synth 2 engine fm4");
@@ -115,6 +121,9 @@ int main() {
     assert(controlParseLine("MS16/1 1 project 0 save", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 project 9 load", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 project 1 delete", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 boot", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 boot factory", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 boot host now", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 synth 0 engine fm4", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 synth 1 engine fake", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 synth 1 set fm.index 801", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);

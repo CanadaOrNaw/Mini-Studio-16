@@ -8,7 +8,7 @@
 //   - 16 patterns x 16 steps, 128-entry chain, live record with quantize
 //   - live mic sampling, SD-streamed sampler/looper, master/stem recording
 //   - BLE/USB MIDI, BMI270 motion, and USB serial control
-//   - project save/load to microSD (GBX v7; loads v1-v6 transparently)
+//   - project save/load to microSD (GBX v8; loads v1-v7 transparently)
 //
 // Portions of the synth voice, 808 drums, and audio task are derived
 // from qwertyuu/Cardputer-Adv-Tracker (MIT License) - see LICENSE.
@@ -36,6 +36,7 @@
 #include "ble_midi.h"
 #include "usb_midi.h"
 #include "sd_io_arbiter.h"
+#include "boot_selector.h"
 #include "ui.h"
 
 void inputInit();
@@ -49,6 +50,39 @@ void setup() {
     M5Cardputer.begin(cfg, true);
 
     uiInit();
+    bootSelectorInit();
+
+    // The selector runs before storage, audio, BLE, or either USB MIDI stack.
+    // Both applications therefore retain a common recovery path if a later
+    // hardware subsystem fails during initialization.
+    uiSplash();
+    while (true) {
+        M5Cardputer.update();
+        if (M5Cardputer.Keyboard.isChange() && M5Cardputer.Keyboard.isPressed()) {
+            const Keyboard_Class::KeysState keys = M5Cardputer.Keyboard.keysState();
+            if (!keys.tab) break;
+            const BootRole target = bootOtherRole(bootSelectorCompiledRole());
+            const BootSwitchDecision decision = bootSelectorPrepare(target);
+            if (decision == BOOT_SWITCH_READY) {
+                uiBootMessage("USB ROLE SAVED",
+                              target == BOOT_ROLE_USB_HOST
+                                  ? "Rebooting into USB MIDI Host..."
+                                  : "Rebooting into Normal USB Device...");
+                Serial.printf("BOOT_SWITCH target=%s state=ready\n", bootRoleName(target));
+                Serial.flush();
+                delay(250);
+                bootSelectorRestart();
+                while (true) delay(1000);
+            }
+            uiBootMessage("SWITCH REFUSED", bootSwitchDecisionName(decision));
+            Serial.printf("BOOT_SWITCH target=%s state=%s\n", bootRoleName(target),
+                          bootSwitchDecisionName(decision));
+            delay(1200);
+            uiSplash();
+        }
+        if (M5Cardputer.BtnA.wasPressed()) break;
+        delay(30);
+    }
 
     // Speaker / codec
     auto spk = M5Cardputer.Speaker.config();
@@ -84,14 +118,6 @@ void setup() {
     bleMidiInit();
     usbMidiInit();
     loadDemoPattern();
-
-    uiSplash();
-    while (true) {
-        M5Cardputer.update();
-        if (M5Cardputer.Keyboard.isChange() && M5Cardputer.Keyboard.isPressed()) break;
-        if (M5Cardputer.BtnA.wasPressed()) break;
-        delay(30);
-    }
 
     inputInit();
     audioEngineStart();              // render task on core 0

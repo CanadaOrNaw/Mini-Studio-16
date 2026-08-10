@@ -50,6 +50,10 @@ class FakeSerial:
                     "dspDeadlineUs=11609 t1=MG/303,1,80,40,30 "
                     "t2=MG/303,1,80,40,30 t3=MG/303,1,80,40,30"
                 ),
+                "boot status": (
+                    "compiled=normal running=normal configured=normal normal=1 "
+                    "host=1 layout=1 pending=0 platformError=0"
+                ),
             }[command_name]
             self.responses.append(
                 f"MS16/1 {request_id} OK {values}\n".encode()

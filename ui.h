@@ -29,5 +29,6 @@ extern uint8_t g_fileSel;
 void uiInit();
 void uiDraw();
 void uiSplash();
+void uiBootMessage(const char* title, const char* detail);
 void uiStatus(const char* msg);          // transient message in footer
 void uiScanSampleDir();                  // refresh SAMPLE page file list

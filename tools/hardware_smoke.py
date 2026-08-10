@@ -24,6 +24,7 @@ READ_ONLY_PROBES: tuple[tuple[str, ...], ...] = (
     ("motion", "status"),
     ("midi", "status"),
     ("synth", "status"),
+    ("boot", "status"),
 )
 
 PROBE_REQUIRED: dict[str, tuple[str, ...]] = {
@@ -37,6 +38,8 @@ PROBE_REQUIRED: dict[str, tuple[str, ...]] = {
     "midi status": ("usbAvailable", "bleAvailable", "queueDrops", "clockDrops"),
     "synth status": ("dspBlocks", "dspLastUs", "dspMaxUs", "dspMisses", "dspDeadlineUs",
                      "t1", "t2", "t3"),
+    "boot status": ("compiled", "running", "configured", "normal", "host", "layout",
+                    "pending", "platformError"),
 }
 
 
@@ -64,6 +67,15 @@ def validate_probe(command: str, response: Response) -> None:
             raise RuntimeError("audio renderer already exceeded its DSP deadline")
         if int(response.values["dspMisses"]) != 0:
             raise RuntimeError("audio renderer reported missed DSP deadlines")
+    if command == "boot status":
+        if response.values["compiled"] != "normal" or \
+                response.values["running"] != "normal":
+            raise RuntimeError("hardware smoke must begin in the Normal application")
+        if response.values["normal"] != "1" or response.values["host"] != "1" or \
+                response.values["layout"] != "1":
+            raise RuntimeError("combined dual-role image is incomplete or mismatched")
+        if response.values["pending"] != "0" or response.values["platformError"] != "0":
+            raise RuntimeError("unexpected pending/failed boot selection state")
 
 
 def send_correlated(device, request_id: str, words: Iterable[object], timeout: float,

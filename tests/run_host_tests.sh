@@ -119,6 +119,12 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 "$build_dir/test_usb_midi_host_descriptor"
 
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_boot_selector_core.cpp" "$test_dir/../boot_selector_core.cpp" \
+  -o "$build_dir/test_boot_selector_core"
+
+"$build_dir/test_boot_selector_core"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
   "$test_dir/test_synth_engine.cpp" "${synth_sources[@]}" \
   -o "$build_dir/test_synth_engine"
 
@@ -184,7 +190,8 @@ g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   "$test_dir/../loop_engine.cpp" "$test_dir/../sd_io_arbiter.cpp" \
   "$test_dir/../synth_dsp.cpp" "$test_dir/../synth_engine.cpp" \
   "$test_dir/../synth_parameters.cpp" "$test_dir/../synth_project.cpp" \
-  "$test_dir/../synth_ui_model.cpp"
+  "$test_dir/../synth_ui_model.cpp" \
+  "$test_dir/../boot_selector_core.cpp" "$test_dir/../boot_selector.cpp"
 
 echo "audio/sequencer/sampler: host syntax checks passed"
 
@@ -195,6 +202,7 @@ g++ -pipe -x c++ -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
 echo "sketch integration: host syntax check passed"
 
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_merge_firmware.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_merge_dual_firmware.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_package_sd.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_ministudio_cli.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_split_stems.py"

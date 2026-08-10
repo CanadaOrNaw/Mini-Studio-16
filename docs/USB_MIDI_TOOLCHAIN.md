@@ -1,7 +1,8 @@
 # USB MIDI profiles and hardware boundary
 
-Mini Studio 16 implements two separately flashed USB roles on the ESP32-S3's
-single native USB PHY.
+Mini Studio 16 implements two separately compiled USB roles on the ESP32-S3's
+single native USB PHY. The primary combined image stores them in two OTA slots;
+the common startup selector validates the alternate slot and reboots into it.
 
 ## Normal profile: computer-facing device
 
@@ -42,10 +43,11 @@ Build:
 pio run -e m5stack-cardputer-adv-usb-host
 ```
 
-CI outputs `microgroove-v3-alpha-usb-host.bin`, a merged image flashed at
-offset `0x0`. Because CDC is unavailable in this role, on-device MIDI status and
-UI/behavior are the first diagnostics; USB-host telemetry over another channel
-can be added only if hardware testing proves it necessary.
+CI retains `microgroove-v3-alpha-usb-host.bin` as a standalone recovery/debug
+image and also places this application in the `usbhost` slot of
+`mini-studio-16-dual-role.bin`. Because CDC is unavailable in this role,
+on-device MIDI status and UI/behavior are the first diagnostics; return to
+Normal with `Tab` on the startup screen.
 
 ## Why there are two images
 
@@ -61,7 +63,7 @@ Do not connect two powered USB hosts together. The hardware pass must document:
 - whether the controller needs more current than the Cardputer can safely
   supply;
 - whether external powered-hub VBUS is isolated correctly;
-- how the board is reflashed after loading the host profile.
+- how the startup selector returns to Normal after loading the host profile.
 
 ## Shared MIDI behavior
 

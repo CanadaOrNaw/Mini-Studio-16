@@ -12,14 +12,15 @@ duration, and complete serial output for every pass or failure.
 2. Build or download a CI artifact only after host, sanitizer, and firmware jobs
    all pass. Run `sha256sum -c SHA256SUMS.txt` from the extracted artifact
    directory and retain `BUILD_INFO.txt` with the test evidence.
-3. Flash the normal merged image at offset `0x0`:
+3. Flash the combined dual-role image at offset `0x0`:
 
    ```bash
-   esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
+   esptool.py --chip esp32s3 write_flash 0x0 mini-studio-16-dual-role.bin
    ```
 
-4. Open a 115200-baud serial monitor, press any key to dismiss the inherited
-   splash screen, and save the full boot log.
+4. Confirm the common startup screen reports Normal and both images installed.
+   Press any non-Tab key, open a 115200-baud serial monitor, and save the full
+   boot log.
 5. Confirm `BOOT_READY` reports `sd=1`, sensible `heapFree`/`heapLargest`, and
    `BOOT_SUBSYSTEM` reports loop, sampler, motion, BLE, and USB availability.
 6. Save all recovery and SD-arbiter lines. Do not accept a boot loop, watchdog,
@@ -44,6 +45,30 @@ Direct source build/upload:
 pio run -e m5stack-cardputer-adv
 pio run -e m5stack-cardputer-adv -t upload --upload-port /dev/ttyACM0
 ```
+
+## 1a. Dual-role selector and recovery
+
+Before testing instrument behavior, preserve the initial Normal boot log and
+run:
+
+```bash
+python tools/ministudio_cli.py --port /dev/ttyACM0 boot-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode host
+```
+
+Confirm the response is flushed before USB disconnects, the Cardputer reboots
+into USB Host, and the startup screen still appears before host-stack
+initialization. Press `Tab` to return to Normal. Repeat twenty complete round
+trips and require the displayed role and actual USB enumeration to agree every
+time without reflashing.
+
+While each recorder type is active, confirm `boot normal|host` returns
+`boot_recording_busy` and the take remains valid. On a disposable test setup,
+cut power ten times during role-selection/reboot timing; every restart must boot
+one valid role and retain access to the startup selector. Also flash each
+standalone image once and verify it continues to start while correctly refusing
+dual-role switching when the other valid labelled slot is absent or the build
+is deliberately in the recovery slot.
 
 ## 2. Inherited-function regression
 
@@ -222,16 +247,16 @@ queue growth, reboot, or render stall. Record malformed/dropped packet counters.
 Before connecting anything, document the OTG adapter and safe VBUS/powered-hub
 arrangement. Never connect two powered hosts together.
 
-Flash:
+Select USB Host from the common startup screen (`Tab`) or from Normal mode:
 
 ```bash
-esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha-usb-host.bin
+python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode host
 ```
 
 Test Yamaha, CYD, disconnect during traffic, twenty reconnects, a non-MIDI
 device, and 30 minutes of clock. This profile is input-only and lacks CDC, so
-use UI/audio behavior plus any available hardware debug path. Document how the
-normal image is restored.
+use UI/audio behavior plus any available hardware debug path. Return to Normal
+with `Tab` on its startup screen and verify the computer enumerates CDC+MIDI.
 
 ## 11. Built-in full duplex
 
