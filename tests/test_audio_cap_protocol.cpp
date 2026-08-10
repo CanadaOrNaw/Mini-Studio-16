@@ -27,13 +27,6 @@ int main() {
 
     audioCapPacketInit(packet, 7, AUDIO_CAP_PCM_VALID, pcm, AUDIO_CAP_FRAMES + 40);
     assert(packet.frames == AUDIO_CAP_FRAMES && audioCapPacketValidate(packet));
-    assert(audioCapSequenceFollows(0xFFFFFFFEu, 0xFFFFFFFFu));
-    assert(audioCapSequenceFollows(0xFFFFFFFFu, 0u));
-    assert(!audioCapSequenceFollows(4u, 6u));
-
-    audioCapPacketInit(packet, 8, AUDIO_CAP_PCM_VALID, pcm, 4,
-                       AUDIO_CAP_COMMAND_LINE_ENABLE);
-    assert(packet.status == AUDIO_CAP_COMMAND_LINE_ENABLE);
 
     std::cout << "audio_cap_protocol: layout, CRC and bounds passed\n";
     return 0;

@@ -9,10 +9,6 @@ controller, recorder, and MIDI firmware for the **M5Stack Cardputer-ADV**.
 
 **[Open the Mini Studio 16 project site →](https://canadaornaw.github.io/MiniStudio.github.io/)**
 
-**New builder? Start with [`START_HERE.md`](START_HERE.md).** It links the
-plain-language flashing, first-song, printing, recovery, and optional Audio Cap
-instructions in the order you need them.
-
 > **Pre-hardware validation alpha.** The complete software paths described
 > below are implemented and built in CI. They have not yet been flashed or
 > stress-tested on a physical Cardputer-ADV, so timing, audio quality, USB
@@ -56,7 +52,7 @@ first physical print/fit remains a hardware gate; see
 | Recording | Long master WAVs and optional five-bus master/synth1/synth2/synth3/drums stem containers on SD | Zero-drop 30-minute captures and power-cut cycles |
 | Control | Bounded `MS16/1` USB serial protocol, desktop CLI, JSON, monitor, discovery, fuzzing, and soak client | Device-side 10,000-command soak |
 | Existing Microgroove | Original `SynthVoice` DSP and workflow remain the default `MG/303` engine; three synth tracks, eight drum lanes, keyboard, short sampler/resampler gestures, speaker, mic, headphones, projects, and factory content retained; samples use adaptive RAM or transparent SD-stream fallback | Regression pass on hardware |
-| Expanded audio | Optional removable Audio Cap: Cardputer bridge, CRC/sequence telemetry, protected line-input architecture, Bluetooth Classic A2DP coprocessor firmware, pair/monitor CLI, deterministic base/lid STLs, code-defined reference PCB, controlled BOM, and CA/US/EU sourcing | First assembled cap: footprint review, electrical/audio/RF/thermal/latency tests and physical fit |
+| Expanded audio | Line input and conventional Bluetooth headphones/speakers | External codec/A2DP expansion hardware; unavailable from stock S3 firmware alone |
 
 The DAW is optional: songs can be captured to master WAV or exported as five
 stems without removing any inherited standalone workflow.
@@ -109,12 +105,6 @@ Build the alternate direct-controller USB-host image:
 
 ```bash
 pio run -e m5stack-cardputer-adv-usb-host
-```
-
-Build the optional original-ESP32 Audio Cap image:
-
-```bash
-pio run -e mini-studio-audio-cap
 ```
 
 Upload the normal image over USB:
@@ -179,25 +169,6 @@ pattern editing, project slots, and song controls remain available. See
 The engine architecture, algorithms, parameter units, and compatibility
 contract are documented in [`docs/SYNTHESIS.md`](docs/SYNTHESIS.md).
 
-## Optional line input and Bluetooth-audio cap
-
-The stock Cardputer-ADV remains the complete standalone instrument. The
-removable Rev-A cap adds 3.5 mm line input and conventional Bluetooth audio
-without cutting the Cardputer or removing any feature.
-
-- [`docs/AUDIO_CAP_BUILD.md`](docs/AUDIO_CAP_BUILD.md) — order, flash, assemble,
-  pair, and test
-- [`hardware/audio-cap/SOURCING.md`](hardware/audio-cap/SOURCING.md) — exact
-  MPNs and Canada/US/EU distributor links
-- [`hardware/audio-cap/BOM.csv`](hardware/audio-cap/BOM.csv) — controlled BOM
-- [`docs/PRINTING.md`](docs/PRINTING.md) — cap and cradle print settings
-- [`docs/AUDIO_CAP_DESIGN.md`](docs/AUDIO_CAP_DESIGN.md) — architecture and
-  honest evidence boundary
-
-Rev A is explicitly marked **NOT HARDWARE VERIFIED**. The software, PCB review
-source, enclosure, sourcing, and acceptance procedure are complete; only the
-first-article physical measurements remain.
-
 ## Remote control
 
 Install `pyserial` and use the checked-in CLI:
@@ -215,9 +186,6 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 --json midi-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 1 fm4
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.op2.ratio 200
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
-python tools/ministudio_cli.py --port /dev/ttyACM0 cap-status
-python tools/ministudio_cli.py --port /dev/ttyACM0 cap-pair
-python tools/ministudio_cli.py --port /dev/ttyACM0 cap-monitor 20
 python tools/ministudio_cli.py --port /dev/ttyACM0 boot-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode host
 python tools/hardware_smoke.py --port /dev/ttyACM0 --sd-test \

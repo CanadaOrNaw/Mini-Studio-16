@@ -37,7 +37,6 @@
 #include "usb_midi.h"
 #include "sd_io_arbiter.h"
 #include "boot_selector.h"
-#include "audio_cap.h"
 #include "ui.h"
 
 void inputInit();
@@ -118,7 +117,6 @@ void setup() {
     motionInit();
     bleMidiInit();
     usbMidiInit();
-    audioCapInit();
     loadDemoPattern();
 
     inputInit();

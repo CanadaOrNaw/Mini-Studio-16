@@ -21,8 +21,6 @@ ROOT = Path(__file__).resolve().parents[1]
 LAYOUT = ROOT / "hardware" / "button-layout.json"
 SVG = ROOT / "hardware" / "mini-studio-16-button-layout.svg"
 STL = ROOT / "hardware" / "stl" / "mini-studio-16-bench-cradle.stl"
-CAP_BASE_STL = ROOT / "hardware" / "audio-cap" / "stl" / "mini-studio-audio-cap-base.stl"
-CAP_LID_STL = ROOT / "hardware" / "audio-cap" / "stl" / "mini-studio-audio-cap-lid.stl"
 
 # Published Cardputer-ADV envelope plus a conservative unverified clearance.
 DEVICE_X_MM = 84.0
@@ -192,77 +190,9 @@ def cradle_triangles():
     return triangles
 
 
-def _voxel_triangles(xs, ys, zs, occupied):
-    cells = set()
-    for ix in range(len(xs) - 1):
-        for iy in range(len(ys) - 1):
-            for iz in range(len(zs) - 1):
-                center = ((xs[ix] + xs[ix + 1]) / 2,
-                          (ys[iy] + ys[iy + 1]) / 2,
-                          (zs[iz] + zs[iz + 1]) / 2)
-                if occupied(*center):
-                    cells.add((ix, iy, iz))
-    faces = [
-        ((-1,0,0), lambda a,b,c,d,e,f: [(a,c,e),(a,c,f),(a,d,f),(a,d,e)]),
-        ((1,0,0), lambda a,b,c,d,e,f: [(b,c,e),(b,d,e),(b,d,f),(b,c,f)]),
-        ((0,-1,0), lambda a,b,c,d,e,f: [(a,c,e),(b,c,e),(b,c,f),(a,c,f)]),
-        ((0,1,0), lambda a,b,c,d,e,f: [(a,d,e),(a,d,f),(b,d,f),(b,d,e)]),
-        ((0,0,-1), lambda a,b,c,d,e,f: [(a,c,e),(a,d,e),(b,d,e),(b,c,e)]),
-        ((0,0,1), lambda a,b,c,d,e,f: [(a,c,f),(b,c,f),(b,d,f),(a,d,f)]),
-    ]
-    triangles = []
-    for ix, iy, iz in sorted(cells):
-        bounds = (xs[ix], xs[ix + 1], ys[iy], ys[iy + 1], zs[iz], zs[iz + 1])
-        for (dx, dy, dz), vertices in faces:
-            if (ix + dx, iy + dy, iz + dz) in cells:
-                continue
-            q = vertices(*bounds)
-            triangles.extend(((q[0], q[1], q[2]), (q[0], q[2], q[3])))
-    return triangles
-
-
-def cap_base_triangles():
-    xs = [-42, -40, -36, -31, -24, -10, 10, 24, 31, 36, 40, 42]
-    ys = [-12, -10, -7, -5, 5, 7, 10, 12]
-    zs = [0, 2, 4, 6, 9, 11, 13]
-
-    def occupied(x, y, z):
-        ax, ay = abs(x), abs(y)
-        if z < 2:
-            # The 2x7 cap connector protrudes through this keyed floor opening.
-            return not (ax < 10 and y < -5)
-        wall = ax >= 40 or ay >= 10
-        # End openings are deliberately generous until actual jack/USB height
-        # is measured. The SCAD source carries the continuous nominal geometry.
-        port_opening = ax >= 40 and ay < 5 and z < 9
-        rails = z < 4 and ((24 < ax < 36 and ay < 7) or (ax < 10 and 5 < y < 7))
-        latch_shelf = 9 < z < 11 and ay >= 10 and ax < 31
-        return (wall and not port_opening) or rails or latch_shelf
-
-    return _voxel_triangles(xs, ys, zs, occupied)
-
-
-def cap_lid_triangles():
-    xs = [-42.4, -40.4, -31, 31, 40.4, 42.4]
-    ys = [-12.4, -10.4, -8.8, 8.8, 10.4, 12.4]
-    zs = [0, 1.4, 3.0, 5.0]
-
-    def occupied(x, y, z):
-        ax, ay = abs(x), abs(y)
-        top = z >= 3.0
-        skirt = z < 3.0 and (ax >= 40.4 or ay >= 10.4)
-        # Two compliant internal catches; PETG flexes the long skirt to release.
-        catch = z < 1.4 and ay > 8.8 and ax < 31
-        return top or skirt or catch
-
-    return _voxel_triangles(xs, ys, zs, occupied)
-
-
-def render_binary_stl(triangles=None, title=None) -> bytes:
-    if triangles is None:
-        triangles = cradle_triangles()
-    if title is None:
-        title = b"Mini Studio 16 bench cradle; original pre-hardware fit prototype"
+def render_binary_stl() -> bytes:
+    triangles = cradle_triangles()
+    title = b"Mini Studio 16 bench cradle; original pre-hardware fit prototype"
     output = bytearray(title.ljust(80, b"\0")[:80])
     output.extend(struct.pack("<I", len(triangles)))
     for triangle in triangles:
@@ -293,18 +223,6 @@ def main() -> int:
         raise SystemExit("button layout must contain exactly 4 rows of 14 keys")
     _write_or_check(SVG, render_svg(layout), args.check)
     _write_or_check(STL, render_binary_stl(), args.check)
-    _write_or_check(
-        CAP_BASE_STL,
-        render_binary_stl(cap_base_triangles(),
-                          b"Mini Studio Audio Cap Rev A base; NOT HARDWARE VERIFIED"),
-        args.check,
-    )
-    _write_or_check(
-        CAP_LID_STL,
-        render_binary_stl(cap_lid_triangles(),
-                          b"Mini Studio Audio Cap Rev A snap lid; NOT HARDWARE VERIFIED"),
-        args.check,
-    )
     return 0
 
 

@@ -8,11 +8,6 @@ The fork now has its own reproducible physical assets:
 | [`button-layout.json`](button-layout.json) | Canonical key and website-context data | Host-tested source of truth |
 | [`stl/mini-studio-16-bench-cradle.stl`](stl/mini-studio-16-bench-cradle.stl) | Original open Cardputer-ADV cradle | Watertight and dimension-validated; physical fit pending |
 | [`cad/mini-studio-16-bench-cradle.scad`](cad/mini-studio-16-bench-cradle.scad) | Editable OpenSCAD source | Parameters documented below |
-| [`audio-cap/stl/mini-studio-audio-cap-base.stl`](audio-cap/stl/mini-studio-audio-cap-base.stl) | Optional cap lower shell | Watertight 84 × 24 × 13 mm Rev-A prototype |
-| [`audio-cap/stl/mini-studio-audio-cap-lid.stl`](audio-cap/stl/mini-studio-audio-cap-lid.stl) | Compliant snap lid | Watertight PETG prototype; fatigue pending |
-| [`audio-cap/cad/mini-studio-audio-cap.scad`](audio-cap/cad/mini-studio-audio-cap.scad) | Editable two-part cap source | Ports, header opening and RF zone documented |
-| [`audio-cap/BOM.csv`](audio-cap/BOM.csv) | Controlled procurement list | Exact MPNs and substitution rules |
-| [`audio-cap/pcb/`](audio-cap/pcb/) | Code-defined PCB/schematic review source | Deterministic review artifacts; first-article footprint sign-off pending |
 
 The previous `microgroove_labels_v6_preview.png` remains solely as inherited
 historical reference. It predates Mini Studio pages and is not the current
@@ -33,7 +28,7 @@ mechanical references. No M5Stack mesh and no MakerWorld mesh is included.
 | Base | 2.0 mm ventilated frame |
 | Port strategy | Open side/end centers; corner-only guides |
 
-The generated cradle STL has 336 triangles. Automated tests require every edge
+The generated binary STL has 336 triangles. Automated tests require every edge
 to have exactly two incident triangles and enforce bounds of 88 × 58 × 6 mm.
 That proves a closed printable mesh; it does **not** prove fit, shrinkage,
 warping, connector access, comfort, or drop retention.
@@ -66,12 +61,6 @@ The Python generator uses only the standard library so CI does not depend on a
 particular CAD package. OpenSCAD source is provided for human editing; when a
 dimension changes, update both parameter sets and let `--check` prevent stale
 exports.
-
-The optional cap uses the same deterministic mesh path and adds separate
-base/lid watertightness and exact-envelope tests. See
-[`docs/PRINTING.md`](../docs/PRINTING.md) and
-[`docs/AUDIO_CAP_BUILD.md`](../docs/AUDIO_CAP_BUILD.md); do not infer a physical
-fit pass from a valid STL.
 
 ## References and licenses
 

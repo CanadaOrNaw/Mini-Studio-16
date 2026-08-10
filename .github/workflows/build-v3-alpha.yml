@@ -25,19 +25,6 @@ jobs:
           SANITIZER_SET: address,undefined
         run: bash ./tests/run_sanitizers.sh
 
-  audio-cap-assets:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: hardware/audio-cap/pcb/package-lock.json
-      - name: Verify code-defined PCB review artifacts
-        working-directory: hardware/audio-cap/pcb
-        run: npm ci && npm run check
-
   firmware:
     runs-on: ubuntu-latest
     steps:
@@ -48,11 +35,7 @@ jobs:
       - name: Install build tools
         run: python -m pip install "platformio==6.1.19" "esptool==4.8.1"
       - name: Build firmware
-        run: >-
-          pio run
-          -e m5stack-cardputer-adv
-          -e m5stack-cardputer-adv-usb-host
-          -e mini-studio-audio-cap
+        run: pio run -e m5stack-cardputer-adv -e m5stack-cardputer-adv-usb-host
       - name: Enforce firmware resource budget
         run: >-
           python tools/check_firmware_size.py
@@ -72,10 +55,6 @@ jobs:
             --build-dir .pio/build/m5stack-cardputer-adv-usb-host \
             --output .pio/build/m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin
           python tools/merge_dual_firmware.py
-          python tools/merge_firmware.py \
-            --build-dir .pio/build/mini-studio-audio-cap \
-            --output .pio/build/mini-studio-audio-cap/mini-studio-audio-cap-rev-a.bin \
-            --chip esp32 --flash-size 4MB --flash-freq 40m
       - name: Create artifact manifest
         run: |
           python tools/package_sd.py \
@@ -94,9 +73,6 @@ jobs:
             m5stack-cardputer-adv-usb-host/firmware.bin \
             m5stack-cardputer-adv-usb-host/firmware.elf \
             m5stack-cardputer-adv-usb-host/size-report.json \
-            mini-studio-audio-cap/mini-studio-audio-cap-rev-a.bin \
-            mini-studio-audio-cap/firmware.bin \
-            mini-studio-audio-cap/firmware.elf \
             mini-studio-16-dual-role.bin \
             dual-image-layout.json \
             partitions_dual.csv \
@@ -125,9 +101,6 @@ jobs:
             .pio/build/m5stack-cardputer-adv-usb-host/firmware.bin
             .pio/build/m5stack-cardputer-adv-usb-host/firmware.elf
             .pio/build/m5stack-cardputer-adv-usb-host/size-report.json
-            .pio/build/mini-studio-audio-cap/mini-studio-audio-cap-rev-a.bin
-            .pio/build/mini-studio-audio-cap/firmware.bin
-            .pio/build/mini-studio-audio-cap/firmware.elf
             .pio/build/mini-studio-16-dual-role.bin
             .pio/build/dual-image-layout.json
             .pio/build/partitions_dual.csv

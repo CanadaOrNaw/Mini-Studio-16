@@ -22,14 +22,6 @@ ASSETS = [
     (ROOT / "hardware" / "button-layout.json", Path("downloads/button-layout.json")),
     (ROOT / "hardware" / "stl" / "mini-studio-16-bench-cradle.stl", Path("downloads/mini-studio-16-bench-cradle.stl")),
     (ROOT / "hardware" / "cad" / "mini-studio-16-bench-cradle.scad", Path("downloads/mini-studio-16-bench-cradle.scad")),
-    (ROOT / "hardware" / "audio-cap" / "stl" / "mini-studio-audio-cap-base.stl", Path("downloads/mini-studio-audio-cap-base.stl")),
-    (ROOT / "hardware" / "audio-cap" / "stl" / "mini-studio-audio-cap-lid.stl", Path("downloads/mini-studio-audio-cap-lid.stl")),
-    (ROOT / "hardware" / "audio-cap" / "cad" / "mini-studio-audio-cap.scad", Path("downloads/mini-studio-audio-cap.scad")),
-    (ROOT / "hardware" / "audio-cap" / "BOM.csv", Path("downloads/mini-studio-audio-cap-bom.csv")),
-    (ROOT / "hardware" / "audio-cap" / "SOURCING.md", Path("downloads/audio-cap-sourcing.md")),
-    (ROOT / "hardware" / "audio-cap" / "pcb" / "generated" / "audio-cap-pcb.svg", Path("downloads/audio-cap-pcb-reference.svg")),
-    (ROOT / "START_HERE.md", Path("downloads/START_HERE.md")),
-    (ROOT / "docs" / "AUDIO_CAP_BUILD.md", Path("downloads/AUDIO_CAP_BUILD.md")),
 ]
 
 

@@ -13,13 +13,14 @@ Official references:
 - [Espressif original ESP32 A2DP API](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/bluetooth/esp_a2dp.html)
 - [ESP32-S3 I2S/full-duplex driver documentation](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/i2s.html)
 
-## Frozen Rev-A Audio Cap boundary
+## Proposed Audio Cap boundary
 
-The checked-in Rev-A package uses:
+Use a Cardputer-ADV Cap-Bus board containing:
 
-- PCM1808PWR line-input ADC with input protection, biasing, antialiasing, and
-  exact 44.1 kHz clocking;
-- ESP32-WROOM-32E-N4 Bluetooth Classic coprocessor providing A2DP source;
+- an external line-input ADC/codec with input protection, biasing, antialiasing,
+  and gain control;
+- a Bluetooth Classic-capable coprocessor (original ESP32 or a purpose-built
+  certified audio module) providing A2DP source, and optionally A2DP sink;
 - local buffering/clock-domain conversion between the codec/Bluetooth side and
   the Cardputer's 22.05 kHz mono engine;
 - correct level shifting, reset, power filtering, ESD protection, and jack
@@ -81,11 +82,11 @@ path as other long inputs. Neither direction may block the audio renderer:
 - input monitoring has a user-controlled level and defaults off to prevent
   feedback.
 
-## Hardware-dependent measurements
+## Hardware-dependent decisions
 
 These cannot be responsibly fixed without the actual parts/prototype:
 
-- analogue level, noise, protection and first-article footprint confirmation;
+- codec/module choice and availability;
 - analog input impedance, maximum level, gain, noise, and protection;
 - A2DP codec/latency behavior and certification constraints;
 - power draw from 5 V, battery impact, regulator temperature, and RF layout;
@@ -104,7 +105,6 @@ These cannot be responsibly fixed without the actual parts/prototype:
 - A power fault/reset on the cap cannot crash, back-power, or corrupt the
   Cardputer/SD card.
 
-The packet contract, both firmware sides, fixed DSP conversion, code-defined
-reference PCB, BOM/sourcing, enclosure, and acceptance procedure are checked
-in. First-article electrical/audio/RF/fit measurements are now the remaining
-expansion gate rather than an undefined component or software decision.
+The packet contract and firmware-side architecture are ready; electrical/codec
+selection and the production driver are now legitimately gated by expansion
+hardware rather than SD capacity or an undefined interface.
