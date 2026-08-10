@@ -17,6 +17,7 @@ portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 AudioCapSnapshot s_snapshot = {};
 volatile uint16_t s_pendingCommands = 0;
 volatile uint8_t s_monitorPercent = 0;
+volatile bool s_detected = false;
 
 int16_t mixPcm(int16_t dry, int16_t input, uint8_t percent) {
     int32_t mixed = static_cast<int32_t>(dry) +
@@ -33,7 +34,11 @@ void capTask(void*) {
     while (true) {
         const uint32_t now = micros();
         const bool requested = digitalRead(AUDIO_CAP_IRQ_PIN) != 0;
-        if (!requested && now - lastTransferUs < 4500u) {
+        const bool active = __atomic_load_n(&s_detected, __ATOMIC_ACQUIRE);
+        // An absent optional cap must cost almost nothing. Poll twice per
+        // second until its IRQ appears, then service the 5.8 ms audio cadence.
+        const uint32_t intervalUs = active ? 4500u : 500000u;
+        if (!requested && now - lastTransferUs < intervalUs) {
             vTaskDelay(1);
             continue;
         }
@@ -52,8 +57,10 @@ void capTask(void*) {
         const AudioCapBridgeStats stats = s_bridge.stats();
         portENTER_CRITICAL(&s_mux);
         ++s_snapshot.transfers;
-        s_snapshot.detected = accepted &&
+        const bool detected = accepted &&
             ((s_bridge.remoteStatus() & AUDIO_CAP_STATUS_READY) != 0);
+        s_snapshot.detected = detected;
+        __atomic_store_n(&s_detected, detected, __ATOMIC_RELEASE);
         s_snapshot.status = s_bridge.remoteStatus();
         s_snapshot.bluetoothConnected =
             (s_bridge.remoteStatus() & AUDIO_CAP_STATUS_BT_CONNECTED) != 0;
@@ -84,6 +91,7 @@ void audioCapInit() {
 
 void audioCapProcessAudioBlock(int16_t* master, size_t frames) {
     if (!master || frames == 0) return;
+    if (!__atomic_load_n(&s_detected, __ATOMIC_ACQUIRE)) return;
     const size_t pushed = s_bridge.pushPlayback22050(master, frames);
     if (pushed != frames) {
         portENTER_CRITICAL(&s_mux);

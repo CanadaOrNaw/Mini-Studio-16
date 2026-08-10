@@ -40,10 +40,20 @@ python -m pip install platformio==6.1.19 esptool==4.8.1
 pio run -e mini-studio-audio-cap
 ```
 
-Connect the cap's own USB-C port. Replace `YOUR_PORT`:
+The verified Actions artifact contains
+`mini-studio-audio-cap-rev-a.bin`. Flash that one-file image at offset zero:
 
 ```sh
 python -m esptool --chip esp32 --port YOUR_PORT erase_flash
+python -m esptool --chip esp32 --port YOUR_PORT --baud 460800 write_flash \
+  0x0 mini-studio-audio-cap-rev-a.bin
+```
+
+For a local developer build, the equivalent separate-file command is:
+
+Connect the cap's own USB-C port. Replace `YOUR_PORT`:
+
+```sh
 python -m esptool --chip esp32 --port YOUR_PORT --baud 460800 write_flash \
   0x1000 .pio/build/mini-studio-audio-cap/bootloader.bin \
   0x8000 .pio/build/mini-studio-audio-cap/partitions.bin \
