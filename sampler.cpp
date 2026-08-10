@@ -4,6 +4,7 @@
 #include "sampler.h"
 #include "master_recorder.h"
 #include "stem_recorder.h"
+#include "sd_io_arbiter.h"
 #include <SD.h>
 #include <string.h>
 #include <stdio.h>
@@ -27,6 +28,7 @@ bool samplerInit() {
     g_poolCapacity = bytes / sizeof(int16_t);
     samplerClearAll();
 
+    SdIoGuard guard;
     if (!SD.exists(DIR_ROOT))       SD.mkdir(DIR_ROOT);
     if (!SD.exists(DIR_SAMPLES))    SD.mkdir(DIR_SAMPLES);
     if (!SD.exists(DIR_WAVETABLES)) SD.mkdir(DIR_WAVETABLES);
@@ -49,46 +51,45 @@ int samplerFindByName(const char* filename) {
 
 // ---------- WAV parsing ----------
 static uint32_t rdU32(File& f) {
-    uint8_t b[4]; f.read(b, 4);
+    uint8_t b[4]; { SdIoGuard guard; f.read(b, 4); }
     return (uint32_t)b[0] | ((uint32_t)b[1] << 8) | ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24);
 }
 static uint16_t rdU16(File& f) {
-    uint8_t b[2]; f.read(b, 2);
+    uint8_t b[2]; { SdIoGuard guard; f.read(b, 2); }
     return (uint16_t)b[0] | ((uint16_t)b[1] << 8);
 }
 
 bool wavDecodeToMono16(File& f, int16_t* dst, uint32_t maxFrames,
                        uint32_t& outFrames, uint32_t& outRate) {
-    f.seek(0);
+    { SdIoGuard guard; f.seek(0); }
     char id[5] = {0};
 
-    f.read((uint8_t*)id, 4);
+    { SdIoGuard guard; f.read((uint8_t*)id, 4); }
     if (strncmp(id, "RIFF", 4) != 0) return false;
     rdU32(f);                              // riff size
-    f.read((uint8_t*)id, 4);
+    { SdIoGuard guard; f.read((uint8_t*)id, 4); }
     if (strncmp(id, "WAVE", 4) != 0) return false;
 
     uint16_t fmt = 0, channels = 0, bits = 0;
     uint32_t rate = 0, dataSize = 0, dataPos = 0;
 
     // walk chunks
-    while (f.available() >= 8) {
-        f.read((uint8_t*)id, 4);
+    while ([&f]() { SdIoGuard guard; return f.available(); }() >= 8) {
+        { SdIoGuard guard; f.read((uint8_t*)id, 4); }
         uint32_t sz = rdU32(f);
         if (strncmp(id, "fmt ", 4) == 0) {
-            uint32_t start = f.position();
+            uint32_t start = [&f]() { SdIoGuard guard; return f.position(); }();
             fmt      = rdU16(f);
             channels = rdU16(f);
             rate     = rdU32(f);
             rdU32(f); rdU16(f);            // byte rate, block align
             bits     = rdU16(f);
-            f.seek(start + sz);
+            { SdIoGuard guard; f.seek(start + sz); }
         } else if (strncmp(id, "data", 4) == 0) {
             dataSize = sz;
-            dataPos  = f.position();
-            f.seek(f.position() + sz);
+            { SdIoGuard guard; dataPos = f.position(); f.seek(f.position() + sz); }
         } else {
-            f.seek(f.position() + sz + (sz & 1));
+            { SdIoGuard guard; f.seek(f.position() + sz + (sz & 1)); }
         }
     }
 
@@ -100,7 +101,7 @@ bool wavDecodeToMono16(File& f, int16_t* dst, uint32_t maxFrames,
     uint32_t frames = dataSize / bytesPerFrame;
     if (frames > maxFrames) frames = maxFrames;
 
-    f.seek(dataPos);
+    { SdIoGuard guard; f.seek(dataPos); }
     static uint8_t chunk[512];
     uint32_t framesPerChunk = sizeof(chunk) / bytesPerFrame;
     uint32_t done = 0;
@@ -108,7 +109,8 @@ bool wavDecodeToMono16(File& f, int16_t* dst, uint32_t maxFrames,
     while (done < frames) {
         uint32_t n = frames - done;
         if (n > framesPerChunk) n = framesPerChunk;
-        int got = f.read(chunk, n * bytesPerFrame);
+        int got = 0;
+        { SdIoGuard guard; got = f.read(chunk, n * bytesPerFrame); }
         if (got <= 0) break;
         uint32_t gotFrames = (uint32_t)got / bytesPerFrame;
 
@@ -140,13 +142,14 @@ int samplerLoad(const char* filename) {
 
     char path[80];
     snprintf(path, sizeof(path), "%s/%s", DIR_SAMPLES, filename);
-    File f = SD.open(path, FILE_READ);
+    File f;
+    { SdIoGuard guard; f = SD.open(path, FILE_READ); }
     if (!f) return -1;
 
     uint32_t freeFrames = g_poolCapacity - g_poolUsed;
     uint32_t frames = 0, rate = 0;
     bool ok = wavDecodeToMono16(f, g_samplePool + g_poolUsed, freeFrames, frames, rate);
-    f.close();
+    { SdIoGuard guard; f.close(); }
     if (!ok || frames == 0) return -1;
 
     SampleInfo& s = g_samples[g_numSamples];

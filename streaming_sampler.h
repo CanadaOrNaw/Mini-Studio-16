@@ -53,5 +53,6 @@ bool streamingSamplerStopRecord();
 void streamingSamplerCaptureBusFrame(int16_t frame);
 void streamingSamplerStopAll();
 bool streamingSamplerBusy();
+bool streamingSamplerIsRecording();
 StreamingSamplerSnapshot streamingSamplerSnapshot();
 const char* sampleStreamStateName(SampleStreamState state);

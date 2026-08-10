@@ -13,6 +13,8 @@
 #include "motion.h"
 #include "ble_midi.h"
 #include "usb_midi.h"
+#include "mic_sampler.h"
+#include "sd_io_arbiter.h"
 
 #include <Arduino.h>
 #include <string.h>
@@ -34,11 +36,13 @@ void dispatch(const ControlRequest& request) {
         case CONTROL_STATUS: {
             const MasterRecorderSnapshot recorder = masterRecorderSnapshot();
             const StemRecorderSnapshot stems = stemRecorderSnapshot();
+            const SdIoSnapshot sdIo = sdIoSnapshot();
             Serial.printf(
                 CONTROL_PROTOCOL_PREFIX " %s OK playing=%u bpm=%u pattern=%u step=%u "
                 "song=%u master=%s frames=%lu dropped=%lu path=%s midiDropped=%lu "
                 "recoveredFrames=%lu recoveredPath=%s stems=%s stemFrames=%lu "
-                "stemDropped=%lu stemPath=%s\n",
+                "stemDropped=%lu stemPath=%s sdWaitMax=%lu sdHoldMax=%lu "
+                "sdContention=%lu\n",
                 request.id, g_playing ? 1u : 0u, static_cast<unsigned>(g_bpm),
                 static_cast<unsigned>(g_playPattern + 1),
                 static_cast<unsigned>(g_playStep + 1), g_songMode ? 1u : 0u,
@@ -52,7 +56,10 @@ void dispatch(const ControlRequest& request) {
                 stemRecorderStateName(stems.state),
                 static_cast<unsigned long>(stems.framesWritten),
                 static_cast<unsigned long>(stems.droppedFrames),
-                stems.path[0] ? stems.path : "-");
+                stems.path[0] ? stems.path : "-",
+                static_cast<unsigned long>(sdIo.maxWaitUs),
+                static_cast<unsigned long>(sdIo.maxHoldUs),
+                static_cast<unsigned long>(sdIo.contentions));
             break;
         }
 
@@ -201,7 +208,8 @@ void dispatch(const ControlRequest& request) {
             const StreamingSamplerSnapshot sampler = streamingSamplerSnapshot();
             Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK available=%u quota=%lu "
                           "remaining=%lu queued=%lu drops=%lu starts=%lu errors=%lu "
-                          "maxRead=%lu",
+                          "maxRead=%lu record=%u,input=%u,slot=%u,frames=%lu,target=%lu,"
+                          "dropped=%lu",
                           request.id, sampler.available ? 1u : 0u,
                           static_cast<unsigned long>(g_samplerSlotBank.quotaUsedFrames()),
                           static_cast<unsigned long>(g_samplerSlotBank.quotaRemainingFrames()),
@@ -209,7 +217,13 @@ void dispatch(const ControlRequest& request) {
                           static_cast<unsigned long>(sampler.commandDrops),
                           static_cast<unsigned long>(sampler.starts),
                           static_cast<unsigned long>(sampler.errors),
-                          static_cast<unsigned long>(sampler.maxReadUs));
+                          static_cast<unsigned long>(sampler.maxReadUs),
+                          static_cast<unsigned>(sampler.recordState),
+                          static_cast<unsigned>(sampler.recordInput),
+                          static_cast<unsigned>(sampler.recordSlot + 1u),
+                          static_cast<unsigned long>(sampler.recordFrames),
+                          static_cast<unsigned long>(sampler.recordTargetFrames),
+                          static_cast<unsigned long>(sampler.recordDroppedFrames));
             for (uint8_t voice = 0; voice < STREAMING_SAMPLE_VOICES; ++voice) {
                 const SampleStreamVoiceSnapshot& item = sampler.voices[voice];
                 Serial.printf(" v%u=%s,%u,%lu,%lu,%lu",
@@ -257,6 +271,41 @@ void dispatch(const ControlRequest& request) {
             else
                 replyError(request.id, "sample_clear_rejected");
             break;
+
+        case CONTROL_SAMPLE_RECORD: {
+            const uint8_t slot = static_cast<uint8_t>(request.arg1 - 1);
+            const SamplerSlotMode mode = static_cast<SamplerSlotMode>(request.arg3);
+            const bool started = request.arg2 == STREAM_SAMPLE_INPUT_MIC
+                ? micStreamRecStart(slot, mode)
+                : streamingSamplerBeginRecord(slot, mode, SAMPLE_RATE,
+                                              STREAM_SAMPLE_INPUT_BUS);
+            if (started)
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK sample=%u record=%s mode=%s\n", request.id,
+                              static_cast<unsigned>(request.arg1),
+                              request.arg2 == STREAM_SAMPLE_INPUT_MIC ? "mic" : "bus",
+                              mode == SAMPLER_SLOT_SLICED ? "sliced" : "melodic");
+            else replyError(request.id, "sample_record_rejected");
+            break;
+        }
+
+        case CONTROL_SAMPLE_STOP: {
+            const StreamingSamplerSnapshot sampler = streamingSamplerSnapshot();
+            bool stopped = false;
+            if (sampler.recordSlot == request.arg1 - 1u &&
+                sampler.recordInput == STREAM_SAMPLE_INPUT_MIC && micRecActive()) {
+                micRecStop();
+                stopped = true;
+            } else if (sampler.recordSlot == request.arg1 - 1u) {
+                stopped = streamingSamplerStopRecord();
+            }
+            if (stopped)
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK sample=%u state=stopping\n", request.id,
+                              static_cast<unsigned>(request.arg1));
+            else replyError(request.id, "sample_not_recording");
+            break;
+        }
 
         case CONTROL_EVENT_STATUS:
             Serial.printf(CONTROL_PROTOCOL_PREFIX

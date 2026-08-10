@@ -2,6 +2,7 @@
 #include "sampler_slots.h"
 #include "event_looper_core.h"
 #include "motion.h"
+#include "streaming_sampler.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -187,6 +188,20 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
             } else if (sameWord(action, "clear")) {
                 if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
                 request.command = CONTROL_SAMPLE_CLEAR;
+            } else if (sameWord(action, "record")) {
+                char* input = nextToken(cursor);
+                char* mode = nextToken(cursor);
+                if (!input || !mode || !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+                if (sameWord(input, "bus")) request.arg2 = STREAM_SAMPLE_INPUT_BUS;
+                else if (sameWord(input, "mic")) request.arg2 = STREAM_SAMPLE_INPUT_MIC;
+                else return CONTROL_PARSE_BAD_ARGUMENTS;
+                if (sameWord(mode, "melodic")) request.arg3 = SAMPLER_SLOT_MELODIC;
+                else if (sameWord(mode, "sliced")) request.arg3 = SAMPLER_SLOT_SLICED;
+                else return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.command = CONTROL_SAMPLE_RECORD;
+            } else if (sameWord(action, "stop")) {
+                if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.command = CONTROL_SAMPLE_STOP;
             } else {
                 return CONTROL_PARSE_BAD_ARGUMENTS;
             }

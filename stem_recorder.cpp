@@ -6,6 +6,8 @@
 #include "pcm_ring.h"
 #include "sd_diagnostics.h"
 #include "loop_engine.h"
+#include "sd_io_arbiter.h"
+#include "streaming_sampler.h"
 
 #include <Arduino.h>
 #include <SD.h>
@@ -42,6 +44,7 @@ void addError() {
 }
 
 bool selectPath(const char* prefix, const char* extension, char* output, size_t length) {
+    SdIoGuard guard;
     if (!SD.exists(DIR_ROOT) && !SD.mkdir(DIR_ROOT)) return false;
     if (!SD.exists(DIR_RECORDINGS) && !SD.mkdir(DIR_RECORDINGS)) return false;
     for (uint16_t number = 1; number <= 999; ++number) {
@@ -53,10 +56,12 @@ bool selectPath(const char* prefix, const char* extension, char* output, size_t 
 }
 
 void recoverInterruptedStems() {
-    if (!SD.exists(kTempPath)) return;
-    File file = SD.open(kTempPath, "r+");
+    { SdIoGuard guard; if (!SD.exists(kTempPath)) return; }
+    File file;
+    { SdIoGuard guard; file = SD.open(kTempPath, "r+"); }
     if (!file) { addError(); return; }
-    const uint32_t bytes = static_cast<uint32_t>(file.size());
+    const uint32_t bytes = [&file]() { SdIoGuard guard;
+        return static_cast<uint32_t>(file.size()); }();
     const uint32_t payload = bytes > STEM_FILE_HEADER_BYTES ? bytes - STEM_FILE_HEADER_BYTES : 0;
     const uint32_t frames = payload / sizeof(StemPcmFrame);
     const bool recoverable = frames > 0;
@@ -66,11 +71,11 @@ void recoverInterruptedStems() {
     if (ok && recoverable) {
         uint8_t header[STEM_FILE_HEADER_BYTES];
         stemBuildHeader(header, SAMPLE_RATE, frames);
+        SdIoGuard guard;
         ok = file.seek(0) && file.write(header, sizeof(header)) == sizeof(header);
         if (ok) file.flush();
     }
-    file.close();
-    if (ok) ok = SD.rename(kTempPath, recovered);
+    { SdIoGuard guard; file.close(); if (ok) ok = SD.rename(kTempPath, recovered); }
     if (!ok) addError();
     Serial.printf("STEM_RECOVERY state=%s path=%s frames=%lu trailing=%lu\n",
                   ok ? (recoverable ? "RECOVERED" : "QUARANTINED") : "FAILED",
@@ -83,8 +88,10 @@ void stemTask(void*) {
     uint8_t header[STEM_FILE_HEADER_BYTES];
     stemBuildHeader(header, SAMPLE_RATE, 0);
 
-    File file = SD.open(kTempPath, FILE_WRITE);
-    bool ok = file && file.write(header, sizeof(header)) == sizeof(header);
+    File file;
+    bool ok = false;
+    { SdIoGuard guard; file = SD.open(kTempPath, FILE_WRITE);
+      ok = file && file.write(header, sizeof(header)) == sizeof(header); }
     if (!ok) addError();
     if (ok && getState() == STEM_REC_STARTING) setState(STEM_REC_RECORDING);
 
@@ -93,7 +100,8 @@ void stemTask(void*) {
         if (available) {
             const size_t bytes = available * sizeof(StemPcmFrame);
             const uint32_t started = micros();
-            ok = file.write(reinterpret_cast<uint8_t*>(frames), bytes) == bytes;
+            { SdIoGuard guard;
+              ok = file.write(reinterpret_cast<uint8_t*>(frames), bytes) == bytes; }
             const uint32_t elapsed = micros() - started;
             portENTER_CRITICAL(&s_mux);
             if (ok) s_snapshot.framesWritten += static_cast<uint32_t>(available);
@@ -112,6 +120,7 @@ void stemTask(void*) {
         const StemRecorderSnapshot beforeFinalize = stemRecorderSnapshot();
         stemBuildHeader(header, SAMPLE_RATE, beforeFinalize.framesWritten);
         const uint32_t started = micros();
+        SdIoGuard guard;
         ok = file.seek(0) && file.write(header, sizeof(header)) == sizeof(header);
         if (ok) file.flush();
         const uint32_t elapsed = micros() - started;
@@ -120,11 +129,11 @@ void stemTask(void*) {
         if (!ok) ++s_snapshot.errors;
         portEXIT_CRITICAL(&s_mux);
     }
-    if (file) file.close();
+    if (file) { SdIoGuard guard; file.close(); }
 
     if (ok) {
         const StemRecorderSnapshot finalizing = stemRecorderSnapshot();
-        ok = SD.rename(kTempPath, finalizing.path);
+        { SdIoGuard guard; ok = SD.rename(kTempPath, finalizing.path); }
         if (!ok) addError();
     }
     setState(ok ? STEM_REC_COMPLETE : STEM_REC_ERROR);
@@ -161,7 +170,8 @@ void stemRecorderInit(bool sdMounted) {
 bool stemRecorderStart() {
     if (!s_sdMounted || stemRecorderIsBusy() || masterRecorderIsBusy() ||
         sdDiagnosticsIsRunning() || micRecActive() || loopEngineIsRecording() ||
-        SD.exists(kTempPath)) return false;
+        streamingSamplerIsRecording() ||
+        [&]() { SdIoGuard guard; return SD.exists(kTempPath); }()) return false;
     char path[64];
     if (!selectPath("STEM", "mss", path, sizeof(path))) return false;
     s_ring.reset();

@@ -13,6 +13,7 @@
 #include "event_looper.h"
 #include "motion.h"
 #include <SD.h>
+#include "sd_io_arbiter.h"
 #include <string.h>
 
 uint8_t g_curProject = 0;
@@ -157,20 +158,22 @@ static_assert(sizeof(ProjectFileV6) == 31816, "unexpected GBX v6 layout");
 static ProjectBuffer s_projectBuffer;
 
 static bool readProjectFile(const char* path, ProjectBuffer& loaded, uint16_t& version) {
-    File f = SD.open(path, FILE_READ);
+    File f;
+    { SdIoGuard guard; f = SD.open(path, FILE_READ); }
     if (!f) return false;
 
     uint8_t head[8];
-    if (f.read(head, sizeof(head)) != sizeof(head)) { f.close(); return false; }
+    { SdIoGuard guard;
+      if (f.read(head, sizeof(head)) != sizeof(head)) { f.close(); return false; } }
     uint32_t magic;
     memcpy(&magic, head, sizeof(magic));
     memcpy(&version, head + sizeof(magic), sizeof(version));
     if (magic != GBX_MAGIC || (version < 1 || version > GBX_VERSION)) {
-        f.close();
+        { SdIoGuard guard; f.close(); }
         return false;
     }
 
-    f.seek(0);
+    { SdIoGuard guard; f.seek(0); }
     void* destination = version == 1 ? static_cast<void*>(&loaded.v1) :
                         version == 2 ? static_cast<void*>(&loaded.v2) :
                         version == 3 ? static_cast<void*>(&loaded.v3) :
@@ -182,8 +185,10 @@ static bool readProjectFile(const char* path, ProjectBuffer& loaded, uint16_t& v
                             version == 3 ? sizeof(loaded.v3) :
                             version == 4 ? sizeof(loaded.v4) :
                             version == 5 ? sizeof(loaded.v5) : sizeof(loaded.v6);
-    const size_t got = f.read(static_cast<uint8_t*>(destination), expected);
-    f.close();
+    size_t got = 0;
+    { SdIoGuard guard;
+      got = f.read(static_cast<uint8_t*>(destination), expected);
+      f.close(); }
     return got == expected;
 }
 
@@ -195,10 +200,10 @@ bool storageProjectExists(uint8_t slot) {
     if (masterRecorderIsBusy() || stemRecorderIsBusy() || loopEngineIsRecording() ||
         streamingSamplerBusy()) return false;
     char path[64]; slotPath(slot, path, sizeof(path));
-    if (SD.exists(path)) return true;
+    { SdIoGuard guard; if (SD.exists(path)) return true; }
     char backupPath[72];
     snprintf(backupPath, sizeof(backupPath), "%s.bak", path);
-    return SD.exists(backupPath);
+    { SdIoGuard guard; return SD.exists(backupPath); }
 }
 
 bool storageSaveProject(uint8_t slot) {
@@ -296,22 +301,27 @@ bool storageSaveProject(uint8_t slot) {
     char tempPath[72], backupPath[72];
     snprintf(tempPath, sizeof(tempPath), "%s.tmp", path);
     snprintf(backupPath, sizeof(backupPath), "%s.bak", path);
-    SD.remove(tempPath);
-    File f = SD.open(tempPath, FILE_WRITE);
+    File f;
+    { SdIoGuard guard; SD.remove(tempPath); f = SD.open(tempPath, FILE_WRITE); }
     if (!f) return false;
-    size_t written = f.write((uint8_t*)&pf, sizeof(pf));
-    f.flush();
-    f.close();
-    if (written != sizeof(pf)) { SD.remove(tempPath); return false; }
+    size_t written = 0;
+    { SdIoGuard guard;
+      written = f.write((uint8_t*)&pf, sizeof(pf));
+      f.flush();
+      f.close(); }
+    if (written != sizeof(pf)) { SdIoGuard guard; SD.remove(tempPath); return false; }
 
-    SD.remove(backupPath);
-    if (SD.exists(path) && !SD.rename(path, backupPath)) {
-        SD.remove(tempPath);
-        return false;
-    }
-    if (!SD.rename(tempPath, path)) {
-        if (SD.exists(backupPath)) SD.rename(backupPath, path);
-        return false;
+    {
+        SdIoGuard guard;
+        SD.remove(backupPath);
+        if (SD.exists(path) && !SD.rename(path, backupPath)) {
+            SD.remove(tempPath);
+            return false;
+        }
+        if (!SD.rename(tempPath, path)) {
+            if (SD.exists(backupPath)) SD.rename(backupPath, path);
+            return false;
+        }
     }
     return true;
 }

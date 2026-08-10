@@ -10,6 +10,7 @@
 #include "loop_engine.h"
 #include "sd_diagnostics.h"
 #include "streaming_sampler.h"
+#include "sd_io_arbiter.h"
 #include <M5Cardputer.h>
 #include <SD.h>
 #include <esp_heap_caps.h>
@@ -56,8 +57,8 @@ static bool writeWav(const char* name, uint32_t start, uint32_t frames, uint32_t
     if (masterRecorderIsBusy() || stemRecorderIsBusy()) return false;
     char path[80];
     snprintf(path, sizeof(path), "%s/%s", DIR_SAMPLES, name);
-    SD.remove(path);
-    File f = SD.open(path, FILE_WRITE);
+    File f;
+    { SdIoGuard guard; SD.remove(path); f = SD.open(path, FILE_WRITE); }
     if (!f) return false;
     uint32_t dataBytes = frames * 2;
     uint8_t h[44] = {'R','I','F','F',0,0,0,0,'W','A','V','E','f','m','t',' ',
@@ -68,9 +69,11 @@ static bool writeWav(const char* name, uint32_t start, uint32_t frames, uint32_t
     memcpy(h + 24, &rate,  4);
     memcpy(h + 28, &brate, 4);
     memcpy(h + 40, &dataBytes, 4);
-    bool ok = f.write(h, 44) == 44 &&
-              f.write((uint8_t*)(g_scratch + start), dataBytes) == dataBytes;
-    f.close();
+    bool ok = false;
+    { SdIoGuard guard;
+      ok = f.write(h, 44) == 44 &&
+           f.write((uint8_t*)(g_scratch + start), dataBytes) == dataBytes;
+      f.close(); }
     return ok;
 }
 

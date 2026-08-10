@@ -4,6 +4,8 @@
 #include "master_recorder.h"
 #include "mic_sampler.h"
 #include "sd_diagnostics.h"
+#include "sd_io_arbiter.h"
+#include "streaming_sampler.h"
 #include "stem_recorder.h"
 #include "wav_file.h"
 
@@ -59,6 +61,7 @@ void noteError() {
 }
 
 bool ensureDirectories() {
+    SdIoGuard guard;
     return (SD.exists(DIR_ROOT) || SD.mkdir(DIR_ROOT)) &&
            (SD.exists(DIR_LOOPS) || SD.mkdir(DIR_LOOPS));
 }
@@ -66,6 +69,7 @@ bool ensureDirectories() {
 bool readCanonicalHeader(File& file, WavMono16Info& info) {
     uint8_t header[WAV_PCM_HEADER_BYTES];
     const uint32_t started = micros();
+    SdIoGuard guard;
     const bool ok = file.seek(0) && file.read(header, sizeof(header)) ==
                                       static_cast<int>(sizeof(header)) &&
                     wavParseCanonicalMono16Header(header, info) &&
@@ -76,8 +80,10 @@ bool readCanonicalHeader(File& file, WavMono16Info& info) {
 }
 
 void closePlayback(uint8_t track) {
-    if (track < LOOP_STREAM_TRACKS && s_playbackFiles[track])
+    if (track < LOOP_STREAM_TRACKS && s_playbackFiles[track]) {
+        SdIoGuard guard;
         s_playbackFiles[track].close();
+    }
 }
 
 bool openPlayback(uint8_t track, uint32_t requiredFrames) {
@@ -85,7 +91,7 @@ bool openPlayback(uint8_t track, uint32_t requiredFrames) {
     trackPath(track, path, sizeof(path));
     closePlayback(track);
     const uint32_t started = micros();
-    s_playbackFiles[track] = SD.open(path, FILE_READ);
+    { SdIoGuard guard; s_playbackFiles[track] = SD.open(path, FILE_READ); }
     noteLatency(false, micros() - started);
     if (!s_playbackFiles[track]) return false;
     WavMono16Info info = {};
@@ -106,13 +112,15 @@ bool refillTrack(uint8_t track) {
     while (filled < kReadFrames) {
         const size_t wantedBytes = (kReadFrames - filled) * sizeof(int16_t);
         const uint32_t started = micros();
-        const int got = s_playbackFiles[track].read(
-            reinterpret_cast<uint8_t*>(frames + filled), wantedBytes);
+        int got = 0;
+        { SdIoGuard guard; got = s_playbackFiles[track].read(
+            reinterpret_cast<uint8_t*>(frames + filled), wantedBytes); }
         noteLatency(false, micros() - started);
         if (got < 0 || (got & 1) != 0) return false;
         if (got == 0) {
             const uint32_t seekStarted = micros();
-            const bool seekOk = s_playbackFiles[track].seek(WAV_PCM_HEADER_BYTES);
+            bool seekOk = false;
+            { SdIoGuard guard; seekOk = s_playbackFiles[track].seek(WAV_PCM_HEADER_BYTES); }
             noteLatency(false, micros() - seekStarted);
             if (!seekOk) return false;
             continue;
@@ -139,6 +147,7 @@ void quarantineTemp(uint8_t track, const char* temp, bool recoverable,
         snprintf(candidate, sizeof(candidate), "%s/RECOVER_L%u_%03u.%s", DIR_LOOPS,
                  static_cast<unsigned>(track + 1), static_cast<unsigned>(number),
                  recoverable ? "wav" : "bad");
+        SdIoGuard guard;
         if (SD.exists(candidate)) continue;
         if (!SD.rename(temp, candidate)) noteError();
         else Serial.printf("LOOP_RECOVERY track=%u path=%s frames=%lu state=%s\n",
@@ -154,20 +163,22 @@ void recoverTemps() {
     for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
         char temp[64];
         tempPath(track, temp, sizeof(temp));
-        if (!SD.exists(temp)) continue;
-        File file = SD.open(temp, "r+");
+        File file;
+        { SdIoGuard guard; if (!SD.exists(temp)) continue; file = SD.open(temp, "r+"); }
         if (!file) { noteError(); continue; }
         const WavRecoveryPlan plan =
-            wavPlanMono16Recovery(static_cast<uint32_t>(file.size()));
+            wavPlanMono16Recovery([&file]() { SdIoGuard guard;
+                return static_cast<uint32_t>(file.size()); }());
         bool recoverable = plan.recoverable && plan.frames <= kMaximumLoopFrames;
         if (recoverable) {
             uint8_t header[WAV_PCM_HEADER_BYTES];
             wavBuildMono16Header(header, SAMPLE_RATE, plan.frames);
+            SdIoGuard guard;
             recoverable = file.seek(0) &&
                 file.write(header, sizeof(header)) == sizeof(header);
             if (recoverable) file.flush();
         }
-        file.close();
+        { SdIoGuard guard; file.close(); }
         quarantineTemp(track, temp, recoverable, plan.frames);
     }
 }
@@ -175,7 +186,8 @@ void recoverTemps() {
 void loadExistingLoops() {
     char path[64];
     trackPath(0, path, sizeof(path));
-    if (!SD.exists(path) || !openPlayback(0, 0)) return;
+    { SdIoGuard guard; if (!SD.exists(path)) return; }
+    if (!openPlayback(0, 0)) return;
     const uint32_t timeline = s_core.snapshot(0).lengthFrames;
     if (!s_core.establishTimeline(timeline) || !primeAndArm(0)) {
         s_core.markError(0);
@@ -184,7 +196,7 @@ void loadExistingLoops() {
     }
     for (uint8_t track = 1; track < LOOP_STREAM_TRACKS; ++track) {
         trackPath(track, path, sizeof(path));
-        if (!SD.exists(path)) continue;
+        { SdIoGuard guard; if (!SD.exists(path)) continue; }
         if (!openPlayback(track, timeline) || !primeAndArm(track)) {
             s_core.markError(track);
             noteError();
@@ -197,16 +209,20 @@ bool startRecording(uint8_t track) {
         !ensureDirectories()) return false;
     char temp[64];
     tempPath(track, temp, sizeof(temp));
-    if (SD.exists(temp)) return false;
+    { SdIoGuard guard; if (SD.exists(temp)) return false; }
     uint8_t header[WAV_PCM_HEADER_BYTES];
     wavBuildMono16Header(header, SAMPLE_RATE, 0);
     const uint32_t started = micros();
-    s_recordFile = SD.open(temp, FILE_WRITE);
-    bool ok = s_recordFile &&
-              s_recordFile.write(header, sizeof(header)) == sizeof(header);
+    bool ok = false;
+    {
+        SdIoGuard guard;
+        s_recordFile = SD.open(temp, FILE_WRITE);
+        ok = s_recordFile &&
+             s_recordFile.write(header, sizeof(header)) == sizeof(header);
+    }
     noteLatency(true, micros() - started);
     if (!ok) {
-        if (s_recordFile) s_recordFile.close();
+        if (s_recordFile) { SdIoGuard guard; s_recordFile.close(); }
         return false;
     }
     const uint32_t timeline = s_core.timelineFrames();
@@ -214,7 +230,7 @@ bool startRecording(uint8_t track) {
         FirmwareLoopCore::nextBoundary(s_core.absoluteFrame(), timeline, true);
     const uint32_t target = track == 0 ? kMaximumLoopFrames : timeline;
     if (!s_core.beginRecording(track, scheduled, target)) {
-        s_recordFile.close();
+        { SdIoGuard guard; s_recordFile.close(); }
         return false;
     }
     __atomic_store_n(&s_recordFileTrack, track, __ATOMIC_RELEASE);
@@ -228,7 +244,8 @@ bool writeRecordedFrames() {
     if (!count) return true;
     const size_t bytes = count * sizeof(int16_t);
     const uint32_t started = micros();
-    const bool ok = s_recordFile.write(reinterpret_cast<uint8_t*>(frames), bytes) == bytes;
+    bool ok = false;
+    { SdIoGuard guard; ok = s_recordFile.write(reinterpret_cast<uint8_t*>(frames), bytes) == bytes; }
     noteLatency(true, micros() - started);
     if (ok) s_recordFileFrames += static_cast<uint32_t>(count);
     return ok;
@@ -242,18 +259,24 @@ bool finalizeRecording(uint8_t track) {
     uint8_t header[WAV_PCM_HEADER_BYTES];
     wavBuildMono16Header(header, SAMPLE_RATE, s_recordFileFrames);
     const uint32_t started = micros();
-    ok = ok && s_recordFile.seek(0) &&
-         s_recordFile.write(header, sizeof(header)) == sizeof(header);
-    if (ok) s_recordFile.flush();
+    {
+        SdIoGuard guard;
+        ok = ok && s_recordFile.seek(0) &&
+             s_recordFile.write(header, sizeof(header)) == sizeof(header);
+        if (ok) s_recordFile.flush();
+        s_recordFile.close();
+    }
     noteLatency(true, micros() - started);
-    s_recordFile.close();
 
     char temp[64];
     char finalPath[64];
     tempPath(track, temp, sizeof(temp));
     trackPath(track, finalPath, sizeof(finalPath));
-    if (ok && SD.exists(finalPath)) ok = false;  // never destroy an existing loop
-    if (ok) ok = SD.rename(temp, finalPath);
+    {
+        SdIoGuard guard;
+        if (ok && SD.exists(finalPath)) ok = false;  // never destroy an existing loop
+        if (ok) ok = SD.rename(temp, finalPath);
+    }
     if (ok && track == 0) ok = s_core.establishTimeline(s_recordFileFrames);
     if (ok) ok = s_core.completeRecording(track, s_recordFileFrames) &&
                  openPlayback(track, s_recordFileFrames) && primeAndArm(track);
@@ -276,6 +299,7 @@ void processClearRequests() {
         if (!s_core.clearTrack(track)) { noteError(); continue; }
         char path[64];
         trackPath(track, path, sizeof(path));
+        SdIoGuard guard;
         if (SD.exists(path) && !SD.remove(path)) noteError();
     }
 }
@@ -307,7 +331,7 @@ void storageTask(void*) {
                 take.state == LOOP_STREAM_RECORDING)
                 s_core.requestStopRecording(track);
             if (!writeRecordedFrames()) {
-                s_recordFile.close();
+                { SdIoGuard guard; s_recordFile.close(); }
                 s_core.markError(track);
                 __atomic_store_n(&s_recordFileTrack, LOOP_NO_TRACK, __ATOMIC_RELEASE);
                 noteError();
@@ -320,7 +344,9 @@ void storageTask(void*) {
         for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
             LoopStreamState state = s_core.trackState(track);
             if (state == LOOP_STREAM_UNDERRUN) {
-                if (!s_core.prepareResync(track) || !s_playbackFiles[track].seek(WAV_PCM_HEADER_BYTES)) {
+                bool seekOk = false;
+                { SdIoGuard guard; seekOk = s_playbackFiles[track].seek(WAV_PCM_HEADER_BYTES); }
+                if (!s_core.prepareResync(track) || !seekOk) {
                     s_core.markError(track);
                     noteError();
                     continue;
@@ -364,7 +390,8 @@ int32_t loopEngineProcessFrame(int16_t dryInput) {
 bool loopEngineRequestRecord(uint8_t track) {
     if (!s_sdMounted || track >= LOOP_STREAM_TRACKS || loopEngineIsRecording() ||
         masterRecorderIsBusy() || stemRecorderIsBusy() || sdDiagnosticsIsRunning() ||
-        micRecActive() || __atomic_load_n(&s_recordRequests, __ATOMIC_ACQUIRE) != 0)
+        micRecActive() || streamingSamplerIsRecording() ||
+        __atomic_load_n(&s_recordRequests, __ATOMIC_ACQUIRE) != 0)
         return false;
     const LoopStreamState state = s_core.trackState(track);
     if (state != LOOP_STREAM_EMPTY && state != LOOP_STREAM_ERROR) return false;

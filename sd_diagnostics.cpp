@@ -4,6 +4,8 @@
 #include "master_recorder.h"
 #include "stem_recorder.h"
 #include "loop_engine.h"
+#include "streaming_sampler.h"
+#include "sd_io_arbiter.h"
 #include <Arduino.h>
 #include <SD.h>
 #include <esp_heap_caps.h>
@@ -82,19 +84,21 @@ bool writeFiles(const uint8_t* block) {
     for (uint8_t index = 0; index < kFiles; ++index) {
         char path[64];
         filePath(index, path, sizeof(path));
-        SD.remove(path);
+        { SdIoGuard guard; SD.remove(path); }
         const uint32_t openStart = micros();
-        File file = SD.open(path, FILE_WRITE);
+        File file;
+        { SdIoGuard guard; file = SD.open(path, FILE_WRITE); }
         noteLatency(true, micros() - openStart);
         if (!file) { addError(); return false; }
 
         for (size_t offset = 0; offset < kFileBytes; offset += kChunkBytes) {
             const uint32_t opStart = micros();
-            const size_t written = file.write(block, kChunkBytes);
+            size_t written = 0;
+            { SdIoGuard guard; written = file.write(block, kChunkBytes); }
             noteLatency(true, micros() - opStart);
             if (written != kChunkBytes) {
                 addError();
-                file.close();
+                { SdIoGuard guard; file.close(); }
                 return false;
             }
             totalBytes += written;
@@ -103,10 +107,10 @@ bool writeFiles(const uint8_t* block) {
         }
 
         const uint32_t flushStart = micros();
-        file.flush();
+        { SdIoGuard guard; file.flush(); }
         noteLatency(true, micros() - flushStart);
         const uint32_t closeStart = micros();
-        file.close();
+        { SdIoGuard guard; file.close(); }
         noteLatency(true, micros() - closeStart);
     }
 
@@ -122,7 +126,8 @@ bool sequentialRead(const uint8_t* expected, uint8_t* block) {
     char path[64];
     filePath(0, path, sizeof(path));
     const uint32_t openStart = micros();
-    File file = SD.open(path, FILE_READ);
+    File file;
+    { SdIoGuard guard; file = SD.open(path, FILE_READ); }
     noteLatency(false, micros() - openStart);
     if (!file) { addError(); return false; }
 
@@ -130,11 +135,12 @@ bool sequentialRead(const uint8_t* expected, uint8_t* block) {
     const uint32_t started = micros();
     while (totalBytes < kFileBytes) {
         const uint32_t opStart = micros();
-        const int got = file.read(block, kChunkBytes);
+        int got = 0;
+        { SdIoGuard guard; got = file.read(block, kChunkBytes); }
         noteLatency(false, micros() - opStart);
         if (got != static_cast<int>(kChunkBytes) || memcmp(block, expected, kChunkBytes) != 0) {
             addError();
-            file.close();
+            { SdIoGuard guard; file.close(); }
             return false;
         }
         totalBytes += static_cast<uint32_t>(got);
@@ -142,7 +148,7 @@ bool sequentialRead(const uint8_t* expected, uint8_t* block) {
         taskYIELD();
     }
     const uint32_t closeStart = micros();
-    file.close();
+    { SdIoGuard guard; file.close(); }
     noteLatency(false, micros() - closeStart);
 
     const uint32_t rate = throughputKBs(totalBytes, micros() - started);
@@ -160,12 +166,14 @@ bool roundRobinRead(const uint8_t* expected, uint8_t* block) {
         char path[64];
         filePath(index, path, sizeof(path));
         const uint32_t openStart = micros();
-        files[index] = SD.open(path, FILE_READ);
+        { SdIoGuard guard; files[index] = SD.open(path, FILE_READ); }
         noteLatency(false, micros() - openStart);
         remaining[index] = kFileBytes;
         if (!files[index]) {
             addError();
-            for (uint8_t closeIndex = 0; closeIndex <= index; ++closeIndex) files[closeIndex].close();
+            { SdIoGuard guard;
+              for (uint8_t closeIndex = 0; closeIndex <= index; ++closeIndex)
+                  files[closeIndex].close(); }
             return false;
         }
     }
@@ -180,11 +188,12 @@ bool roundRobinRead(const uint8_t* expected, uint8_t* block) {
             workLeft = true;
             const size_t requested = remaining[index] < kChunkBytes ? remaining[index] : kChunkBytes;
             const uint32_t opStart = micros();
-            const int got = files[index].read(block, requested);
+            int got = 0;
+            { SdIoGuard guard; got = files[index].read(block, requested); }
             noteLatency(false, micros() - opStart);
             if (got != static_cast<int>(requested) || memcmp(block, expected, requested) != 0) {
                 addError();
-                for (auto& file : files) file.close();
+                { SdIoGuard guard; for (auto& file : files) file.close(); }
                 return false;
             }
             remaining[index] -= static_cast<size_t>(got);
@@ -193,7 +202,7 @@ bool roundRobinRead(const uint8_t* expected, uint8_t* block) {
         }
         taskYIELD();
     }
-    for (auto& file : files) file.close();
+    { SdIoGuard guard; for (auto& file : files) file.close(); }
 
     const uint32_t rate = throughputKBs(totalBytes, micros() - started);
     portENTER_CRITICAL(&s_mux);
@@ -206,9 +215,9 @@ void cleanup() {
     for (uint8_t index = 0; index < kFiles; ++index) {
         char path[64];
         filePath(index, path, sizeof(path));
-        SD.remove(path);
+        { SdIoGuard guard; SD.remove(path); }
     }
-    SD.rmdir(kDiagDir);
+    { SdIoGuard guard; SD.rmdir(kDiagDir); }
 }
 
 void diagTask(void*) {
@@ -222,6 +231,7 @@ void diagTask(void*) {
     if (ok) {
         for (size_t i = 0; i < kChunkBytes; ++i)
             writeBlock[i] = static_cast<uint8_t>((i * 37u + 11u) & 0xFFu);
+        SdIoGuard guard;
         if (!SD.exists(DIR_ROOT)) SD.mkdir(DIR_ROOT);
         if (!SD.exists(kDiagDir) && !SD.mkdir(kDiagDir)) { addError(); ok = false; }
     }
@@ -279,7 +289,8 @@ void sdDiagnosticsInit(bool sdMounted) {
 
 bool sdDiagnosticsStart() {
     if (!s_sdMounted || sdDiagnosticsIsRunning() || masterRecorderIsBusy() ||
-        stemRecorderIsBusy() || loopEngineHasActiveIo()) return false;
+        stemRecorderIsBusy() || loopEngineHasActiveIo() || streamingSamplerBusy())
+        return false;
     portENTER_CRITICAL(&s_mux);
     resetSnapshot(SD_DIAG_RUNNING, "STARTING", 0);
     portEXIT_CRITICAL(&s_mux);

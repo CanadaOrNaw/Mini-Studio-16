@@ -126,7 +126,7 @@ g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   "$test_dir/../motion.cpp" \
   "$test_dir/../ble_midi.cpp" \
   "$test_dir/../usb_midi.cpp" "$test_dir/../midi_output.cpp" \
-  "$test_dir/../loop_engine.cpp"
+  "$test_dir/../loop_engine.cpp" "$test_dir/../sd_io_arbiter.cpp"
 
 echo "audio/sequencer/sampler: host syntax checks passed"
 

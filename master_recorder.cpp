@@ -8,6 +8,8 @@
 #include "wav_file.h"
 #include "stem_recorder.h"
 #include "loop_engine.h"
+#include "sd_io_arbiter.h"
+#include "streaming_sampler.h"
 
 #include <Arduino.h>
 #include <SD.h>
@@ -44,6 +46,7 @@ void noteWrite(size_t frames, uint32_t elapsedUs) {
 }
 
 bool selectAvailablePath(const char* prefix, const char* extension, char* output, size_t length) {
+    SdIoGuard guard;
     if (!SD.exists(DIR_ROOT) && !SD.mkdir(DIR_ROOT)) return false;
     if (!SD.exists(DIR_RECORDINGS) && !SD.mkdir(DIR_RECORDINGS)) return false;
 
@@ -62,18 +65,20 @@ bool selectAvailablePath(const char* prefix, const char* extension, char* output
 
 void failRecorder(File& file) {
     addError();
-    if (file) file.close();
+    if (file) { SdIoGuard guard; file.close(); }
     portENTER_CRITICAL(&s_mux);
     s_session.fail();
     portEXIT_CRITICAL(&s_mux);
 }
 
 void recoverInterruptedRecording() {
-    if (!SD.exists(kTempPath)) return;
+    { SdIoGuard guard; if (!SD.exists(kTempPath)) return; }
 
-    File file = SD.open(kTempPath, "r+");
+    File file;
+    { SdIoGuard guard; file = SD.open(kTempPath, "r+"); }
     if (!file) { addError(); return; }
-    const WavRecoveryPlan plan = wavPlanMono16Recovery(static_cast<uint32_t>(file.size()));
+    const WavRecoveryPlan plan = wavPlanMono16Recovery(
+        [&file]() { SdIoGuard guard; return static_cast<uint32_t>(file.size()); }());
     char recovered[64];
     const bool havePath = selectAvailablePath("RECOVER", plan.recoverable ? "wav" : "bad",
                                                recovered, sizeof(recovered));
@@ -81,11 +86,11 @@ void recoverInterruptedRecording() {
     if (ok && plan.recoverable) {
         uint8_t header[WAV_PCM_HEADER_BYTES];
         wavBuildMono16Header(header, SAMPLE_RATE, plan.frames);
+        SdIoGuard guard;
         ok = file.seek(0) && file.write(header, sizeof(header)) == sizeof(header);
         if (ok) file.flush();
     }
-    file.close();
-    if (ok) ok = SD.rename(kTempPath, recovered);
+    { SdIoGuard guard; file.close(); if (ok) ok = SD.rename(kTempPath, recovered); }
 
     portENTER_CRITICAL(&s_mux);
     if (ok && plan.recoverable) s_session.noteRecovery(recovered, plan.frames);
@@ -103,8 +108,11 @@ void recorderTask(void*) {
     uint8_t header[WAV_PCM_HEADER_BYTES];
     wavBuildMono16Header(header, SAMPLE_RATE, 0);
 
-    File file = SD.open(kTempPath, FILE_WRITE);
-    if (!file || file.write(header, sizeof(header)) != sizeof(header)) {
+    File file;
+    bool opened = false;
+    { SdIoGuard guard; file = SD.open(kTempPath, FILE_WRITE);
+      opened = file && file.write(header, sizeof(header)) == sizeof(header); }
+    if (!opened) {
         failRecorder(file);
     } else {
         portENTER_CRITICAL(&s_mux);
@@ -117,7 +125,10 @@ void recorderTask(void*) {
             if (available > 0) {
                 const uint32_t started = micros();
                 const size_t bytes = available * sizeof(int16_t);
-                if (file.write(reinterpret_cast<const uint8_t*>(block), bytes) != bytes) {
+                bool wrote = false;
+                { SdIoGuard guard; wrote = file.write(
+                    reinterpret_cast<const uint8_t*>(block), bytes) == bytes; }
+                if (!wrote) {
                     addError();
                     ok = false;
                     break;
@@ -138,14 +149,16 @@ void recorderTask(void*) {
             const MasterRecorderSnapshot beforeFinalize = masterRecorderSnapshot();
             wavBuildMono16Header(header, SAMPLE_RATE, beforeFinalize.framesWritten);
             const uint32_t started = micros();
+            SdIoGuard guard;
             ok = file.seek(0) && file.write(header, sizeof(header)) == sizeof(header);
             if (ok) file.flush();
             noteWrite(0, micros() - started);
         }
-        file.close();
+        { SdIoGuard guard; file.close(); }
 
         if (ok) {
             const MasterRecorderSnapshot finalizing = masterRecorderSnapshot();
+            SdIoGuard guard;
             if (!SD.rename(kTempPath, finalizing.path)) {
                 addError();
                 ok = false;
@@ -186,9 +199,10 @@ void masterRecorderInit(bool sdMounted) {
 
 bool masterRecorderStart() {
     if (!s_sdMounted || masterRecorderIsBusy() || stemRecorderIsBusy() ||
-        sdDiagnosticsIsRunning() || micRecActive() || loopEngineIsRecording())
+        sdDiagnosticsIsRunning() || micRecActive() || loopEngineIsRecording() ||
+        streamingSamplerIsRecording())
         return false;
-    if (SD.exists(kTempPath)) return false;
+    { SdIoGuard guard; if (SD.exists(kTempPath)) return false; }
     char path[64];
     if (!selectAvailablePath("MASTER", "wav", path, sizeof(path))) return false;
 

@@ -1,6 +1,7 @@
 #include "../control_protocol.h"
 #include "../sampler_slots.h"
 #include "../motion.h"
+#include "../streaming_sampler.h"
 
 #include <cassert>
 #include <cstring>
@@ -49,6 +50,11 @@ int main() {
     request = parseOk("MS16/1 13 sample 2 trigger 16");
     assert(request.command == CONTROL_SAMPLE_TRIGGER && request.arg1 == 2 &&
            request.arg2 == 16);
+    request = parseOk("MS16/1 rec1 sample 4 record bus sliced");
+    assert(request.command == CONTROL_SAMPLE_RECORD && request.arg1 == 4 &&
+           request.arg2 == STREAM_SAMPLE_INPUT_BUS && request.arg3 == SAMPLER_SLOT_SLICED);
+    request = parseOk("MS16/1 rec2 sample 4 stop");
+    assert(request.command == CONTROL_SAMPLE_STOP && request.arg1 == 4);
     request = parseOk("MS16/1 14 event status");
     assert(request.command == CONTROL_EVENT_STATUS);
     request = parseOk("MS16/1 15 event 5 bars 128");
@@ -78,6 +84,8 @@ int main() {
     assert(controlParseLine("MS16/1 1 sample 17 clear", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 sample 1 trigger 0", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 sample 1 assign x.wav stereo", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 sample 1 record aux melodic", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 sample 1 record mic stereo", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 event 6 arm", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 event 1 bars 129", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 motion 5 clear", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);

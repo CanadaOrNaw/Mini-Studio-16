@@ -33,6 +33,7 @@
 #include "motion.h"
 #include "ble_midi.h"
 #include "usb_midi.h"
+#include "sd_io_arbiter.h"
 #include "ui.h"
 
 void inputInit();
@@ -60,6 +61,7 @@ void setup() {
     // SD (Cardputer-ADV pinout)
     SPI.begin(SD_SPI_CLK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
     s_sdOk = SD.begin(SD_SPI_CS_PIN, SPI, 25000000);
+    sdIoInit();
     sdDiagnosticsInit(s_sdOk);
     masterRecorderInit(s_sdOk);
     stemRecorderInit(s_sdOk);

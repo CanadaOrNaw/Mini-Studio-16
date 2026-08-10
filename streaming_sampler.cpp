@@ -6,6 +6,7 @@
 #include "mic_sampler.h"
 #include "pcm_ring.h"
 #include "sd_diagnostics.h"
+#include "sd_io_arbiter.h"
 #include "stem_recorder.h"
 #include "wav_file.h"
 
@@ -110,13 +111,13 @@ bool selectRecordPath(uint8_t slot, char* path, size_t pathCapacity,
         snprintf(filename, filenameCapacity, "S%02u_%03u.wav",
                  static_cast<unsigned>(slot + 1u), static_cast<unsigned>(number));
         samplePath(filename, path, pathCapacity);
-        if (!SD.exists(path)) return true;
+        { SdIoGuard guard; if (!SD.exists(path)) return true; }
     }
     return false;
 }
 
 void resetRecordWorker() {
-    if (s_recordFile) s_recordFile.close();
+    if (s_recordFile) { SdIoGuard guard; s_recordFile.close(); }
     s_recordTempPath[0] = 0;
     s_recordFinalPath[0] = 0;
     s_recordFilename[0] = 0;
@@ -126,17 +127,23 @@ void resetRecordWorker() {
 }
 
 void failRecording(bool quarantine) {
-    if (s_recordFile) s_recordFile.close();
+    if (s_recordFile) { SdIoGuard guard; s_recordFile.close(); }
     bool quarantined = false;
-    if (quarantine && s_recordTempPath[0] && SD.exists(s_recordTempPath)) {
-        char badPath[96];
-        snprintf(badPath, sizeof(badPath), "%s/S%02u_DROPPED.bad", DIR_SAMPLES,
-                 static_cast<unsigned>(
-                     __atomic_load_n(&s_recordSlot, __ATOMIC_RELAXED) + 1u));
-        SD.remove(badPath);
-        quarantined = SD.rename(s_recordTempPath, badPath);
+    if (quarantine && s_recordTempPath[0]) {
+        SdIoGuard guard;
+        if (SD.exists(s_recordTempPath)) {
+            char badPath[96];
+            snprintf(badPath, sizeof(badPath), "%s/S%02u_DROPPED.bad", DIR_SAMPLES,
+                     static_cast<unsigned>(
+                         __atomic_load_n(&s_recordSlot, __ATOMIC_RELAXED) + 1u));
+            SD.remove(badPath);
+            quarantined = SD.rename(s_recordTempPath, badPath);
+        }
     }
-    if (!quarantined && s_recordTempPath[0]) SD.remove(s_recordTempPath);
+    if (!quarantined && s_recordTempPath[0]) {
+        SdIoGuard guard;
+        SD.remove(s_recordTempPath);
+    }
     noteError();
     setRecordState(STREAM_SAMPLE_REC_ERROR);
     __atomic_store_n(&s_recordInput, STREAM_SAMPLE_INPUT_NONE, __ATOMIC_RELEASE);
@@ -149,18 +156,25 @@ bool beginRecordWorker(const SamplerCommand& command) {
         return false;
     resetRecordWorker();
     recordTempPath(command.slot, s_recordTempPath, sizeof(s_recordTempPath));
-    if (SD.exists(s_recordTempPath) ||
-        !selectRecordPath(command.slot, s_recordFinalPath, sizeof(s_recordFinalPath),
-                          s_recordFilename, sizeof(s_recordFilename)))
-        return false;
-    SD.remove(s_recordTempPath);
-    s_recordFile = SD.open(s_recordTempPath, FILE_WRITE);
+    {
+        SdIoGuard guard;
+        if (SD.exists(s_recordTempPath)) return false;
+    }
+    if (!selectRecordPath(command.slot, s_recordFinalPath, sizeof(s_recordFinalPath),
+                          s_recordFilename, sizeof(s_recordFilename))) return false;
     uint8_t header[WAV_PCM_HEADER_BYTES];
     wavBuildMono16Header(header, command.sourceRate, 0);
-    if (!s_recordFile ||
-        s_recordFile.write(header, sizeof(header)) != sizeof(header)) {
-        if (s_recordFile) s_recordFile.close();
+    {
+        SdIoGuard guard;
         SD.remove(s_recordTempPath);
+        s_recordFile = SD.open(s_recordTempPath, FILE_WRITE);
+        if (!s_recordFile ||
+            s_recordFile.write(header, sizeof(header)) != sizeof(header)) {
+            if (s_recordFile) s_recordFile.close();
+            SD.remove(s_recordTempPath);
+        }
+    }
+    if (!s_recordFile) {
         resetRecordWorker();
         return false;
     }
@@ -183,7 +197,11 @@ bool pumpRecording() {
     if (count) {
         const uint32_t started = micros();
         const size_t bytes = count * sizeof(int16_t);
-        const bool ok = s_recordFile.write(reinterpret_cast<uint8_t*>(frames), bytes) == bytes;
+        bool ok = false;
+        {
+            SdIoGuard guard;
+            ok = s_recordFile.write(reinterpret_cast<uint8_t*>(frames), bytes) == bytes;
+        }
         updateMaximum(&s_maxReadUs, micros() - started);
         if (!ok) {
             failRecording(true);
@@ -202,11 +220,15 @@ bool pumpRecording() {
 
     uint8_t header[WAV_PCM_HEADER_BYTES];
     wavBuildMono16Header(header, s_recordSourceRate, s_recordFramesWritten);
-    bool ok = s_recordFile.seek(0) &&
-              s_recordFile.write(header, sizeof(header)) == sizeof(header);
-    if (ok) s_recordFile.flush();
-    s_recordFile.close();
-    if (ok) ok = SD.rename(s_recordTempPath, s_recordFinalPath);
+    bool ok = false;
+    {
+        SdIoGuard guard;
+        ok = s_recordFile.seek(0) &&
+             s_recordFile.write(header, sizeof(header)) == sizeof(header);
+        if (ok) s_recordFile.flush();
+        s_recordFile.close();
+        if (ok) ok = SD.rename(s_recordTempPath, s_recordFinalPath);
+    }
     const uint8_t slot = static_cast<uint8_t>(
         __atomic_load_n(&s_recordSlot, __ATOMIC_RELAXED));
     if (ok) {
@@ -215,7 +237,7 @@ bool pumpRecording() {
                                       static_cast<SamplerSlotMode>(s_recordMode));
     }
     if (!ok) {
-        if (SD.exists(s_recordFinalPath)) SD.remove(s_recordFinalPath);
+        { SdIoGuard guard; if (SD.exists(s_recordFinalPath)) SD.remove(s_recordFinalPath); }
         failRecording(false);
         return false;
     }
@@ -233,39 +255,44 @@ void recoverInterruptedRecordings() {
     for (uint8_t slot = 0; slot < SAMPLER_SLOT_COUNT; ++slot) {
         char tempPath[80];
         recordTempPath(slot, tempPath, sizeof(tempPath));
-        if (!SD.exists(tempPath)) continue;
-        File file = SD.open(tempPath, "r+");
+        File file;
+        { SdIoGuard guard; if (!SD.exists(tempPath)) continue; file = SD.open(tempPath, "r+"); }
         bool ok = static_cast<bool>(file);
         uint32_t sourceRate = SAMPLE_RATE;
         uint32_t frames = 0;
         if (ok) {
             uint8_t oldHeader[WAV_PCM_HEADER_BYTES];
             WavMono16Info info = {};
-            ok = file.seek(0) &&
-                 file.read(oldHeader, sizeof(oldHeader)) == static_cast<int>(sizeof(oldHeader)) &&
-                 wavParseCanonicalMono16Header(oldHeader, info);
+            {
+                SdIoGuard guard;
+                ok = file.seek(0) &&
+                     file.read(oldHeader, sizeof(oldHeader)) == static_cast<int>(sizeof(oldHeader));
+            }
+            ok = ok && wavParseCanonicalMono16Header(oldHeader, info);
             if (ok) sourceRate = info.sampleRate;
             const WavRecoveryPlan plan = wavPlanMono16Recovery(
-                static_cast<uint32_t>(file.size()));
+                [&file]() { SdIoGuard guard; return static_cast<uint32_t>(file.size()); }());
             ok = ok && plan.recoverable;
             frames = plan.frames;
             if (ok) {
                 uint8_t header[WAV_PCM_HEADER_BYTES];
                 wavBuildMono16Header(header, sourceRate, frames);
+                SdIoGuard guard;
                 ok = file.seek(0) && file.write(header, sizeof(header)) == sizeof(header);
                 if (ok) file.flush();
             }
-            file.close();
+            { SdIoGuard guard; file.close(); }
         }
         char recoveredPath[96];
         char recoveredName[SAMPLE_NAME_LEN];
         bool havePath = selectRecordPath(slot, recoveredPath, sizeof(recoveredPath),
                                          recoveredName, sizeof(recoveredName));
-        if (ok && havePath) ok = SD.rename(tempPath, recoveredPath);
+        if (ok && havePath) { SdIoGuard guard; ok = SD.rename(tempPath, recoveredPath); }
         if (!ok) {
             char badPath[96];
             snprintf(badPath, sizeof(badPath), "%s/S%02u_RECOVER.bad", DIR_SAMPLES,
                      static_cast<unsigned>(slot + 1u));
+            SdIoGuard guard;
             SD.remove(badPath);
             if (!SD.rename(tempPath, badPath)) noteError();
         }
@@ -280,17 +307,24 @@ void recoverInterruptedRecordings() {
 bool readHeader(File& file, WavMono16Info& info) {
     uint8_t header[WAV_PCM_HEADER_BYTES];
     const uint32_t started = micros();
-    const bool ok = file.seek(0) &&
-        file.read(header, sizeof(header)) == static_cast<int>(sizeof(header)) &&
-        wavParseCanonicalMono16Header(header, info) && info.frames >= SAMPLER_SLICE_COUNT &&
-        file.size() >= WAV_PCM_HEADER_BYTES + info.frames * sizeof(int16_t);
+    bool ioOk = false;
+    uint32_t fileBytes = 0;
+    {
+        SdIoGuard guard;
+        ioOk = file.seek(0) &&
+            file.read(header, sizeof(header)) == static_cast<int>(sizeof(header));
+        fileBytes = static_cast<uint32_t>(file.size());
+    }
+    const bool ok = ioOk && wavParseCanonicalMono16Header(header, info) &&
+        info.frames >= SAMPLER_SLICE_COUNT &&
+        fileBytes >= WAV_PCM_HEADER_BYTES + info.frames * sizeof(int16_t);
     updateMaximum(&s_maxReadUs, micros() - started);
     return ok;
 }
 
 void closeVoice(uint8_t voice) {
     if (voice >= STREAMING_SAMPLE_VOICES) return;
-    if (s_workers[voice].file) s_workers[voice].file.close();
+    if (s_workers[voice].file) { SdIoGuard guard; s_workers[voice].file.close(); }
     s_workers[voice].active = false;
     s_workers[voice].remainingFrames = 0;
 }
@@ -342,8 +376,9 @@ bool pumpVoice(uint8_t voice) {
                                       kReadFrames);
     int16_t frames[kReadFrames];
     const uint32_t started = micros();
-    const int bytes = worker.file.read(reinterpret_cast<uint8_t*>(frames),
-                                       wanted * sizeof(int16_t));
+    int bytes = 0;
+    { SdIoGuard guard; bytes = worker.file.read(reinterpret_cast<uint8_t*>(frames),
+                                                wanted * sizeof(int16_t)); }
     updateMaximum(&s_maxReadUs, micros() - started);
     if (bytes != static_cast<int>(wanted * sizeof(int16_t)) ||
         s_core.push(voice, frames, wanted) != wanted) {
@@ -373,12 +408,14 @@ bool startVoice(const SamplerCommand& command) {
     closeVoice(voice);
     char path[96];
     samplePath(slot.filename, path, sizeof(path));
-    File file = SD.open(path, FILE_READ);
+    File file;
+    { SdIoGuard guard; file = SD.open(path, FILE_READ); }
     WavMono16Info info = {};
     if (!file || !readHeader(file, info) || info.frames != slot.sourceFrames ||
         info.sampleRate != slot.sourceRate ||
-        !file.seek(WAV_PCM_HEADER_BYTES + region.startFrame * sizeof(int16_t))) {
-        if (file) file.close();
+        [&file, &region]() { SdIoGuard guard; return file.seek(
+            WAV_PCM_HEADER_BYTES + region.startFrame * sizeof(int16_t)); }() == false) {
+        if (file) { SdIoGuard guard; file.close(); }
         return false;
     }
 
@@ -399,7 +436,7 @@ bool startVoice(const SamplerCommand& command) {
     if (!s_core.prepare(voice, command.slot, region.lengthFrames,
                         playbackIncrement(slot.sourceRate, pitch), gain,
                         cutoff, resonance)) {
-        file.close();
+        { SdIoGuard guard; file.close(); }
         return false;
     }
     WorkerVoice& worker = s_workers[voice];
@@ -422,13 +459,14 @@ bool startVoice(const SamplerCommand& command) {
 bool assignSlot(const SamplerCommand& command) {
     char path[96];
     samplePath(command.filename, path, sizeof(path));
-    File file = SD.open(path, FILE_READ);
+    File file;
+    { SdIoGuard guard; file = SD.open(path, FILE_READ); }
     WavMono16Info info = {};
     const bool ok = file && readHeader(file, info) &&
         g_samplerSlotBank.assign(command.slot, command.filename, info.frames,
                                  info.sampleRate,
                                  static_cast<SamplerSlotMode>(command.mode));
-    if (file) file.close();
+    if (file) { SdIoGuard guard; file.close(); }
     return ok;
 }
 
@@ -652,6 +690,12 @@ bool streamingSamplerBusy() {
         if (state == SAMPLE_STREAM_PREPARING || state == SAMPLE_STREAM_PLAYING) return true;
     }
     return false;
+}
+
+bool streamingSamplerIsRecording() {
+    const StreamingSamplerRecordState state = recordState();
+    return state == STREAM_SAMPLE_REC_STARTING || state == STREAM_SAMPLE_REC_RECORDING ||
+           state == STREAM_SAMPLE_REC_STOPPING;
 }
 
 StreamingSamplerSnapshot streamingSamplerSnapshot() {

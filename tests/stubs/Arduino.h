@@ -10,9 +10,13 @@
 using TaskHandle_t = void*;
 using BaseType_t = int;
 using portMUX_TYPE = int;
+using SemaphoreHandle_t = void*;
+struct StaticSemaphore_t { int value; };
 
 #define portMUX_INITIALIZER_UNLOCKED 0
 #define pdPASS 1
+#define pdTRUE 1
+#define portMAX_DELAY 0xFFFFFFFFu
 #define portENTER_CRITICAL(mux) ((void)(mux))
 #define portEXIT_CRITICAL(mux) ((void)(mux))
 #define taskYIELD() ((void)0)
@@ -22,6 +26,11 @@ inline uint32_t millis() { static uint32_t value = 0; return ++value; }
 inline void delay(uint32_t) {}
 inline void vTaskDelete(void*) {}
 inline void vTaskDelay(uint32_t) {}
+inline SemaphoreHandle_t xSemaphoreCreateRecursiveMutexStatic(StaticSemaphore_t* storage) {
+    return storage;
+}
+inline BaseType_t xSemaphoreTakeRecursive(SemaphoreHandle_t, uint32_t) { return pdTRUE; }
+inline BaseType_t xSemaphoreGiveRecursive(SemaphoreHandle_t) { return pdTRUE; }
 template <typename T>
 inline T constrain(T value, T minimum, T maximum) {
     return value < minimum ? minimum : (value > maximum ? maximum : value);

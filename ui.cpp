@@ -24,6 +24,7 @@
 #include "motion.h"
 #include "ble_midi.h"
 #include "usb_midi.h"
+#include "sd_io_arbiter.h"
 
 Page    g_curPage    = PAGE_PATTERN;
 bool    g_needRedraw = true;
@@ -70,22 +71,25 @@ void uiStatus(const char* msg) {
 void uiScanSampleDir() {
     g_fileCount = 0;
     if (masterRecorderIsBusy() || stemRecorderIsBusy()) return;
-    File dir = SD.open(DIR_SAMPLES);
+    File dir;
+    { SdIoGuard guard; dir = SD.open(DIR_SAMPLES); }
     if (!dir || !dir.isDirectory()) return;
-    File f = dir.openNextFile();
+    File f;
+    { SdIoGuard guard; f = dir.openNextFile(); }
     while (f && g_fileCount < BROWSER_MAX) {
-        String nm = f.name();
+        String nm;
+        bool isDirectory = false;
+        { SdIoGuard guard; nm = f.name(); isDirectory = f.isDirectory(); }
         int slash = nm.lastIndexOf('/');            // some core versions return full path
         if (slash >= 0) nm = nm.substring(slash + 1);
-        if (!f.isDirectory() && (nm.endsWith(".wav") || nm.endsWith(".WAV"))) {
+        if (!isDirectory && (nm.endsWith(".wav") || nm.endsWith(".WAV"))) {
             strncpy(g_fileList[g_fileCount], nm.c_str(), SAMPLE_NAME_LEN - 1);
             g_fileList[g_fileCount][SAMPLE_NAME_LEN - 1] = 0;
             g_fileCount++;
         }
-        f.close();
-        f = dir.openNextFile();
+        { SdIoGuard guard; f.close(); f = dir.openNextFile(); }
     }
-    dir.close();
+    { SdIoGuard guard; dir.close(); }
     if (g_fileSel >= g_fileCount) g_fileSel = 0;
 }
 
