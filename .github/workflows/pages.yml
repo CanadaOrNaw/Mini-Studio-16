@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: "3.12"
       - uses: actions/configure-pages@v5
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || github.head_ref == 'agent/v3-alpha-sd-streaming'
       - name: Verify generated hardware assets
         run: python tools/generate_hardware_assets.py --check
       - name: Run CAD and site tests
@@ -51,12 +51,14 @@ jobs:
           path: build/pages
           if-no-files-found: error
       - uses: actions/upload-pages-artifact@v4
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || github.head_ref == 'agent/v3-alpha-sd-streaming'
         with:
           path: build/pages
 
   deploy:
-    if: github.event_name != 'pull_request'
+    # The long-running alpha branch is the product's current integration ref.
+    # Deploy it during this draft PR; after merge, pushes to main take over.
+    if: github.event_name != 'pull_request' || github.head_ref == 'agent/v3-alpha-sd-streaming'
     needs: build
     runs-on: ubuntu-latest
     permissions:
