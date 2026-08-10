@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 LAYOUT = ROOT / "hardware" / "button-layout.json"
 SVG = ROOT / "hardware" / "mini-studio-16-button-layout.svg"
 STL = ROOT / "hardware" / "stl" / "mini-studio-16-bench-cradle.stl"
+CAP_BASE = ROOT / "hardware" / "audio-cap" / "stl" / "mini-studio-audio-cap-base.stl"
+CAP_LID = ROOT / "hardware" / "audio-cap" / "stl" / "mini-studio-audio-cap-lid.stl"
 
 
 class HardwareAssetTests(unittest.TestCase):
@@ -75,6 +77,32 @@ class HardwareAssetTests(unittest.TestCase):
                 edge = tuple(sorted((triangle[index], triangle[(index + 1) % 3])))
                 edges[edge] += 1
         self.assertEqual(set(edges.values()), {2})
+
+    def test_audio_cap_parts_are_watertight_and_fit_cap_envelope(self):
+        for path, bounds in (
+            (CAP_BASE, ((-42.0, 42.0), (-12.0, 12.0), (0.0, 13.0))),
+            (CAP_LID, ((-42.4, 42.4), (-12.4, 12.4), (0.0, 5.0))),
+        ):
+            data = path.read_bytes()
+            count = struct.unpack_from("<I", data, 80)[0]
+            self.assertEqual(len(data), 84 + count * 50)
+            self.assertGreater(count, 80)
+            triangles = []
+            offset = 84
+            for _ in range(count):
+                values = struct.unpack_from("<12fH", data, offset)
+                triangles.append([tuple(values[3 + i * 3:6 + i * 3]) for i in range(3)])
+                offset += 50
+            flat = [vertex for triangle in triangles for vertex in triangle]
+            for axis, expected in enumerate(bounds):
+                actual = (min(v[axis] for v in flat), max(v[axis] for v in flat))
+                self.assertAlmostEqual(actual[0], expected[0], places=4)
+                self.assertAlmostEqual(actual[1], expected[1], places=4)
+            edges = collections.Counter()
+            for triangle in triangles:
+                for index in range(3):
+                    edges[tuple(sorted((triangle[index], triangle[(index + 1) % 3])))] += 1
+            self.assertEqual(set(edges.values()), {2}, path.name)
 
 
 if __name__ == "__main__":

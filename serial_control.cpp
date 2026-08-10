@@ -19,6 +19,7 @@
 #include "audio_engine.h"
 #include "synth_parameters.h"
 #include "boot_selector.h"
+#include "audio_cap.h"
 
 #include <Arduino.h>
 #include <M5Cardputer.h>
@@ -600,6 +601,44 @@ void dispatch(const ControlRequest& request) {
             audioEngineResetDspStats();
             Serial.printf(CONTROL_PROTOCOL_PREFIX
                           " %s OK dsp=reset\n", request.id);
+            break;
+
+        case CONTROL_CAP_STATUS: {
+            const AudioCapSnapshot cap = audioCapSnapshot();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK initialized=%u detected=%u status=0x%04X "
+                          "bt=%u monitor=%u transfers=%lu crc=%lu gaps=%lu "
+                          "playDrops=%lu captureUnderruns=%lu capUnderruns=%lu "
+                          "capOverruns=%lu\n",
+                          request.id, cap.initialized ? 1u : 0u,
+                          cap.detected ? 1u : 0u, static_cast<unsigned>(cap.status),
+                          cap.bluetoothConnected ? 1u : 0u,
+                          static_cast<unsigned>(cap.monitorPercent),
+                          static_cast<unsigned long>(cap.transfers),
+                          static_cast<unsigned long>(cap.crcErrors),
+                          static_cast<unsigned long>(cap.sequenceGaps),
+                          static_cast<unsigned long>(cap.playbackDrops),
+                          static_cast<unsigned long>(cap.captureUnderruns),
+                          static_cast<unsigned long>(cap.capUnderruns),
+                          static_cast<unsigned long>(cap.capOverruns));
+            break;
+        }
+        case CONTROL_CAP_PAIR:
+            audioCapRequestPair();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK cap=pairing\n", request.id);
+            break;
+        case CONTROL_CAP_DISCONNECT:
+            audioCapRequestDisconnect();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK cap=disconnected\n", request.id);
+            break;
+        case CONTROL_CAP_MONITOR:
+            audioCapSetMonitor(static_cast<uint8_t>(request.arg1));
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK capMonitor=%u\n", request.id,
+                          static_cast<unsigned>(request.arg1));
+            break;
+        case CONTROL_CAP_CLEAR_STATS:
+            audioCapRequestClearStats();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK capStats=cleared\n", request.id);
             break;
 
         default:

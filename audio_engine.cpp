@@ -12,6 +12,7 @@
 #include "stem_recorder.h"
 #include "loop_engine.h"
 #include "streaming_sampler.h"
+#include "audio_cap.h"
 
 float g_scopeBuf[SCREEN_W];
 volatile int g_scopeIdx = 0;
@@ -74,6 +75,10 @@ static void audioTask(void*) {
         }
 
         streamingSamplerRecordPush(STREAM_SAMPLE_INPUT_BUS, buf, AUDIO_BUF_LEN);
+        // The cap receives the final master bus through a lock-free reservoir.
+        // Optional line monitoring is mixed after the outbound copy, preventing
+        // a direct digital feedback loop.
+        audioCapProcessAudioBlock(buf, AUDIO_BUF_LEN);
         masterRecorderPush(buf, AUDIO_BUF_LEN);
         stemRecorderPush(s_stemBuf, AUDIO_BUF_LEN);
 

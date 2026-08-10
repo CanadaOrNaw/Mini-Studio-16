@@ -13,3 +13,4 @@ tools/__pycache__/
 /cc*.cdtor.c
 /cc*.cdtor.o
 .DS_Store
+node_modules/

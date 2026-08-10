@@ -97,6 +97,12 @@ int main() {
            request.arg2 == SYNTH_PARAM_FM_OP4_RATIO && request.arg3 == 675);
     request = parseOk("MS16/1 sr synth dsp_reset");
     assert(request.command == CONTROL_SYNTH_DSP_RESET);
+    request = parseOk("MS16/1 cs cap status");
+    assert(request.command == CONTROL_CAP_STATUS);
+    request = parseOk("MS16/1 cp cap pair");
+    assert(request.command == CONTROL_CAP_PAIR);
+    request = parseOk("MS16/1 cm cap monitor 25");
+    assert(request.command == CONTROL_CAP_MONITOR && request.arg1 == 25);
 
     ControlRequest invalid = {};
     assert(controlParseLine("", invalid) == CONTROL_PARSE_EMPTY);
@@ -128,6 +134,8 @@ int main() {
     assert(controlParseLine("MS16/1 1 synth 1 engine fake", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 synth 1 set fm.index 801", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 synth 1 set fm.op5.ratio 100", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 cap monitor 101", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 cap pair now", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 wat", invalid) == CONTROL_PARSE_UNKNOWN_COMMAND);
     assert(controlParseLine("MS16/1 1 ping extra", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
 

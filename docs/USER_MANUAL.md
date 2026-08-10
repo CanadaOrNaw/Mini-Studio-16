@@ -12,6 +12,22 @@ same 56 keys as an interactive page-by-page map. Both are generated from
 `hardware/button-layout.json`; this manual remains authoritative for detailed
 context behavior.
 
+## Five-minute first song
+
+1. Power on, press **BtnA**, and wait for the PATTERN page.
+2. Press `1` for Synth 1. Tap `a s d f` and confirm you hear notes.
+3. Press `` ` `` for drums. Tap `fn shift a s`; those are drum lanes 1–4.
+4. Press `/` once so REC lights up, press `space`, then tap a few drum keys.
+5. Press `/` again to stop recording. The sixteen-step pattern keeps looping.
+6. Tap `ctrl` until LOOPS appears. Select L1 and press `/`; play some notes,
+   then press `/` again. L1 now repeats as a separate audio layer.
+7. Tap `ctrl` until SONG appears. Hold `.` to start a master WAV, perform, then
+   hold `.` again to finish. The file is in `/groovebox/recordings/`.
+
+If a step does not behave exactly like this, stop and use
+[`docs/FLASHING.md#troubleshooting`](FLASHING.md#troubleshooting). Do not clear
+or reformat the SD card until you have copied any recordings you want to keep.
+
 ## Interaction rule
 
 Most labeled keys have a tap action and a 450 ms hold action. A footer progress

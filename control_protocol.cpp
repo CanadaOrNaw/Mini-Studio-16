@@ -336,6 +336,26 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
                 request.command = CONTROL_SYNTH_SET;
             } else return CONTROL_PARSE_BAD_ARGUMENTS;
         }
+    } else if (sameWord(verb, "cap")) {
+        char* action = nextToken(cursor);
+        if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(action, "status")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CAP_STATUS;
+        } else if (sameWord(action, "pair")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CAP_PAIR;
+        } else if (sameWord(action, "disconnect")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CAP_DISCONNECT;
+        } else if (sameWord(action, "clear_stats")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CAP_CLEAR_STATS;
+        } else if (sameWord(action, "monitor")) {
+            if (!parseNumber(nextToken(cursor), 0, 100, request.arg1) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CAP_MONITOR;
+        } else return CONTROL_PARSE_BAD_ARGUMENTS;
     } else {
         return CONTROL_PARSE_UNKNOWN_COMMAND;
     }

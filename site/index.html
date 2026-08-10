@@ -21,6 +21,7 @@
       <a href="#instrument">Instrument</a>
       <a href="#controls">Controls</a>
       <a href="#make">Make it</a>
+      <a href="#audio-cap">Audio Cap</a>
       <a href="https://github.com/CanadaOrNaw/Mini-Studio-16">GitHub</a>
     </nav>
   </header>
@@ -54,9 +55,30 @@
     </section>
 
     <section class="steps" aria-label="Getting started">
-      <article><span>01</span><h2>PRINT</h2><p>Print the original open cradle and the full-resolution key legend.</p></article>
+      <article><span>01</span><h2>START</h2><p>Follow one plain-language checklist from shopping to your first sound.</p></article>
       <article><span>02</span><h2>FLASH</h2><p>Flash one combined image; choose USB device or USB host at boot.</p></article>
       <article><span>03</span><h2>PLAY</h2><p>Insert FAT32 microSD, power on, and make music without a DAW.</p></article>
+    </section>
+
+    <section class="section" id="audio-cap">
+      <div class="section-heading">
+        <p class="kicker">OPTIONAL • REMOVABLE • REV A</p>
+        <h2>Line in and Bluetooth audio, without cutting the Cardputer.</h2>
+        <p>The Audio Cap has its own open ESP32 firmware, protected ADC architecture, pair button, USB-C, sourced BOM and two-part PETG shell. Every file possible before first hardware is downloadable; physical verification remains clearly marked.</p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature"><span class="feature-no">IN</span><h3>3.5 mm line input</h3><p>PCM1808 capture at 44.1 kHz, bounded low-pass/decimation and zero-by-default monitoring.</p></article>
+        <article class="feature"><span class="feature-no">BT</span><h3>A2DP output</h3><p>Original ESP32 Bluetooth Classic coprocessor with one-button discovery and serial status.</p></article>
+        <article class="feature"><span class="feature-no">2P</span><h3>Snap shell</h3><p>Deterministic base and compliant lid STLs sized to the 84 × 24 mm cap envelope.</p></article>
+      </div>
+      <div class="actions">
+        <a class="button primary" href="downloads/mini-studio-audio-cap-base.stl" download>Cap base STL</a>
+        <a class="button secondary" href="downloads/mini-studio-audio-cap-lid.stl" download>Cap lid STL</a>
+        <a class="button secondary" href="downloads/mini-studio-audio-cap-bom.csv" download>BOM CSV</a>
+        <a class="button secondary" href="downloads/audio-cap-sourcing.md" download>CA / US / EU sourcing</a>
+        <a class="button secondary" href="downloads/audio-cap-pcb-reference.svg" download>PCB reference SVG</a>
+      </div>
+      <p class="honesty">REV A / NOT HARDWARE VERIFIED: unique footprints, header height, analogue performance, RF, thermals, latency and snap fit require the first physical article.</p>
     </section>
 
     <section class="section" id="instrument">
@@ -65,6 +87,7 @@
         <h2>Small hardware. Serious architecture.</h2>
         <p>Long audio streams through bounded RAM rings so the real-time renderer never waits on the SD filesystem.</p>
       </div>
+      <div class="actions"><a class="button primary" href="downloads/START_HERE.md" download>Download Start Here</a><a class="button secondary" href="downloads/AUDIO_CAP_BUILD.md" download>Audio Cap build guide</a></div>
       <div class="feature-grid">
         <article class="feature feature-wide"><span class="feature-no">03</span><h3>Synthesis engines</h3><p>The untouched original MG/303, expanded subtractive MGX, and genuine four-operator FM4 are selectable per track.</p><div class="chips"><b>MG/303</b><b>MGX</b><b>FM4</b></div></article>
         <article class="feature"><span class="feature-no">16</span><h3>Sample slots</h3><p>Forty shared seconds, melodic or sliced playback, trim, pitch, filter and step locks.</p></article>

@@ -152,6 +152,16 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["synth", args.track, "set", args.parameter, args.value]
     if args.command == "synth-dsp-reset":
         return ["synth", "dsp_reset"]
+    if args.command == "cap-status":
+        return ["cap", "status"]
+    if args.command == "cap-pair":
+        return ["cap", "pair"]
+    if args.command == "cap-disconnect":
+        return ["cap", "disconnect"]
+    if args.command == "cap-monitor":
+        return ["cap", "monitor", args.percent]
+    if args.command == "cap-clear-stats":
+        return ["cap", "clear_stats"]
     raise ValueError(f"unsupported command: {args.command}")
 
 
@@ -241,6 +251,12 @@ def parser() -> argparse.ArgumentParser:
     synth_set.add_argument("parameter", help="for example fm.op2.ratio or mgx.amp.attack")
     synth_set.add_argument("value", type=int, choices=range(0, 5001))
     sub.add_parser("synth-dsp-reset", help="reset audio render timing counters")
+    sub.add_parser("cap-status", help="show optional Audio Cap link/audio counters")
+    sub.add_parser("cap-pair", help="scan for and pair one Bluetooth audio renderer")
+    sub.add_parser("cap-disconnect", help="disconnect the Audio Cap A2DP output")
+    cap_monitor = sub.add_parser("cap-monitor", help="set safe line-input monitor level")
+    cap_monitor.add_argument("percent", type=int, choices=range(0, 101))
+    sub.add_parser("cap-clear-stats", help="clear host and cap transport counters")
     sub.add_parser("ports", help="list serial ports without opening one")
     monitor = sub.add_parser("monitor", help="print asynchronous device output")
     monitor.add_argument("--seconds", type=float, default=0.0, help="0 means run until interrupted")

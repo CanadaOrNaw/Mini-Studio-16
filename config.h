@@ -31,6 +31,15 @@
 #define SD_SPI_CLK_PIN   40
 #define SD_SPI_MISO_PIN  39
 
+// ---------- Optional Mini Studio Audio Cap ----------
+// Separate routed SPI peripheral; never shares the microSD SPI object.
+#define AUDIO_CAP_CS_PIN     3
+#define AUDIO_CAP_SCLK_PIN   4
+#define AUDIO_CAP_MOSI_PIN   5
+#define AUDIO_CAP_MISO_PIN   6
+#define AUDIO_CAP_IRQ_PIN   13
+#define AUDIO_CAP_RESET_PIN 15
+
 #define DIR_ROOT         "/groovebox"
 #define DIR_SAMPLES      "/groovebox/samples"
 #define DIR_WAVETABLES   "/groovebox/wavetables"

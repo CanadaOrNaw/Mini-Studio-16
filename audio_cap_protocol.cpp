@@ -24,16 +24,21 @@ uint32_t audioCapPacketCrc(const AudioCapPacket& packet) {
 }
 
 void audioCapPacketInit(AudioCapPacket& packet, uint32_t sequence, uint8_t flags,
-                        const int16_t* pcm, uint16_t frames) {
+                        const int16_t* pcm, uint16_t frames, uint16_t status) {
     memset(&packet, 0, sizeof(packet));
     packet.magic = AUDIO_CAP_MAGIC;
     packet.version = AUDIO_CAP_VERSION;
     packet.flags = flags;
     packet.sequence = sequence;
     packet.frames = frames <= AUDIO_CAP_FRAMES ? frames : AUDIO_CAP_FRAMES;
+    packet.status = status;
     if (pcm && packet.frames)
         memcpy(packet.pcm, pcm, packet.frames * sizeof(packet.pcm[0]));
     packet.crc32 = audioCapPacketCrc(packet);
+}
+
+bool audioCapSequenceFollows(uint32_t previous, uint32_t current) {
+    return current == previous + 1u;
 }
 
 bool audioCapPacketValidate(const AudioCapPacket& packet) {

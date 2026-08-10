@@ -5,6 +5,8 @@ on:
     branches: ["main", "agent/v3-alpha-sd-streaming"]
     paths:
       - "site/**"
+      - "START_HERE.md"
+      - "docs/AUDIO_CAP_BUILD.md"
       - "hardware/**"
       - "tools/build_site.py"
       - "tools/generate_hardware_assets.py"
@@ -14,6 +16,8 @@ on:
   pull_request:
     paths:
       - "site/**"
+      - "START_HERE.md"
+      - "docs/AUDIO_CAP_BUILD.md"
       - "hardware/**"
       - "tools/build_site.py"
       - "tools/generate_hardware_assets.py"

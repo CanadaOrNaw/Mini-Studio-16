@@ -54,5 +54,7 @@ build_run synth_ui "$test_dir/test_synth_ui_model.cpp" \
     "$test_dir/../synth_ui_model.cpp"
 build_run audio_cap "$test_dir/test_audio_cap_protocol.cpp" \
     "$test_dir/../audio_cap_protocol.cpp"
+build_run audio_cap_bridge -pthread "$test_dir/test_audio_cap_bridge_core.cpp" \
+    "$test_dir/../audio_cap_bridge_core.cpp" "$test_dir/../audio_cap_protocol.cpp"
 
 echo "Sanitizers (${SANITIZER_SET:-undefined}): core, protocol, synth, streaming, event, motion and MIDI tests passed"
