@@ -80,8 +80,6 @@ static void releaseMidiNote(uint8_t key) {
         if (s_heldMidiNotes[index].key != key) continue;
         liveSynthRelease(s_heldMidiNotes[index].channel,
                          s_heldMidiNotes[index].note);
-        midiOutputNoteOff(s_heldMidiNotes[index].channel,
-                          s_heldMidiNotes[index].note);
         s_heldMidiNotes[index] = s_heldMidiNotes[--s_heldMidiNoteCount];
         return;
     }
@@ -807,8 +805,8 @@ void inputUpdate() {
         micRecStop();
     }
 
-    // Releases still prevent stuck outbound notes and now also drive the
-    // ADSR release stage of MGX/FM4. MG/303 intentionally ignores note-off.
+    // Release drives both outbound MIDI and the MGX/FM4 ADSR release stage.
+    // MG/303 intentionally ignores the internal note-off.
     for (uint8_t index = 0; index < s_prev.n; ++index)
         if (!now.has(s_prev.codes[index])) releaseMidiNote(s_prev.codes[index]);
 

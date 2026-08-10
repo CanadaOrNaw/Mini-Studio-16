@@ -34,10 +34,21 @@ Holding LOAD and SAVE together loads the built-in demo.
 
 ## Synths and drums
 
-Synth tracks 1–3 provide saw, square, triangle, sine, and wavetable oscillators
-through a resonant envelope filter. Each track supports one to three voices.
-Mono mode provides 303-style slide/legato; poly mode records chords up to three
-notes.
+Synth tracks 1–3 independently select one of three engines and support one to
+three voices:
+
+- `MG/303` is the unchanged original Microgroove voice: saw, square, triangle,
+  sine, wavetable, low-pass SVF, decay envelopes, accent, and mono slide. Old
+  projects always select this engine.
+- `MGX` adds proper amplitude/filter ADSR envelopes, LP/BP/HP output, pulse
+  width, sub oscillator, drive, velocity-to-amp/filter, and one LFO routed to
+  pitch, filter, PWM, or amplitude.
+- `FM4` is genuine four-operator phase modulation with eight routing
+  algorithms, operator ratios/levels/ADSR, modulation index, and feedback.
+
+Mono `MGX`/`FM4` notes enter their release envelope on key/MIDI note-off.
+Poly mode records chords up to three notes. Event tracks record both note-on
+and note-off so ADSR performances replay without stuck sustained notes.
 
 The drum track contains eight lanes. Each can use 808 synthesis, 909 synthesis,
 or the inherited sample engine, with volume, tune, decay, and choke group.
@@ -61,10 +72,17 @@ notes create slides, while overlapping poly notes create chords.
 
 ## SOUND page
 
-Synth rows: oscillator, wavetable, cutoff, resonance, envelope amount, filter
-decay, amp decay, volume, and voices. Drum rows: lane, engine, type/sample,
-volume, tune, decay, and choke. `v/c` chooses a row, `x/b` changes it, and hold
-`m` for fine changes. Piano/pads audition the current sound.
+`v/c` chooses a row, `x/b` changes it, and hold `m` for fine changes.
+Piano/pads audition the current sound; releasing a key releases MGX/FM4.
+
+For synth tracks, tap `tab` to cycle small banks. `COMMON` contains engine,
+voice count, and volume. `MG/303` retains its original nine-row page. `MGX`
+has oscillator, filter, amp-envelope, filter-envelope, and LFO banks. `FM4`
+has one global bank plus one six-row bank for each operator. Selecting a new
+engine moves directly to that engine's first useful bank; each engine's patch
+is retained when switching away and back.
+
+Drum rows remain lane, engine, type/sample, volume, tune, decay, and choke.
 
 ## SAMPLE page
 
@@ -166,9 +184,11 @@ pattern keys place the selected A/B-bank pattern; `z` clears; tap `.` sets the
 loop start; tap `n` toggles song/pattern mode. Hold `opt/alt` to select project
 P1–P8, then hold LOAD/SAVE.
 
-GBX v7 saves patterns, chain, synth/drums, legacy sample references, all 16
+GBX v8 saves patterns, chain, all three selectable synth-engine patches,
+synth/drums, legacy sample references, all 16
 streamed slots/parameters/slices/events/locks, five event tracks, motion
-mappings, and six-loop volume/mute state. GBX v1–v6 files still load.
+mappings, and six-loop volume/mute state. GBX v1–v7 files still load and select
+the original `MG/303` engine.
 
 On SONG:
 
@@ -206,6 +226,8 @@ Synth input mapping:
 - On any channel, CC20–22 control synth 1–3 cutoff and CC23–25 control synth
   1–3 resonance.
 - Cutoff/resonance CC changes are recordable into an armed event track.
+- On `FM4`, cutoff mappings control modulation index and resonance mappings
+  control feedback; `MGX` uses its filter cutoff/resonance.
 - Internal transport sends bounded 24-PPQN clock plus start/continue/stop; a
   late main loop drops/counts excess catch-up pulses instead of flooding MIDI.
 - Cardputer synth-key releases emit note-off so a connected DAW does not retain
@@ -229,6 +251,10 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 loop-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 sample-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 event-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 midi-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 1 fm4
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.algorithm 5
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.op2.ratio 200
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
 ```
 
 See `CONTROL_PROTOCOL.md` for the full command table.

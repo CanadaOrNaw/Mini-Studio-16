@@ -1,7 +1,7 @@
 # Mini Studio 16
 
-SD-backed groovebox, sampler, looper, motion controller, recorder, and MIDI
-firmware for the **M5Stack Cardputer-ADV**.
+SD-backed groovebox, multi-engine synthesizer, sampler, looper, motion
+controller, recorder, and MIDI firmware for the **M5Stack Cardputer-ADV**.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -20,6 +20,7 @@ official Microgroove or lebiro.studio release.
 
 | System | Implemented software | Remaining proof |
 | --- | --- | --- |
+| Synthesis | Per-track selectable original `MG/303`, expanded subtractive `MGX`, or genuine four-operator `FM4`; fixed-size DSP, banked SOUND UI, velocity/note-off, automation, CLI, and GBX v8 persistence | Real render time and safe simultaneous FM polyphony under full device load |
 | Six-track audio looper | Six independent 22.05 kHz mono SD streams, up to 20 seconds; Track 1 fixes the frame length; tracks 2–6 align to its boundary; mute, volume, recovery, and resync | Zero-underrun playback and simultaneous recording on the actual card |
 | PO-style sampler | 16 SD-streamed slots sharing a normalized 40-second quota; melodic/sliced modes, 16 slices, trim, pitch, gain, filter, four voices, pattern triggers, and sparse parameter locks | Performance and latency on the actual SD card |
 | Sequencer | 16 patterns × 16 steps and a 128-entry chain | Keyboard/UI usability pass |
@@ -28,7 +29,7 @@ official Microgroove or lebiro.studio release.
 | MIDI | BLE MIDI input/output; composite USB CDC+MIDI device image; separate direct USB-MIDI host image; notes, CC, clock, song position, start/continue/stop | Enumeration, reconnect, clock jitter, OTG/VBUS behavior |
 | Recording | Long master WAVs and optional five-bus master/synth1/synth2/synth3/drums stem containers on SD | Zero-drop 30-minute captures and power-cut cycles |
 | Control | Bounded `MS16/1` USB serial protocol, desktop CLI, JSON, monitor, discovery, fuzzing, and soak client | Device-side 10,000-command soak |
-| Existing Microgroove | Three synth tracks, eight drum lanes, keyboard, short sampler/resampler gestures, speaker, mic, headphones, projects, and factory content retained; samples use adaptive RAM or transparent SD-stream fallback | Regression pass on hardware |
+| Existing Microgroove | Original `SynthVoice` DSP and workflow remain the default `MG/303` engine; three synth tracks, eight drum lanes, keyboard, short sampler/resampler gestures, speaker, mic, headphones, projects, and factory content retained; samples use adaptive RAM or transparent SD-stream fallback | Regression pass on hardware |
 | Expanded audio | Line input and conventional Bluetooth headphones/speakers | External codec/A2DP expansion hardware; unavailable from stock S3 firmware alone |
 
 The DAW is optional: songs can be captured to master WAV or exported as five
@@ -43,13 +44,16 @@ stems without removing any inherited standalone workflow.
   underrun/voice stealing, sampler quota/slices/locks, the 128-bar event model,
   motion filtering/cooldowns, MIDI parsing/transport, BLE framing, USB-MIDI host
   descriptor parsing, WAV/stem recovery, project layouts, protocol fuzzing,
-  CLI behavior, and concurrent ring ordering.
+  CLI behavior, concurrent ring ordering, the exact legacy synth PCM vector,
+  ADSR/operator/algorithm/ratio/feedback/engine switching, GBX v8 synthesis
+  migration, and deterministic offline FM waveform/spectrum statistics.
 - GitHub runs the host suite plus AddressSanitizer and UndefinedBehaviorSanitizer.
 - Firmware size is checked from the ESP32 linker sections using the same DRAM
   accounting rules as PlatformIO, with a 200 KiB static-DRAM ceiling so runtime
   workers, wireless stacks, and the 8-bit UI canvas retain heap.
-- GBX v7 persists the expanded sequencer, sampler, locks, event tracks, motion
-  mappings, and six-loop mixer while retaining v1–v6 loading.
+- GBX v8 persists the expanded sequencer, sampler, locks, event tracks, motion
+  mappings, six-loop mixer, and all per-track engine patches while retaining
+  v1–v7 loading as the original `MG/303` engine.
 - Every long-audio subsystem uses bounded RAM rings; SD files are owned by
   storage workers, not opened or touched by the real-time renderer.
 - The inherited mic-to-drum and short-resample gestures use the streamed
@@ -113,6 +117,7 @@ Tap `ctrl` to cycle through the original and new pages.
 
 | Page | Controls |
 | --- | --- |
+| SOUND synth | `tab` cycles the selected engine's small parameter banks; `v/c` selects a row; `x/b` edits; hold `m` for fine edits; COMMON selects `MG/303`, `MGX`, or `FM4` |
 | SAMPLE browser | `x/b` chooses slot, `v/c` chooses WAV, `/` assigns; hold `.` records mic; hold `n` records master bus |
 | SAMPLE performance | 16 white/performance keys trigger pitches or slices; REC writes quantized events |
 | SAMPLE edit | `tab` cycles browser/sound/step-lock; `v/c` selects parameter; `x/b` edits; hold `m` + `x/b` selects step; `/` clears a lock; `,` clears the sample event |
@@ -125,6 +130,8 @@ Tap `ctrl` to cycle through the original and new pages.
 The original keys, synth/drum performance, mic sampling, short resampling,
 pattern editing, project slots, and song controls remain available. See
 [`docs/USER_MANUAL.md`](docs/USER_MANUAL.md) for the complete map.
+The engine architecture, algorithms, parameter units, and compatibility
+contract are documented in [`docs/SYNTHESIS.md`](docs/SYNTHESIS.md).
 
 ## Remote control
 
@@ -140,6 +147,9 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 sample-record 1 bus melodic
 python tools/ministudio_cli.py --port /dev/ttyACM0 master start
 python tools/ministudio_cli.py --port /dev/ttyACM0 master stop
 python tools/ministudio_cli.py --port /dev/ttyACM0 --json midi-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 1 fm4
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.op2.ratio 200
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
 python tools/hardware_smoke.py --port /dev/ttyACM0 --sd-test \
   --output cardputer-smoke.json
 ```
@@ -153,7 +163,7 @@ Use a FAT32 microSD card for the first hardware pass:
 
 ```text
 /groovebox/
-├── projects/       P1.gbx–P8.gbx, current write version GBX v7
+├── projects/       P1.gbx–P8.gbx, current write version GBX v8
 ├── samples/        adaptive RAM/streamed drum samples and 16-slot WAV assets
 ├── wavetables/     optional single-cycle WAVs
 ├── loops/          L1.wav–L6.wav and recovery files
@@ -189,8 +199,10 @@ external expansion hardware:
    long master/stem captures, and power-cut recovery;
 3. BLE MIDI and USB device/host enumeration, reconnect, timing, cable, and VBUS;
 4. BMI270 calibration and live event/motion workflow;
-5. lower-level ES8311 full-duplex experiments;
-6. line input and conventional Bluetooth audio cap design/validation.
+5. worst-case `MGX`/`FM4` render time and safe polyphony while all audio,
+   storage, MIDI, event, and motion systems run;
+6. lower-level ES8311 full-duplex experiments;
+7. line input and conventional Bluetooth audio cap design/validation.
 
 The cap pin/protocol boundary is specified in
 [`docs/AUDIO_EXPANSION.md`](docs/AUDIO_EXPANSION.md); its packet layout and CRC

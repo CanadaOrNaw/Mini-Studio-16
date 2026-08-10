@@ -273,7 +273,7 @@ void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent,
     g_synths[track].noteOn(noteToFreq(note, octave), accent, !poly && legato,
                            midi, velocity);
     if (!midiInputIsDispatching())
-        midiOutputNoteOn(track, midi, accent ? 127 : 96);
+        midiOutputNoteOn(track, midi, velocity);
     eventLooperRecordSynth(sequencerEventRecordStep(), track, midi, velocity);
 
     if (g_recEnabled) {
@@ -300,6 +300,7 @@ void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent,
 void liveSynthRelease(uint8_t track, uint8_t midiNote) {
     if (track >= NUM_SYNTHS) return;
     g_synths[track].noteOff(midiNote);
+    if (!midiInputIsDispatching()) midiOutputNoteOff(track, midiNote);
     eventLooperRecordSynthRelease(sequencerEventRecordStep(), track, midiNote);
 }
 

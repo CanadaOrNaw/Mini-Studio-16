@@ -60,6 +60,39 @@ Before stressing new systems, verify the original instrument:
 
 Any regression is a blocker even if the new feature works.
 
+## 2a. Expanded synthesis and DSP deadline
+
+For each track, test `MG/303`, `MGX`, and `FM4` at one, two, and three voices.
+Confirm engine switching retains each patch, MG/303 matches the inherited
+sound/slide/decay behavior, MGX filter modes/envelopes/LFO/PWM/sub/drive and
+velocity respond, and every FM algorithm/ratio/operator envelope/feedback
+produces a useful bounded sound. Save as GBX v8, reboot/reload, then load an
+older GBX file and confirm it selects `MG/303`.
+
+Use the CLI to make the pass reproducible:
+
+```bash
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-dsp-reset
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 1 fm4
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 voices 3
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.algorithm 5
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.index 500
+python tools/ministudio_cli.py --port /dev/ttyACM0 note 1 60 110
+python tools/ministudio_cli.py --port /dev/ttyACM0 note 1 64 110
+python tools/ministudio_cli.py --port /dev/ttyACM0 note 1 67 110
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 note-off 1 60
+python tools/ministudio_cli.py --port /dev/ttyACM0 note-off 1 64
+python tools/ministudio_cli.py --port /dev/ttyACM0 note-off 1 67
+```
+
+First require `dspMisses=0` and `dspMaxUs < dspDeadlineUs` for each isolated
+case. Then repeat maximum FM4 software polyphony for 30 minutes with six loops,
+streamed samples, dense drums, master recording, MIDI clock, motion, and event
+automation active. The final safe polyphony is the highest repeatable setting
+with zero missed deadlines, no reboot, and no audible breakup; compilation does
+not establish this limit.
+
 ## 3. SD diagnostic
 
 1. Start the demo or a dense pattern and leave it playing.
@@ -99,7 +132,7 @@ Verify:
 - L1 free-stops and fixes the exact timeline, capped at 20 seconds;
 - L2–L6 wait for an L1 boundary and stop at exactly L1's frame count;
 - mute consumes audio and unmute returns at the correct phase;
-- volume changes are click-free enough for use and persist through GBX v7;
+- volume changes are click-free enough for use and persist through GBX v8;
 - six tracks play for 30 minutes without phase drift or audible underrun;
 - an injected/real stall increments underrun and the track returns only at the
   next boundary, never late/off-phase;

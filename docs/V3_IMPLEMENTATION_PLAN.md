@@ -69,8 +69,10 @@ Research basis:
   representations and lookup/precomputation where practical, and warns that
   double precision is software-emulated:
   [ESP32-S3 speed optimization](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/performance/speed.html).
-- Exponential target behavior is a standard implementation basis for decay and
-  release portions of ADSR control:
+- Web Audio's scheduled exponential targets were reviewed as a common envelope
+  model; Mini Studio 16 deliberately uses finite linear segments so zero-time
+  stages and bounded completion remain deterministic without per-sample
+  exponentials:
   [Web Audio parameter automation](https://webaudio.github.io/web-audio-api/#dom-audioparam-settargetattime).
 
 SOUND uses small banks rather than one unusable parameter list: engine/common,
@@ -89,8 +91,8 @@ protocol operation allocates or performs file I/O in the render path.
    metadata and filenames, not long PCM payloads.
 5. A shared recursive arbiter serializes all FatFS calls and publishes
    contention/failure/max-hold telemetry.
-6. Every persisted format is versioned. GBX v7 is current; v1–v6 load paths are
-   retained.
+6. Every persisted format is versioned. GBX v8 is current; v1–v7 load paths are
+   retained and explicitly select the original `MG/303` engine.
 7. New systems are additive. Original Microgroove workflows remain compiled
    and usable.
 8. USB serial parsing is bounded/non-allocating and only requests subsystem

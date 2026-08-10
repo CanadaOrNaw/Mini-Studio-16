@@ -25,6 +25,7 @@ bytes per main-loop iteration.
 | `transport start\|continue\|stop` | Internal transport |
 | `tempo BPM` | Set 40–300 BPM |
 | `note TRACK NOTE VELOCITY` | Synth track 1–3, MIDI note 24–107, velocity 1–127 |
+| `note_off TRACK NOTE` | Release an MGX/FM4 MIDI note; MG/303 intentionally retains its decay-only behavior |
 | `drum LANE` | Trigger drum lane 1–8 |
 | `sd_test` | Start the SD diagnostic when storage is free |
 | `master start\|stop` | Start or finalize long master WAV capture |
@@ -46,11 +47,35 @@ bytes per main-loop iteration.
 | `motion MAP clear` | Clear mapping 1–4 |
 | `midi status` | MIDI queue, BLE, USB role/mount, byte/message/error, and dropped output-clock counters |
 | `project status` | Current slot and occupied-slot bit mask |
-| `project SLOT save\|load` | Save or load complete GBX v7 project slot 1–8 |
+| `project SLOT save\|load` | Save or load complete GBX v8 project slot 1–8; v1–v7 remain readable |
+| `synth status` | Per-track engine/voices/volume/control summary plus render-block deadline telemetry |
+| `synth TRACK engine mg\|mgx\|fm4` | Select a track engine without deleting the other engine patches |
+| `synth TRACK set PARAM VALUE` | Set a validated named synth parameter using integer wire units |
+| `synth dsp_reset` | Reset block count, last/max render time, and missed-deadline count |
 
 Motion sources are `tilt_x`, `tilt_y`, `accel`, `gyro`, `shake`, and `slap`.
 Targets are `synth1_cutoff`, `synth2_cutoff`, `synth3_cutoff`,
 `synth1_resonance`, `synth2_resonance`, and `synth3_resonance`.
+
+Synth parameter names are grouped as follows:
+
+- common: `engine`, `voices`, `volume`;
+- original: `mg.osc`, `mg.wavetable`, `mg.cutoff`, `mg.resonance`,
+  `mg.filter_env`, `mg.filter_decay`, `mg.amp_decay`;
+- expanded subtractive: `mgx.osc`, `mgx.wavetable`, `mgx.filter_mode`,
+  `mgx.cutoff`, `mgx.resonance`, `mgx.filter_env`, `mgx.pulse_width`,
+  `mgx.sub_level`, `mgx.drive`, `mgx.velocity_amp`,
+  `mgx.velocity_filter`, `mgx.amp.attack|decay|sustain|release`,
+  `mgx.filter.attack|decay|sustain|release`, and
+  `mgx.lfo.destination|rate|depth`;
+- FM global: `fm.algorithm`, `fm.feedback`, `fm.index`;
+- FM operators 1–4: `fm.opN.ratio|level|attack|decay|sustain|release`.
+
+Levels are 0–100, envelope times are milliseconds 0–5000, FM ratios are
+hundredths 25–1600 (`100` = 1.00), LFO rate is hundredths of hertz, and FM
+index is hundredths 0–800. Oscillator/filter/LFO/engine choices use the integer
+enum shown by the UI, but the dedicated `synth ... engine` command is preferred
+for engine selection. Malformed names and out-of-range values are rejected.
 
 ## Storage outputs
 
@@ -91,6 +116,13 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 master stop
 python tools/ministudio_cli.py --port /dev/ttyACM0 --json midi-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 project-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 project 2 save
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 1 mgx
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 mgx.amp.attack 25
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 2 fm4
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 2 fm.op2.ratio 200
+python tools/ministudio_cli.py --port /dev/ttyACM0 note 2 60 110
+python tools/ministudio_cli.py --port /dev/ttyACM0 note-off 2 60
+python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 monitor --seconds 30
 python tools/protocol_soak.py --port /dev/ttyACM0 --count 10000
 ```
