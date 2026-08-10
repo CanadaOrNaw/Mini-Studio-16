@@ -122,6 +122,7 @@ uint16_t sequencerEventRecordStep();
 // Live input -> sound + optional record
 void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent, bool legato);
 void liveDrumHit(uint8_t lane);
+void liveSampleHit(uint8_t slot, uint8_t key);
 
 // pattern + lane helpers (new-layout / sampling additions)
 void clonePatternTo(uint8_t dst);   // copy current pattern into slot dst

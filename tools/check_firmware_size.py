@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Enforce an SRAM/flash budget from the linked ESP32-S3 ELF."""
+"""Enforce ESP32-S3 DRAM/flash budgets from the linked firmware ELF.
+
+GNU ``size``'s Berkeley summary is misleading for ESP32 images: it includes
+virtual/padding sections in ``data`` and ``bss``.  PlatformIO's ESP32 builder
+uses the System V section table and counts only the actual DRAM sections.  We
+intentionally mirror that calculation here so the CI gate and PlatformIO's
+link report describe the same hardware resources.
+"""
 
 from __future__ import annotations
 
@@ -12,21 +19,46 @@ import subprocess
 import sys
 
 
+PROGRAM_SECTIONS = {
+    ".iram0.text",
+    ".iram0.vectors",
+    ".dram0.data",
+    ".flash.text",
+    ".flash.rodata",
+}
+DRAM_SECTIONS = {".dram0.data", ".dram0.bss", ".noinit"}
+
+
 def parse_size_output(output: str) -> dict[str, int]:
-    lines = [line.split() for line in output.splitlines() if line.strip()]
-    for fields in reversed(lines):
-        if len(fields) >= 6 and all(item.isdigit() for item in fields[:4]):
-            text, data, bss, total = map(int, fields[:4])
-            if total != text + data + bss:
-                raise ValueError("GNU size total does not match its components")
-            return {
-                "text": text,
-                "data": data,
-                "bss": bss,
-                "flash_estimate": text + data,
-                "static_ram": data + bss,
-            }
-    raise ValueError("could not parse GNU size output")
+    """Parse ``xtensa-esp32s3-elf-size -A -d`` output.
+
+    These sets match ``SIZEPROGREGEXP`` and ``SIZEDATAREGEXP`` in PlatformIO's
+    espressif32 6.7.0 builder.  Unknown sections are retained in the ELF but do
+    not get mistaken for on-chip static DRAM.
+    """
+    sections: dict[str, int] = {}
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) < 2 or not fields[0].startswith("."):
+            continue
+        try:
+            sections[fields[0]] = int(fields[1])
+        except ValueError:
+            continue
+    if not sections:
+        raise ValueError("could not parse GNU size section output")
+
+    static_ram = sum(sections.get(name, 0) for name in DRAM_SECTIONS)
+    flash_estimate = sum(sections.get(name, 0) for name in PROGRAM_SECTIONS)
+    if static_ram <= 0 or flash_estimate <= 0:
+        raise ValueError("required ESP32 memory sections were not present")
+    return {
+        "dram_data": sections.get(".dram0.data", 0),
+        "dram_bss": sections.get(".dram0.bss", 0),
+        "noinit": sections.get(".noinit", 0),
+        "flash_estimate": flash_estimate,
+        "static_ram": static_ram,
+    }
 
 
 def find_size_tool() -> str:
@@ -47,14 +79,16 @@ def find_size_tool() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("elf", type=pathlib.Path)
-    parser.add_argument("--max-static", type=int, default=200_000)
-    parser.add_argument("--max-flash", type=int, default=7_340_032)
+    parser.add_argument("--max-static", type=int, default=262_144,
+                        help="static DRAM ceiling (80%% of the 327680-byte board budget)")
+    parser.add_argument("--max-flash", type=int, default=3_000_000,
+                        help="program-image ceiling within the 3342336-byte app partition")
     parser.add_argument("--report", type=pathlib.Path)
     args = parser.parse_args()
 
     if not args.elf.is_file():
         parser.error(f"ELF does not exist: {args.elf}")
-    result = subprocess.run([find_size_tool(), str(args.elf)], check=True,
+    result = subprocess.run([find_size_tool(), "-A", "-d", str(args.elf)], check=True,
                             capture_output=True, text=True)
     metrics = parse_size_output(result.stdout)
     metrics.update({"max_static": args.max_static, "max_flash": args.max_flash})

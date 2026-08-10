@@ -408,6 +408,11 @@ bool loopEngineSetMuted(uint8_t track, bool muted) {
     return s_core.setMuted(track, muted);
 }
 
+bool loopEngineSetVolume(uint8_t track, uint8_t percent) {
+    if (percent > 100) return false;
+    return s_core.setVolumeQ15(track, static_cast<int16_t>(percent * 32767u / 100u));
+}
+
 bool loopEngineClear(uint8_t track) {
     if (track >= LOOP_STREAM_TRACKS || loopEngineIsRecording()) return false;
     __atomic_fetch_or(&s_clearRequests, 1u << track, __ATOMIC_ACQ_REL);

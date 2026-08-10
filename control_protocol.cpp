@@ -152,8 +152,13 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
             if (!parseNumber(trackOrStatus, 1, 6, request.arg1))
                 return CONTROL_PARSE_BAD_ARGUMENTS;
             char* action = nextToken(cursor);
-            if (!action || !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
-            if (sameWord(action, "record")) request.command = CONTROL_LOOP_RECORD;
+            if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
+            if (sameWord(action, "volume")) {
+                if (!parseNumber(nextToken(cursor), 0, 100, request.arg2) || !noMore(cursor))
+                    return CONTROL_PARSE_BAD_ARGUMENTS;
+                request.command = CONTROL_LOOP_VOLUME;
+            } else if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            else if (sameWord(action, "record")) request.command = CONTROL_LOOP_RECORD;
             else if (sameWord(action, "stop")) request.command = CONTROL_LOOP_STOP;
             else if (sameWord(action, "mute")) request.command = CONTROL_LOOP_MUTE;
             else if (sameWord(action, "unmute")) request.command = CONTROL_LOOP_UNMUTE;

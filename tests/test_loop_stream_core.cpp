@@ -34,6 +34,9 @@ int main() {
     assert(core.processFrame(0) == 0);
     assert(core.setMuted(0, false));
     assert(core.processFrame(0) == 102);
+    assert(core.setVolumeQ15(0, 16384));
+    assert(core.processFrame(0) == 51);
+    assert(core.setVolumeQ15(0, 32767));
 
     // A storage stall is counted and moves the track into an explicit resync
     // state instead of letting delayed samples shift its musical phase.

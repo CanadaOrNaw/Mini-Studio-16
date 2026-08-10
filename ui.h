@@ -12,6 +12,8 @@ extern uint8_t g_soundParam;     // selected row on SOUND page
 extern uint8_t g_songCursor;     // selected slot on SONG page
 extern uint8_t g_streamSampleSlot;
 extern uint8_t g_streamSampleMode;
+extern uint8_t g_sampleEditMode;  // 0=browser, 1=slot sound, 2=step lock
+extern uint8_t g_sampleParam;
 extern uint8_t g_loopCursor;
 extern uint8_t g_eventCursor;
 extern uint8_t g_motionCursor;

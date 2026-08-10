@@ -95,7 +95,14 @@ def command_words(args: argparse.Namespace) -> List[object]:
     if args.command == "loop-status":
         return ["loop", "status"]
     if args.command == "loop":
-        return ["loop", args.track, args.action]
+        if args.action == "volume" and args.volume is None:
+            raise ValueError("loop volume requires 0..100")
+        if args.action != "volume" and args.volume is not None:
+            raise ValueError("volume value is only valid with loop volume")
+        words: List[object] = ["loop", args.track, args.action]
+        if args.volume is not None:
+            words.append(args.volume)
+        return words
     if args.command == "sample-status":
         return ["sample", "status"]
     if args.command == "sample-assign":
@@ -158,7 +165,8 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("loop-status", help="show six-track streaming state and counters")
     loop = sub.add_parser("loop")
     loop.add_argument("track", type=int, choices=range(1, 7))
-    loop.add_argument("action", choices=("record", "stop", "mute", "unmute", "clear"))
+    loop.add_argument("action", choices=("record", "stop", "mute", "unmute", "clear", "volume"))
+    loop.add_argument("volume", type=int, nargs="?", choices=range(0, 101))
     sub.add_parser("sample-status", help="show streamed sampler quota, voices and counters")
     sample_assign = sub.add_parser("sample-assign")
     sample_assign.add_argument("slot", type=int, choices=range(1, 17))

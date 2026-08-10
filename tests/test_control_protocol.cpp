@@ -41,6 +41,8 @@ int main() {
     assert(request.command == CONTROL_LOOP_RECORD && request.arg1 == 6);
     request = parseOk("MS16/1 10 loop 2 unmute");
     assert(request.command == CONTROL_LOOP_UNMUTE && request.arg1 == 2);
+    request = parseOk("MS16/1 vol loop 2 volume 65");
+    assert(request.command == CONTROL_LOOP_VOLUME && request.arg1 == 2 && request.arg2 == 65);
     request = parseOk("MS16/1 11 sample status");
     assert(request.command == CONTROL_SAMPLE_STATUS);
     request = parseOk("MS16/1 12 sample 16 assign CHORD.wav melodic");

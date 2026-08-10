@@ -160,14 +160,15 @@ void dispatch(const ControlRequest& request) {
                           static_cast<unsigned long>(loops.errors));
             for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
                 const LoopStreamTrackSnapshot& item = loops.tracks[track];
-                Serial.printf(" t%u=%s,%lu,%lu,%lu,%lu,%lu",
+                Serial.printf(" t%u=%s,%lu,%lu,%lu,%lu,%lu,%u",
                               static_cast<unsigned>(track + 1),
                               loopEngineStateName(item.state),
                               static_cast<unsigned long>(item.lengthFrames),
                               static_cast<unsigned long>(item.capturedFrames),
                               static_cast<unsigned long>(item.droppedFrames),
                               static_cast<unsigned long>(item.underruns),
-                              static_cast<unsigned long>(item.ringFrames));
+                              static_cast<unsigned long>(item.ringFrames),
+                              static_cast<unsigned>(item.volumeQ15) * 100u / 32767u);
             }
             Serial.println("");
             break;
@@ -207,6 +208,17 @@ void dispatch(const ControlRequest& request) {
                               request.id, static_cast<unsigned>(request.arg1));
             else
                 replyError(request.id, "loop_clear_rejected");
+            break;
+
+        case CONTROL_LOOP_VOLUME:
+            if (loopEngineSetVolume(static_cast<uint8_t>(request.arg1 - 1),
+                                    static_cast<uint8_t>(request.arg2)))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX
+                              " %s OK loop=%u volume=%u\n", request.id,
+                              static_cast<unsigned>(request.arg1),
+                              static_cast<unsigned>(request.arg2));
+            else
+                replyError(request.id, "loop_volume_rejected");
             break;
 
         case CONTROL_SAMPLE_STATUS: {

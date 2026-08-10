@@ -63,6 +63,8 @@ class MiniStudioCliTests(unittest.TestCase):
         self.assertEqual(cli.command_words(args), ["loop", "status"])
         args = cli.parser().parse_args(["loop", "6", "record"])
         self.assertEqual(cli.command_words(args), ["loop", 6, "record"])
+        args = cli.parser().parse_args(["loop", "2", "volume", "65"])
+        self.assertEqual(cli.command_words(args), ["loop", 2, "volume", 65])
 
     def test_sample_commands(self):
         args = cli.parser().parse_args(["sample-status"])

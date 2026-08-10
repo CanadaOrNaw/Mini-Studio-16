@@ -20,6 +20,7 @@ int32_t loopEngineProcessFrame(int16_t dryInput);
 bool loopEngineRequestRecord(uint8_t track);
 bool loopEngineStopRecording(uint8_t track);
 bool loopEngineSetMuted(uint8_t track, bool muted);
+bool loopEngineSetVolume(uint8_t track, uint8_t percent);
 bool loopEngineClear(uint8_t track);
 bool loopEngineIsRecording();
 bool loopEngineHasActiveIo();

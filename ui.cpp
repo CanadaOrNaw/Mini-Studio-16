@@ -32,6 +32,8 @@ uint8_t g_soundParam = 0;
 uint8_t g_songCursor = 0;
 uint8_t g_streamSampleSlot = 0;
 uint8_t g_streamSampleMode = SAMPLER_SLOT_MELODIC;
+uint8_t g_sampleEditMode = 0;
+uint8_t g_sampleParam = 0;
 uint8_t g_loopCursor = 0;
 uint8_t g_eventCursor = 0;
 uint8_t g_motionCursor = 0;
@@ -302,11 +304,13 @@ static void drawSoundPage() {
 // ---------- SAMPLE page ----------
 static void drawSamplePage() {
     const StreamingSamplerSnapshot sampler = streamingSamplerSnapshot();
+    const SamplerSlot& streamSlot = g_samplerSlotBank.slot(g_streamSampleSlot);
     canvas.setTextColor(COL_TEXT);
     canvas.setCursor(2, 14);
-    canvas.printf("SLOT %u %s  FILES %u", g_streamSampleSlot + 1,
+    canvas.printf("SLOT %u %s %s", g_streamSampleSlot + 1,
                   g_streamSampleMode == SAMPLER_SLOT_SLICED ? "SLICE" : "MELO",
-                  g_fileCount);
+                  g_sampleEditMode == 0 ? "BROWSE" :
+                  g_sampleEditMode == 1 ? "SOUND" : "LOCK");
 
     // pool usage
     float use = static_cast<float>(g_samplerSlotBank.quotaUsedFrames()) /
@@ -333,6 +337,44 @@ static void drawSamplePage() {
                       static_cast<unsigned long>(sampler.recordDroppedFrames));
     }
 
+    if (g_sampleEditMode != 0) {
+        canvas.setCursor(2, recording ? 37 : 25);
+        canvas.setTextColor(streamSlot.mode == SAMPLER_SLOT_EMPTY ? COL_GRID : COL_SYNTH2);
+        canvas.printf("%s  PAT%u STEP%u %s", streamSlot.mode == SAMPLER_SLOT_EMPTY
+                      ? "(empty)" : streamSlot.filename, g_curPattern + 1, g_curStep + 1,
+                      g_samplerSequence.findLock(g_curPattern, g_curStep,
+                                                 g_streamSampleSlot) ? "LOCKED" : "");
+        if (streamSlot.mode == SAMPLER_SLOT_EMPTY) return;
+        const SamplerLockEntry* lock = g_samplerSequence.findLock(
+            g_curPattern, g_curStep, g_streamSampleSlot);
+        const char* names[] = {"PITCH", "GAIN", "CUTOFF", "RESONANCE", "TRIM START", "TRIM LENGTH"};
+        int y = recording ? 52 : 40;
+        for (uint8_t row = 0; row < 6; ++row) {
+            canvas.setTextColor(row == g_sampleParam ? COL_TEXT : COL_DIM);
+            canvas.setCursor(2, y);
+            canvas.printf("%c %-11s", row == g_sampleParam ? '>' : ' ', names[row]);
+            if (g_sampleEditMode == 1) {
+                if (row == 0) canvas.printf("%+.1f st", streamSlot.pitchQ8 / 256.0f);
+                else if (row == 1) canvas.printf("%3u%%", streamSlot.gainQ15 * 100u / 32767u);
+                else if (row == 2) canvas.printf("%3u%%", streamSlot.cutoffQ15 * 100u / 32767u);
+                else if (row == 3) canvas.printf("%3u%%", streamSlot.resonanceQ15 * 100u / 32767u);
+                else if (row == 4) canvas.printf("%.2fs", streamSlot.trimStart /
+                                                  static_cast<float>(streamSlot.sourceRate));
+                else canvas.printf("%.2fs", streamSlot.trimLength /
+                                    static_cast<float>(streamSlot.sourceRate));
+            } else if (!lock) {
+                canvas.print("--");
+            } else if (row == 0) canvas.printf("%+.1f st", lock->pitchQ8 / 256.0f);
+            else if (row == 1) canvas.printf("%3u%%", lock->gainQ15 * 100u / 32767u);
+            else if (row == 2) canvas.printf("%3u%%", lock->cutoffQ15 * 100u / 32767u);
+            else if (row == 3) canvas.printf("%3u%%", lock->resonanceQ15 * 100u / 32767u);
+            else if (row == 4) canvas.printf("%3u%%", lock->trimStartQ15 * 100u / 32767u);
+            else canvas.printf("%3u%%", lock->trimLengthQ15 * 100u / 32767u);
+            y += 13;
+        }
+        return;
+    }
+
     if (g_fileCount == 0 && !recording) {
         canvas.setTextColor(COL_DIM);
         canvas.setCursor(2, 40);
@@ -344,7 +386,6 @@ static void drawSamplePage() {
         return;
     }
 
-    const SamplerSlot& streamSlot = g_samplerSlotBank.slot(g_streamSampleSlot);
     canvas.setCursor(2, recording ? 37 : 25);
     canvas.setTextColor(streamSlot.mode == SAMPLER_SLOT_EMPTY ? COL_GRID : COL_SYNTH2);
     canvas.printf("STREAM: %s", streamSlot.mode == SAMPLER_SLOT_EMPTY
@@ -381,9 +422,10 @@ static void drawLoopsPage() {
         const int y = 30 + track * 15;
         canvas.setTextColor(track == g_loopCursor ? COL_TEXT : COL_DIM);
         canvas.setCursor(2, y);
-        canvas.printf("%c L%u %-10s %5.1fs U%lu D%lu",
+        canvas.printf("%c L%u %-9s %3u%% %4.1fs U%lu D%lu",
                       track == g_loopCursor ? '>' : ' ', track + 1,
                       loopEngineStateName(item.state),
+                      static_cast<unsigned>(item.volumeQ15) * 100u / 32767u,
                       item.lengthFrames / static_cast<float>(SAMPLE_RATE),
                       static_cast<unsigned long>(item.underruns),
                       static_cast<unsigned long>(item.droppedFrames));
@@ -434,6 +476,8 @@ static void drawMotionPage() {
 
 // ---------- SONG page ----------
 static void drawSongPage() {
+    const MasterRecorderSnapshot master = masterRecorderSnapshot();
+    const StemRecorderSnapshot stems = stemRecorderSnapshot();
     canvas.setTextColor(COL_TEXT);
     canvas.setCursor(2, 14);
     const uint8_t pageBase = (g_songCursor / 64) * 64;
@@ -443,6 +487,18 @@ static void drawSongPage() {
     canvas.setCursor(120, 14);
     canvas.printf("PROJECT P%u %s", g_curProject + 1,
                   storageProjectExists(g_curProject) ? "*" : "");
+    if (masterRecorderIsBusy() || stemRecorderIsBusy()) {
+        canvas.setTextColor(COL_REC);
+        canvas.setCursor(2, 112);
+        if (masterRecorderIsBusy())
+            canvas.printf("MASTER %s %lus D%lu", masterRecorderStateName(master.state),
+                          static_cast<unsigned long>(master.framesWritten / SAMPLE_RATE),
+                          static_cast<unsigned long>(master.droppedFrames));
+        else
+            canvas.printf("STEMS %s %lus D%lu", stemRecorderStateName(stems.state),
+                          static_cast<unsigned long>(stems.framesWritten / SAMPLE_RATE),
+                          static_cast<unsigned long>(stems.droppedFrames));
+    }
 
     const int gx = 8, gy = 28, cw = 14, ch = 16;
     for (int visible = 0; visible < 64; visible++) {
@@ -523,15 +579,19 @@ void uiDraw() {
         case PAGE_SOUND:   drawSoundPage();
             drawFooter("v c row  x b adjust  m=fine"); break;
         case PAGE_SAMPLE:  drawSamplePage();
-            drawFooter("hold .=mic  hold n=bus rec  /=assign"); break;
+            drawFooter(g_sampleEditMode == 0
+                       ? "tab:edit /=assign hold .=mic hold n=bus"
+                       : g_sampleEditMode == 1
+                       ? "tab:lock arrows:edit m+x/b:step"
+                       : "tab:browse arrows:lock /=clear ,=step clr"); break;
         case PAGE_LOOPS:   drawLoopsPage();
-            drawFooter("v/c:track /=record .:mute z:clear"); break;
+            drawFooter("v/c:track x/b:volume /=record .:mute"); break;
         case PAGE_EVENT:   drawEventPage();
             drawFooter("v/c:track x/b:bars /=arm .:mute"); break;
         case PAGE_MOTION:  drawMotionPage();
             drawFooter("v/c:map x/b:source .:target z:clear"); break;
         case PAGE_SONG:    drawSongPage();
-            drawFooter("4..-:set z:clr .:loop n:mode"); break;
+            drawFooter("hold .=master  hold n=stems"); break;
         case PAGE_DIAG:    drawDiagPage();
             drawFooter("/:run  keep music playing"); break;
         default:           drawHelpPage();

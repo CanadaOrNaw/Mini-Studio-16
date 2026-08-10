@@ -284,6 +284,18 @@ void liveDrumHit(uint8_t lane) {
     }
 }
 
+void liveSampleHit(uint8_t slot, uint8_t key) {
+    if (slot >= SAMPLER_SLOT_COUNT || key >= SAMPLER_SLICE_COUNT ||
+        !streamingSamplerTrigger(slot, key)) return;
+    eventLooperRecordSample(sequencerEventRecordStep(), slot, key, 127);
+    if (!g_recEnabled) return;
+    const uint8_t pattern = g_playing ? g_playPattern : g_curPattern;
+    const uint8_t step = g_playing ? quantizedStep() : g_curStep;
+    g_samplerSequence.setEvent(pattern, step, slot, key);
+    if (!g_playing) g_curStep = static_cast<uint8_t>((g_curStep + 1u) % NUM_STEPS);
+    g_needRedraw = true;
+}
+
 // ---------- helpers for the one-key layout / sampling ----------
 void clonePatternTo(uint8_t dst) {
     if (dst >= NUM_PATTERNS) return;
