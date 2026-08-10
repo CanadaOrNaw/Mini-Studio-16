@@ -4,43 +4,30 @@ Published branch: `agent/v3-alpha-sd-streaming`
 
 This is the precise verification boundary for the current alpha. “Implemented”
 means the production firmware path exists, its hardware-independent behavior is
-host-tested, and both target profiles compile/link. “Hardware-verified” remains
+host-tested, and all three target profiles compile/link. “Hardware-verified” remains
 false until a physical Cardputer-ADV produces measurements.
 
 ## Verified pre-hardware code checkpoint
 
-- Firmware source head: `b2787d6ddfe2db0caee27c9eaea6c325818821bd`
-- Pull-request workflow merge SHA: `e3a1d2bf4cbb53df7d359b7c37e8541780bc1dfb`
-- GitHub Actions: [run 31406764225](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31406764225)
+- Firmware source head: `91cfbf4a175fe0460584ebd1dc0b8c90b18c45b2`
+- GitHub Actions: [run 31442472843](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31442472843)
 - Host tests, AddressSanitizer, UndefinedBehaviorSanitizer, normal firmware,
-  USB-host firmware, resource gates, merged-image generation, SD-card package,
-  checksum manifest, and artifact upload: **passed**
-- Normal image: 181,440 bytes static DRAM; 939,189-byte flash estimate;
-  standalone merged-image SHA-256
-  `5c591ddcc03fb2e2b2e21f7690b45b5de164a9f9da781c476920572d0d5e5c24`
-- USB-host image: 169,872 bytes static DRAM; 957,609-byte flash estimate;
-  standalone merged-image SHA-256
-  `e167d2bef0b2a80e87d6aecfa3357721cd14df7200a69b0efef0b1b323519869`
-- Combined dual-role image SHA-256
-  `9f46dfed1ae2b2447cb5526cd0af9791d764cb6a703fa83c7a77f5978f4e58b2`
-- [Artifact ID 9070055426](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31406764225/artifacts/9070055426);
-  ZIP SHA-256
-  `50875ea36bfca0288757022f86c9d0c356b2c532979a17578543b5799cba71f1`
-- Starter SD ZIP SHA-256
-  `708e868ea108fee26cbdcd150740ba96e665e31712bca774d4ededb40d174256`
+  USB-host firmware, original-ESP32 Audio Cap firmware, resource gates, all
+  three merged images, dual-role generation, SD-card package, checksum
+  manifest, code-defined PCB artifact check, and uploads: **passed**
+- Normal image: 185,704 bytes static DRAM; 942,373-byte flash estimate.
+- USB-host image: 174,120 bytes static DRAM; 960,861-byte flash estimate.
+- Audio Cap PlatformIO report: 70,600 bytes RAM and 1,101,625 bytes flash.
+- [Artifact ID 9083418631](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31442472843/artifacts/9083418631),
+  32,332,301 bytes; GitHub artifact digest
+  `sha256:948c415b1f024b09f80c4996b1aaa273aafaee340beed6f0d90b6b19cf3e2491`.
 
-The downloaded artifact was independently extracted; all fifteen manifest
-payload entries passed `sha256sum -c SHA256SUMS.txt`. The Normal application at
-`0x10000` and USB-host application at `0x300000` were independently compared
-against the combined image and are byte-identical; the complete inter-slot gap
-contains only `0xFF`. The embedded partition-table SHA-256 is
-`b7c4e29a17187775d3a5579a872259c376c47092a8a8d79803aaa4dc37f7e1e2`,
-matching `dual-image-layout.json`. The artifact contains the combined image,
-both standalone recovery images, application binaries and ELFs, both resource
-reports, partition/layout files, starter SD ZIP, license, instructions,
-manifest, and build provenance. A later documentation-only head can produce a
-different outer ZIP digest because `BUILD_INFO.txt` embeds its workflow merge
-SHA; the three image hashes above identify this firmware code checkpoint.
+The artifact contains the combined Cardputer image, both standalone recovery
+images, the one-file Audio Cap image, three application binaries/ELFs, both
+Cardputer resource reports, partition/layout files, starter SD ZIP, license,
+instructions, per-file checksum manifest, and build provenance. GitHub's
+artifact digest covers the complete uploaded ZIP; `SHA256SUMS.txt` is the
+builder-facing check after extraction.
 
 ## Implemented
 
@@ -109,6 +96,11 @@ SHA; the three image hashes above identify this firmware code checkpoint.
   no upstream Microgroove/MakerWorld mesh is redistributed.
 - A dedicated Pages workflow validates, packages, and deploys the static site,
   printable legend, editable CAD source, and STL downloads.
+- The optional Rev-A Audio Cap now has a fixed ESP32-WROOM-32E/PCM1808
+  architecture, separate compiled firmware, a Cardputer SPI task that idles
+  almost completely when no cap is detected, shared tested rate conversion,
+  line monitoring and pairing controls, regional sourcing/BOM, code-defined
+  PCB review artifacts, and watertight deterministic two-part shell STLs.
 
 ## Verified by automated tests
 
@@ -152,7 +144,8 @@ SHA; the three image hashes above identify this firmware code checkpoint.
   the hardware smoke runner expose it for the arrival benchmark.
 - GitHub runs the host suite and separate AddressSanitizer plus
   UndefinedBehaviorSanitizer jobs.
-- CI compiles and links both target profiles, enforces the DRAM/flash budgets,
+- CI compiles and links both Cardputer profiles plus the Audio Cap profile,
+  enforces the Cardputer DRAM/flash budgets,
   generates both standalone images and the dual-role image, validates slot
   alignment/capacity/content, and uploads image/ELF/layout/size reports.
 - Product-layer tests require exactly 56 unique keys, valid page-context
@@ -183,8 +176,8 @@ Host. The resulting resource boundary is:
 
 | Profile | Static DRAM | Gate headroom | Flash estimate | Flash headroom |
 | --- | ---: | ---: | ---: | ---: |
-| USB CDC+MIDI device | 181,440 B | 23,360 B | 939,189 B | 2,060,811 B |
-| USB MIDI host | 169,872 B | 34,928 B | 957,609 B | 2,042,391 B |
+| USB CDC+MIDI device | 185,704 B | 19,096 B | 942,373 B | 2,057,627 B |
+| USB MIDI host | 174,120 B | 30,680 B | 960,861 B | 2,039,139 B |
 
 Fixed host-layout measurements are 60 bytes per original voice, 76 bytes per
 MGX voice, 124 bytes per FM voice, and 952 bytes for one `SynthTrack` containing
@@ -222,11 +215,15 @@ the safe *active* FM polyphony under the complete audio/storage workload.
   side clearance. Photograph the real device before replacing the site's
   original vector mockup with product photography.
 
-### Additional hardware
+### Optional Audio Cap first article
 
-- A real line input requires an external ADC/codec or board modification.
-- Conventional Bluetooth headphone/speaker audio requires an external
-  Bluetooth Classic A2DP coprocessor; ESP32-S3 firmware alone cannot supply it.
+- Confirm every unique production footprint/header height against the physical
+  Cardputer and current MPN datasheets before releasing manufacturing Gerbers.
+- Assemble Rev A and execute the unpowered, rail/current/thermal, ADC clock,
+  SPI soak, line-level/frequency/noise, RF/A2DP latency/reconnect, battery, fit,
+  port-alignment, and PETG clip-fatigue checklist.
+- A failed/removed/reset cap must leave the stock instrument fully usable and
+  must not back-power, crash, or corrupt its SD card.
 
 No unimplemented software-only milestone is being intentionally held back.
 Failures found by the physical pass become the next bug-fix work, not evidence
