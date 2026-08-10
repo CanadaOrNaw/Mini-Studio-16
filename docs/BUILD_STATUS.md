@@ -7,6 +7,29 @@ means the production firmware path exists, its hardware-independent behavior is
 host-tested, and both target profiles compile/link. “Hardware-verified” remains
 false until a physical Cardputer-ADV produces measurements.
 
+## Verified pre-hardware code checkpoint
+
+- Source head: `273380b05ee60fb599d5c585bf064ab1dcf09710`
+- GitHub Actions: [run 31354564512](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31354564512)
+- Host tests, AddressSanitizer, UndefinedBehaviorSanitizer, normal firmware,
+  USB-host firmware, resource gates, merged-image generation, SD-card package,
+  checksum manifest, and artifact upload: **passed**
+- Normal image: 179,104 bytes static DRAM; 921,529-byte flash estimate;
+  merged-image SHA-256 `9bb01e087349474dbb2c7ec701142b9fca6a7c6288ec2832cbea90fbddf1850c`
+- USB-host image: 167,512 bytes static DRAM; 940,005-byte flash estimate;
+  merged-image SHA-256 `ba698aedeaba4bd7e4ccad883df65aa0b51d36f6aa5ffe7380054e201a487eab`
+- Artifact ID `9050233082`; ZIP SHA-256
+  `36ae4d96a005656417603777ca9587cd3ffbc024d1ac1a58064c05a300ed835c`
+- Starter SD ZIP SHA-256
+  `76123e5bc6607cbd8f1dfcc9a19d8901faab1f2f1884f3763c2660231623546c`
+
+The downloaded 13-file artifact was independently extracted; all eleven
+payload entries passed `sha256sum -c SHA256SUMS.txt`, and the starter SD ZIP
+contained the factory project, license, and fourteen WAV assets. A later
+documentation-only head may produce a different outer artifact digest because
+`BUILD_INFO.txt` embeds its workflow SHA; the two merged image hashes above are
+the code checkpoint.
+
 ## Implemented
 
 - Original Microgroove synth, drums, keyboard, UI, short mic sampler, short
