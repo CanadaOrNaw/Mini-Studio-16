@@ -56,8 +56,8 @@ jobs:
             --output .pio/build/m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin
       - name: Create artifact manifest
         run: |
-          (cd factory-sd && python -m zipfile -c \
-            ../.pio/build/Mini-Studio-16_SD.zip groovebox)
+          python tools/package_sd.py \
+            factory-sd/groovebox .pio/build/Mini-Studio-16_SD.zip
           cp factory-sd/README.md .pio/build/SD_CARD_README.md
           cp LICENSE .pio/build/LICENSE.txt
           cd .pio/build

@@ -90,7 +90,8 @@ esptool.py --chip esp32s3 write_flash 0x0 microgroove-v3-alpha.bin
 Each artifact includes `SHA256SUMS.txt`, `BUILD_INFO.txt`, both application
 ELFs/images, both merged images, both resource reports, the license, and a
 `Mini-Studio-16_SD.zip` starter card image. Verify the extracted artifact with
-`sha256sum -c SHA256SUMS.txt` before flashing.
+`sha256sum -c SHA256SUMS.txt` before flashing. The starter image is packaged
+with normalized metadata so identical source trees produce identical ZIPs.
 
 The host image is named `microgroove-v3-alpha-usb-host.bin`. Flashing it
 replaces the normal CDC+MIDI image; the ESP32-S3's single native USB PHY cannot

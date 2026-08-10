@@ -159,6 +159,7 @@ g++ -pipe -x c++ -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
 echo "sketch integration: host syntax check passed"
 
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_merge_firmware.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_package_sd.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_ministudio_cli.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_split_stems.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_protocol_soak.py"
