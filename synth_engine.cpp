@@ -8,11 +8,13 @@ namespace {
 float clampf(float value, float minimum, float maximum) {
     return value < minimum ? minimum : (value > maximum ? maximum : value);
 }
+
 float phaseToUnit(uint32_t phase) {
     return static_cast<float>(phase >> 8) * (1.0f / 16777216.0f);
 }
 
 float softDrive(float sample, float amount) {
+    if (!(amount > 0.0f)) return sample;
     const float gain = 1.0f + clampf(amount, 0.0f, 1.0f) * 4.0f;
     float value = sample * gain;
     if (value > 1.0f) value = 1.0f;
@@ -337,16 +339,26 @@ void SynthTrack::noteOn(float frequency, bool accented, bool legato,
     }
 
     int pick = -1;
-    float quietest = 1.0e9f;
-    for (int index = 0; index < voices; ++index) {
-        bool isActive = engine == SYNTH_ENGINE_MG ? v[index].active :
-                        engine == SYNTH_ENGINE_MGX ? mgxVoices[index].active :
-                                                     fmVoices[index].active;
-        if (!isActive) { pick = index; break; }
-        const float levelValue = engine == SYNTH_ENGINE_MG ? v[index].ampEnv :
-                                 engine == SYNTH_ENGINE_MGX ? mgxVoices[index].level() :
-                                                              fmVoices[index].level();
-        if (levelValue < quietest) { quietest = levelValue; pick = index; }
+    if (engine == SYNTH_ENGINE_MG) {
+        // Preserve the inherited first-free/quietest legacy allocation exactly.
+        float quietest = 1.0e9f;
+        for (int index = 0; index < voices; ++index) {
+            if (!v[index].active) { pick = index; break; }
+            if (v[index].ampEnv < quietest) {
+                quietest = v[index].ampEnv;
+                pick = index;
+            }
+        }
+    } else {
+        // Expanded engines rotate allocation. This makes sequenced polyphonic
+        // cells deterministic even while prior voices are in release.
+        for (int offset = 0; offset < voices; ++offset) {
+            const int index = (rr + offset) % voices;
+            const bool active = engine == SYNTH_ENGINE_MGX
+                ? mgxVoices[index].active : fmVoices[index].active;
+            if (!active) { pick = index; break; }
+        }
+        if (pick < 0) pick = rr;
     }
     rr = static_cast<uint8_t>((pick + 1) % voices);
     if (engine == SYNTH_ENGINE_MG) v[pick].noteOn(frequency, accented, false);

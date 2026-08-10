@@ -61,3 +61,4 @@ void synthProjectEncode(const SynthTrack& track, SaveSynthEngineState& output);
 bool synthProjectValidate(const SaveSynthEngineState& input);
 bool synthProjectDecode(const SaveSynthEngineState& input, SynthTrack& track);
 void synthProjectMigrateLegacy(SynthTrack& track);
+

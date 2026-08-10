@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 
 namespace {
 uint32_t pcmHash(SynthTrack& track, uint32_t frames) {
@@ -26,6 +27,12 @@ void sustainedFm(FmPatch& patch) {
 }  // namespace
 
 int main() {
+    static_assert(sizeof(SynthTrack) < 1024,
+                  "fixed per-track synth state exceeded the software RAM boundary");
+    printf("synth-state legacy=%zu mgxVoice=%zu fmVoice=%zu track=%zu allTracks=%zu\n",
+           sizeof(SynthVoice), sizeof(MgPlusVoice), sizeof(FmVoice),
+           sizeof(SynthTrack), sizeof(SynthTrack) * NUM_SYNTHS);
+
     SynthAdsrParams envelopeParams = {};
     envelopeParams.set(10, 20, 0.25f, 30);
     SynthAdsr envelope = {};
@@ -98,7 +105,10 @@ int main() {
     switched.setEngine(SYNTH_ENGINE_MGX);
     switched.noteOn(220.0f, false, false, 57, 100);
     assert(switched.mgxVoices[0].active && switched.mgxVoices[0].note == 57);
-    for (uint8_t frame = 0; frame < 64; ++frame) (void)switched.render();
+    switched.noteOn(261.6256f, false, false, 60, 100);
+    switched.noteOn(329.6276f, false, false, 64, 100);
+    assert(switched.mgxVoices[1].note == 60 && switched.mgxVoices[2].note == 64);
+    (void)switched.render();
     switched.noteOff(57);
     assert(switched.mgxVoices[0].ampEnvelope.stage == SYNTH_ENV_RELEASE);
     switched.setEngine(SYNTH_ENGINE_FM4);
@@ -117,8 +127,16 @@ int main() {
     legacyTrack.v[0].volume = direct.volume = 0.73f;
     legacyTrack.noteOn(196.0f, true, false);
     direct.noteOn(196.0f, true, false);
-    for (uint32_t frame = 0; frame < 4096; ++frame)
-        assert(legacyTrack.render() == direct.render());
+    uint32_t legacyHash = 2166136261u;
+    for (uint32_t frame = 0; frame < 4096; ++frame) {
+        const float trackSample = legacyTrack.render();
+        assert(trackSample == direct.render());
+        legacyHash ^= static_cast<uint16_t>(
+            static_cast<int16_t>(trackSample * 32767.0f));
+        legacyHash *= 16777619u;
+    }
+    assert(legacyHash == 0xa202afdcu);
+    printf("legacy-mg hash=%08x\n", legacyHash);
 
     SynthParameter parsed = SYNTH_PARAM_ENGINE;
     assert(synthParameterFromName("FM.OP4.RATIO", parsed));

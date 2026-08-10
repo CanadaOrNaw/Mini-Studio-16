@@ -37,6 +37,7 @@ enum SynthEnvelopeStage : uint8_t {
     SYNTH_ENV_SUSTAIN,
     SYNTH_ENV_RELEASE,
 };
+
 struct SynthAdsrParams {
     uint16_t attackMs;
     uint16_t decayMs;
@@ -135,3 +136,4 @@ private:
         }
     }
 };
+

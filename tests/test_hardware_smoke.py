@@ -45,6 +45,11 @@ class FakeSerial:
                 "event status": "position=0 count=0 capacity=2048",
                 "motion status": "available=1 samples=20 gestures=0",
                 "midi status": "usbAvailable=1 bleAvailable=1 queueDrops=0 clockDrops=0",
+                "synth status": (
+                    "dspBlocks=100 dspLastUs=1900 dspMaxUs=2400 dspMisses=0 "
+                    "dspDeadlineUs=11609 t1=MG/303,1,80,40,30 "
+                    "t2=MG/303,1,80,40,30 t3=MG/303,1,80,40,30"
+                ),
             }[command_name]
             self.responses.append(
                 f"MS16/1 {request_id} OK {values}\n".encode()

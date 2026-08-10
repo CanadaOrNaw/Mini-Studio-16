@@ -366,7 +366,7 @@ bool storageSaveProject(uint8_t slot) {
     const LoopEngineSnapshot loops = loopEngineSnapshot();
     for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
         const LoopStreamTrackSnapshot& item = loops.tracks[track];
-            v7.loopMix.volume[track] = static_cast<uint8_t>(
+        v7.loopMix.volume[track] = static_cast<uint8_t>(
             (static_cast<uint32_t>(item.volumeQ15) * 100u + 16383u) / 32767u);
         if (item.state == LOOP_STREAM_MUTED)
             v7.loopMix.mutedMask |= static_cast<uint8_t>(1u << track);

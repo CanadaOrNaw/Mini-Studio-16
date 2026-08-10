@@ -153,3 +153,4 @@ struct SynthTrack {
 const char* synthEngineName(SynthEngine engine);
 const char* synthFilterModeName(SynthFilterMode mode);
 const char* synthLfoDestinationName(SynthLfoDestination destination);
+

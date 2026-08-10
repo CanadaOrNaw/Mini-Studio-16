@@ -31,3 +31,4 @@ const char* synthSoundBankName(SynthSoundBank bank);
 uint8_t synthSoundBankRows(SynthSoundBank bank);
 SynthUiRow synthSoundBankRow(SynthSoundBank bank, uint8_t row);
 int32_t synthSoundParameterStep(SynthParameter parameter, bool fine);
+

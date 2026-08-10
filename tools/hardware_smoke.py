@@ -23,6 +23,7 @@ READ_ONLY_PROBES: tuple[tuple[str, ...], ...] = (
     ("event", "status"),
     ("motion", "status"),
     ("midi", "status"),
+    ("synth", "status"),
 )
 
 PROBE_REQUIRED: dict[str, tuple[str, ...]] = {
@@ -34,6 +35,8 @@ PROBE_REQUIRED: dict[str, tuple[str, ...]] = {
     "event status": ("position", "count", "capacity"),
     "motion status": ("available", "samples", "gestures"),
     "midi status": ("usbAvailable", "bleAvailable", "queueDrops", "clockDrops"),
+    "synth status": ("dspBlocks", "dspLastUs", "dspMaxUs", "dspMisses", "dspDeadlineUs",
+                     "t1", "t2", "t3"),
 }
 
 
@@ -54,6 +57,13 @@ def validate_probe(command: str, response: Response) -> None:
             raise RuntimeError("invalid heap telemetry")
         if not 0 <= int(response.values["battery"]) <= 100:
             raise RuntimeError("invalid battery telemetry")
+    if command == "synth status":
+        if int(response.values["dspDeadlineUs"]) <= 0:
+            raise RuntimeError("invalid DSP deadline telemetry")
+        if int(response.values["dspMaxUs"]) >= int(response.values["dspDeadlineUs"]):
+            raise RuntimeError("audio renderer already exceeded its DSP deadline")
+        if int(response.values["dspMisses"]) != 0:
+            raise RuntimeError("audio renderer reported missed DSP deadlines")
 
 
 def send_correlated(device, request_id: str, words: Iterable[object], timeout: float,

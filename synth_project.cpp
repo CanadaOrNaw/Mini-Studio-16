@@ -6,6 +6,7 @@ uint16_t toQ15(float value) {
     if (value > 1.0f) value = 1.0f;
     return static_cast<uint16_t>(value * 32767.0f + 0.5f);
 }
+
 float fromQ15(uint16_t value) {
     return static_cast<float>(value) * (1.0f / 32767.0f);
 }
@@ -134,3 +135,4 @@ bool synthProjectDecode(const SaveSynthEngineState& input, SynthTrack& track) {
 void synthProjectMigrateLegacy(SynthTrack& track) {
     track.setEngine(SYNTH_ENGINE_MG);
 }
+

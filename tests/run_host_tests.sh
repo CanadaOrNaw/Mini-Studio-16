@@ -138,7 +138,7 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
   "$test_dir/test_synth_ui_model.cpp" "$test_dir/../synth_ui_model.cpp" \
-  "${synth_sources[@]}" -o "$build_dir/test_synth_ui_model"
+  -o "$build_dir/test_synth_ui_model"
 
 "$build_dir/test_synth_ui_model"
 

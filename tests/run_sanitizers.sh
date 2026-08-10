@@ -48,6 +48,8 @@ build_run synth_engine "$test_dir/test_synth_engine.cpp" "${synth_sources[@]}"
 build_run synth_offline "$test_dir/test_synth_offline_render.cpp" "${synth_sources[@]}"
 build_run synth_project "$test_dir/test_synth_project.cpp" \
     "$test_dir/../synth_project.cpp" "${synth_sources[@]}"
+build_run synth_ui "$test_dir/test_synth_ui_model.cpp" \
+    "$test_dir/../synth_ui_model.cpp"
 build_run audio_cap "$test_dir/test_audio_cap_protocol.cpp" \
     "$test_dir/../audio_cap_protocol.cpp"
 

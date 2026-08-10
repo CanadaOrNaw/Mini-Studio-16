@@ -58,3 +58,4 @@ int main() {
     assert(legacy.engine == SYNTH_ENGINE_MG);
     return 0;
 }
+

@@ -680,20 +680,17 @@ static void doPiano(uint8_t kc, const KeySnap& now) {
     if (semi < 0) return;
     uint8_t note, oct; semiToNote(semi, note, oct);
     bool accent = accentHeld(now);
+    const uint8_t midiNote = static_cast<uint8_t>((oct + 1u) * 12u + note - 1u);
 
     if (g_curPage == PAGE_SOUND) {
-        const uint8_t midi = static_cast<uint8_t>((oct + 1u) * 12u + note - 1u);
         g_synths[g_curTrack].noteOn(noteToFreq(note, oct), accent, false,
-                                    midi, accent ? 127 : 96);  // audition
-        midiOutputNoteOn(g_curTrack,
-                         midi,
-                         accent ? 127 : 96);
+                                    midiNote, accent ? 127 : 96);  // audition
+        midiOutputNoteOn(g_curTrack, midiNote, accent ? 127 : 96);
     } else {
         bool legato = heldPianoCount(s_prev) >= 1;
         liveSynthNote(g_curTrack, note, oct, accent, legato);
     }
-    rememberMidiNote(kc, g_curTrack,
-                     static_cast<uint8_t>((oct + 1u) * 12u + note - 1u));
+    rememberMidiNote(kc, g_curTrack, midiNote);
 }
 
 // ---------- main entry ----------
