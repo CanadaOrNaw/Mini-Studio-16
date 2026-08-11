@@ -52,7 +52,7 @@ first physical print/fit remains a hardware gate; see
 | Recording | Long master WAVs and optional five-bus master/synth1/synth2/synth3/drums stem containers on SD | Zero-drop 30-minute captures and power-cut cycles |
 | Control | Bounded `MS16/1` USB serial protocol, desktop CLI, JSON, monitor, discovery, fuzzing, and soak client | Device-side 10,000-command soak |
 | Existing Microgroove | Original `SynthVoice` DSP and workflow remain the default `MG/303` engine; three synth tracks, eight drum lanes, keyboard, short sampler/resampler gestures, speaker, mic, headphones, projects, and factory content retained; samples use adaptive RAM or transparent SD-stream fallback | Regression pass on hardware |
-| Expanded audio | Line input and conventional Bluetooth headphones/speakers | External codec/A2DP expansion hardware; unavailable from stock S3 firmware alone |
+| Expanded audio | One-plug Cardputer-powered Audio Cap: off-the-shelf ATOM Lite + PCM1808, solderless harness, line input, A2DP output, fixed bridge firmware, CLI and two-part snap enclosure | Physical fit, 5VOUT budget, analog quality, SPI soak and Bluetooth compatibility |
 
 The DAW is optional: songs can be captured to master WAV or exported as five
 stems without removing any inherited standalone workflow.
@@ -105,6 +105,13 @@ Build the alternate direct-controller USB-host image:
 
 ```bash
 pio run -e m5stack-cardputer-adv-usb-host
+```
+
+Build and pre-flash the optional ATOM Lite Audio Cap before assembling it:
+
+```bash
+pio run -e mini-studio-audio-cap-atom-lite
+pio run -e mini-studio-audio-cap-atom-lite -t upload --upload-port /dev/ttyUSB0
 ```
 
 Upload the normal image over USB:
@@ -188,6 +195,9 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.op2.ratio 200
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 boot-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode host
+python tools/ministudio_cli.py --port /dev/ttyACM0 cap-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 cap-monitor 25
+python tools/ministudio_cli.py --port /dev/ttyACM0 cap-pair
 python tools/hardware_smoke.py --port /dev/ttyACM0 --sd-test \
   --output cardputer-smoke.json
 ```
@@ -241,11 +251,16 @@ external expansion hardware:
 5. worst-case `MGX`/`FM4` render time and safe polyphony while all audio,
    storage, MIDI, event, and motion systems run;
 6. lower-level ES8311 full-duplex experiments;
-7. line input and conventional Bluetooth audio cap design/validation.
+7. assemble the checked-in solderless Audio Cap; verify EXT 5VOUT current/sag,
+   exact retail-module fit, analog input performance, SPI/clock soak, A2DP
+   pairing/reconnect/latency, enclosure snaps and battery impact.
 
-The cap pin/protocol boundary is specified in
-[`docs/AUDIO_EXPANSION.md`](docs/AUDIO_EXPANSION.md); its packet layout and CRC
-are already covered by host/sanitizer tests.
+The cap architecture is specified in
+[`docs/AUDIO_EXPANSION.md`](docs/AUDIO_EXPANSION.md), and the child-friendly
+purchase/print/flash/assembly guide is
+[`docs/AUDIO_CAP_BUILD_GUIDE.md`](docs/AUDIO_CAP_BUILD_GUIDE.md). Requirements,
+regional sourcing, three printable meshes, transport/rate conversion, both
+firmware sides and CLI are checked in; only physical evidence is outstanding.
 
 Passing compilation or host tests does not substitute for those measurements.
 
@@ -279,3 +294,7 @@ influence rather than a code-derived license obligation.
 All modifications are distributed under the same MIT License. “Mini Studio 16”
 identifies this fork; “Microgroove” and the original artwork belong to their
 respective upstream creators.
+
+The optional cap firmware links Apache-2.0-licensed ESP32-A2DP by Phil
+Schatzmann. Its attribution and license copy are in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

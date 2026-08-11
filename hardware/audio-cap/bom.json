@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "notice": "Buy only factory-assembled modules with installed connectors. Module revisions vary; use the photo checklist before ordering.",
+  "regions": ["Canada", "United States", "European Union"],
+  "items": [
+    {
+      "id": "atom-lite", "quantity": 1, "description": "M5Stack ATOM Lite C008",
+      "sources": {
+        "Canada": [{"vendor": "RobotShop", "url": "https://ca.robotshop.com/products/m5stack-atom-lite-esp32-development-kit"}],
+        "United States": [{"vendor": "DigiKey", "url": "https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/C008/12088545"}],
+        "European Union": [{"vendor": "BerryBase", "url": "https://www.berrybase.de/en/m5stack-atom-lite-esp32-iot-dev-kit"}]
+      }
+    },
+    {
+      "id": "pcm1808", "quantity": 1, "description": "Preassembled PCM1808 stereo line-input I2S module, 3.5 mm jack and installed header",
+      "sources": {
+        "Canada": [{"vendor": "Amazon Canada", "url": "https://www.amazon.ca/Rakstore-PCM1808-Stereo-Single-Ended-Digital/dp/B09CDCLXQC"}],
+        "United States": [{"vendor": "Amazon US", "url": "https://www.amazon.com/Rakstore-PCM1808-Stereo-Single-Ended-Digital/dp/B09CDCLXQC"}],
+        "European Union": [{"vendor": "Amazon Germany", "url": "https://www.amazon.de/-/en/RAKSTORE-PCM1808-Stereo-Single-Ended-Digital/dp/B0D1NNR21W"}]
+      },
+      "photo_check": ["3.5 mm input jack", "DOUT/BCK/LRCK/GND header already installed", "5 V input connector", "board no larger than 50.5 x 30.5 mm", "48 kHz master-mode listing"]
+    },
+    {
+      "id": "cap-header", "quantity": 1, "description": "2x7 2.54 mm extra-long male stacking header, 11 mm minimum exposed pins",
+      "search_terms": "2x7 2.54mm stacking header extra long male",
+      "sources": {
+        "Canada": [{"vendor": "DigiKey Canada", "url": "https://www.digikey.ca/en/products/filter/headers-male-pins/314"}],
+        "United States": [{"vendor": "DigiKey", "url": "https://www.digikey.com/en/products/filter/headers-male-pins/314"}],
+        "European Union": [{"vendor": "Mouser EU", "url": "https://eu.mouser.com/c/connectors/headers-wire-housings/headers-male-pins/"}]
+      }
+    },
+    {
+      "id": "housings-leads", "quantity": 1, "description": "2.54 mm Dupont housings plus precrimped female-to-female and female-to-male leads",
+      "search_terms": "2.54mm Dupont pre crimped wire kit housings",
+      "sources": {
+        "Canada": [{"vendor": "RobotShop", "url": "https://ca.robotshop.com/search?q=dupont+precrimped+wire"}],
+        "United States": [{"vendor": "Pololu", "url": "https://www.pololu.com/category/71/wires-with-pre-crimped-terminals"}],
+        "European Union": [{"vendor": "BerryBase", "url": "https://www.berrybase.de/en/search?sSearch=jumper%20wire"}]
+      }
+    },
+    {
+      "id": "grove-leads", "quantity": 1, "description": "M5Stack A096 Grove-to-Dupont cable set, factory-crimped",
+      "sources": {
+        "Canada": [{"vendor": "RobotShop", "url": "https://www.robotshop.com/products/m5stack-grove2dupont-conversion-cable-20cm-5pairs"}],
+        "United States": [{"vendor": "DigiKey", "url": "https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/A096/16679751"}],
+        "European Union": [{"vendor": "BerryBase", "url": "https://www.berrybase.de/en/seeed-grove-adapter-cable-4-pin-dupont-male-4-pin-grove-male-pack-of-5"}]
+      }
+    },
+    {
+      "id": "power-branch", "quantity": 2, "description": "WAGO 221-413 compact 3-port lever splice; one for +5 V and one for GND, hidden inside the cap",
+      "search_terms": "WAGO 221-413 3 conductor compact lever connector",
+      "sources": {
+        "Canada": [{"vendor": "DigiKey Canada", "url": "https://www.digikey.ca/en/products/detail/wago-corporation/221-413/13545172"}],
+        "United States": [{"vendor": "DigiKey", "url": "https://www.digikey.com/en/products/detail/wago-corporation/221-413/13545172"}],
+        "European Union": [{"vendor": "RS", "url": "https://eu.rs-online.com/web/p/splice-connectors/2203119"}]
+      }
+    },
+    {
+      "id": "internal-adc-power-adapter", "quantity": 1, "description": "Short prewired internal 5 V plug matching the purchased PCM1808 power socket; no data wires required",
+      "search_terms": "USB power pigtail male red black bare prewired",
+      "sources": {
+        "Canada": [{"vendor": "Amazon Canada", "url": "https://www.amazon.ca/s?k=USB+power+pigtail+male+red+black"}],
+        "United States": [{"vendor": "Amazon US", "url": "https://www.amazon.com/s?k=USB+power+pigtail+male+red+black"}],
+        "European Union": [{"vendor": "Amazon Germany", "url": "https://www.amazon.de/s?k=USB+power+pigtail+male+red+black"}]
+      },
+      "note": "This is a hidden internal plug between the 5 V branch and the ADC module. It never exits the closed cap. Match USB-C or Micro-USB to the module photo."
+    },
+    {
+      "id": "hardware", "quantity": 1, "description": "Two M2 x 6 mm nylon screws and two M2 nuts for module retention; enclosure itself snap-closes",
+      "search_terms": "M2 nylon screw nut assortment",
+      "sources": {
+        "Canada": [{"vendor": "Amazon Canada", "url": "https://www.amazon.ca/s?k=M2+nylon+screw+nut"}],
+        "United States": [{"vendor": "McMaster-Carr", "url": "https://www.mcmaster.com/products/nylon-screws/thread-size~m2/"}],
+        "European Union": [{"vendor": "RS", "url": "https://eu.rs-online.com/web/c/fasteners-fixings/screws-bolts/machine-screws/?searchTerm=M2%20nylon"}]
+      }
+    }
+  ]
+}

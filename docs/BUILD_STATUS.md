@@ -159,6 +159,12 @@ SHA; the three image hashes above identify this firmware code checkpoint.
   references, deterministic generated outputs, a 336-triangle STL with every
   edge incident to exactly two faces and exact 88 × 58 × 6 mm bounds, and a
   static Pages artifact with no missing internal links or duplicate HTML IDs.
+- Audio Cap tests freeze the one-plug/Cardputer-powered/no-PCB/no-solder
+  requirements, protect 5VIN/SD/I2C pins, require Canada/US/EU sourcing for
+  every part, validate three watertight meshes, and exercise packet corruption,
+  sequence wrap, bounded rings and chunk-independent 48/22.05/44.1 kHz paths.
+- CI also builds the pinned original-ESP32 ATOM Lite cap firmware and publishes
+  its image/ELF plus the assembly guide beside the two Cardputer images.
 
 ## Resource boundary
 
@@ -222,11 +228,16 @@ the safe *active* FM polyphony under the complete audio/storage workload.
   side clearance. Photograph the real device before replacing the site's
   original vector mockup with product photography.
 
-### Additional hardware
+### Solderless Audio Cap hardware
 
-- A real line input requires an external ADC/codec or board modification.
-- Conventional Bluetooth headphone/speaker audio requires an external
-  Bluetooth Classic A2DP coprocessor; ESP32-S3 firmware alone cannot supply it.
+- Buy the exact ATOM Lite, photo-matched preassembled PCM1808 module, header,
+  precrimped leads, two internal lever splices and matching hidden ADC plug.
+- Print the header gauge first, then the checked-in two-part enclosure. Tune
+  header/module/button/jack/snap clearances from actual measurements.
+- Verify the Cardputer EXT `5VOUT` budget, voltage sag, temperature and battery
+  impact; the cap has no second power connection by design.
+- Validate line level/noise/clipping, 48 kHz I2S format/polarity, SPI CRC and
+  clock-drift soak, A2DP pair/reconnect/latency and three sink models.
 
 No unimplemented software-only milestone is being intentionally held back.
 Failures found by the physical pass become the next bug-fix work, not evidence

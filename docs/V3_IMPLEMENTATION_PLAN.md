@@ -125,10 +125,11 @@ protocol operation allocates or performs file I/O in the render path.
 | M4 six loops | L1–L6 record/play/mute/volume/clear; exact timeline; SD refill; underrun resync; recovery | Timeline/stall/record/ring tests | Six streams for 30 minutes; six plus record |
 | M5 sampler/sequencer | 16 patterns, 128 chain, 16 streamed slots, 40-second quota, melodic/sliced, trim/params/locks, bus/mic recording, GBX v4+ | Layout, migration syntax, quota/slice/lock/voice tests | Reboot persistence and live latency |
 | M6 event/motion/MIDI | Five × 128-bar event tracks; BMI270 mappings/automation; BLE MIDI; composite USB device; alternate USB host | Event/motion/MIDI/BLE/USB descriptor tests; both images link | Gesture calibration, reconnect, enumeration, clock jitter |
-| M7 full duplex/expansion | Low-level experiment boundary, cap pin map, fixed PCM packet/CRC contract, and external hardware requirements | Packet layout/CRC/bounds host-tested; no safe analog/RF host-only substitute exists | ES8311 experiment; line/A2DP hardware |
+| M7 full duplex/expansion | Low-level ES8311 boundary plus complete solderless, Cardputer-powered Audio Cap: retail ATOM Lite/PCM1808 modules, fixed SPI/rate-conversion bridge, CLI and hard design manifest | Packet/CRC/sequence/ring/converter tests; requirement and regional-BOM tests; Cardputer and ATOM firmware compile | ES8311 experiment; cap power/audio/RF measurements |
 | M8 expanded synthesis | Per-track `MG/303`, `MGX`, and true four-operator `FM4`; banked UI/CLI; GBX v8 migration; render telemetry/benchmark | Legacy golden-vector regression; operator/algorithm/ratio/envelope/feedback/switch tests; deterministic offline PCM/spectral statistics; malformed patch validation; both images link under memory gates | Worst-case render time and safe simultaneous FM polyphony with loops/sampler/drums/recording |
 | M9 dual-role boot | Common pre-subsystem selector in both apps; `normal`/`usbhost` OTA slots; validated reboot switch; serial/CLI control; recording/mutation/diagnostic interlocks; combined and standalone artifacts | Pure role/runtime decision tests; malformed/missing/mismatched slot tests; all busy sources and blocker precedence; strict partition-layout and merge-placement tests; both profiles link against the same partition table; combined artifact manifest | Flash combined image, switch both directions repeatedly, power-cut the selection write, and verify USB role/enumeration after every reboot |
 | M10 physical/product layer | Original parameterized open cradle with committed STL; canonical 56-key map; print-ready SVG; responsive interactive Pages site; deterministic build/download manifest; upstream/mechanical attribution | Key/schema/context tests; SVG regeneration; binary STL bounds/manifold checks; static-site link/accessibility/build tests; Pages artifact workflow | Print and caliper fit, port/access/comfort check, photograph actual device, and tune clearances from measurements |
+| M11 solderless Audio Cap product layer | One 14-pin plug; EXT-powered ATOM Lite + PCM1808; no custom PCB/soldering/second cable; precrimp/lever harness; two-part compliant snap case, fit gauge, three-region BOM and beginner guide | Eight-constraint drift guard; protected-pin assertions; BOM coverage; three watertight bounded meshes; deterministic generator | Fit purchased revisions, measure 5VOUT/current/heat, tune case/snaps, analog/SPI/A2DP/battery soak |
 
 ## Hardware test sequence
 
@@ -159,6 +160,8 @@ Run in this order so a failing lower layer does not invalidate later results.
     recording, MIDI, and motion are active. Capture worst render block time and
     missed audio deadlines.
 13. Calibrate gesture thresholds and test lower-level ES8311 full duplex.
+14. Print the Audio Cap gauge/base/lid, assemble the no-solder harness, measure
+    EXT power before closing, then run the line/SPI/A2DP test section.
 
 ## Initial pass criteria
 

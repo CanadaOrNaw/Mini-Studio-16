@@ -271,6 +271,25 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode host
 
 See `CONTROL_PROTOCOL.md` for the full command table.
 
+## Optional solderless Audio Cap
+
+The optional cap adds 3.5 mm stereo line input (summed to Mini Studio's mono
+engine) and Bluetooth Classic output to ordinary headphones/speakers. It is
+powered entirely through its one 14-pin Cardputer plug. Monitoring is off at
+boot to prevent feedback. Set a low level first, then pair:
+
+```bash
+python tools/ministudio_cli.py --port /dev/ttyACM0 cap-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 cap-monitor 20
+python tools/ministudio_cli.py --port /dev/ttyACM0 cap-pair
+```
+
+You may also press the cap's protected pair button. Purple means discovery,
+green means A2DP connected, blue means the line ADC/bridge is ready, and red
+means stop and inspect diagnostics. Removing the cap leaves the normal
+speaker, mic, headphone and MIDI workflows unchanged. See
+`AUDIO_CAP_BUILD_GUIDE.md` before assembly or first power.
+
 ## SD card layout
 
 ```text

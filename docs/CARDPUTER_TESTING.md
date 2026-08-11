@@ -290,6 +290,31 @@ I2S owner for simultaneous ADC/DAC; monitor for driver conflicts, feedback,
 clock errors, noise, CPU load, and audio drops. Do not claim full duplex from
 compile success.
 
+## 12. Solderless Audio Cap
+
+Follow `AUDIO_CAP_BUILD_GUIDE.md`; photograph every harness connection before
+closing. Record the PCM1808 listing/photo/revision, measured dimensions and
+whether it uses USB-C or Micro-USB internally. Confirm the only outside wired
+connection is the 14-pin Cardputer plug.
+
+Before normal use, put a meter in series with EXT pin 6 and record cap current
+at idle, ADC signal, discovery, pairing and loud A2DP playback. Record EXT
+voltage at the Cardputer and cap under peak load plus Cardputer/regulator/ATOM
+temperature after 30 minutes. Stop on excessive sag, heat or reboot; do not add
+a second power input.
+
+Run `cap status`, a ten-minute bidirectional SPI soak, line silence/tone/sweep,
+maximum clean input-level tests, and simultaneous six-loop/master-recording
+tests. Require zero unreported CRC/sequence failures and no Cardputer audio
+deadline miss. Test Bluetooth pair/reconnect/30-minute playback with three sink
+models, five cold starts and five cap removal/reinsertions while powered off.
+Measure latency and battery runtime. Inspect the master WAV to prove monitored
+line input was recorded without Bluetooth feedback.
+
+Finally record jack/button/light-pipe alignment, header insertion depth, snap
+retention and reopening wear. Adjust only the parameterized enclosure after
+measurements; keep the one-plug/no-PCB/no-solder acceptance tests unchanged.
+
 ## Results required for each bug-fix pass
 
 - firmware commit and image SHA-256;

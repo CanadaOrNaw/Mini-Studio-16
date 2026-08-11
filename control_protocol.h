@@ -58,6 +58,11 @@ enum ControlCommand : uint8_t {
     CONTROL_SYNTH_ENGINE,
     CONTROL_SYNTH_SET,
     CONTROL_SYNTH_DSP_RESET,
+    CONTROL_CAP_STATUS,
+    CONTROL_CAP_PAIR,
+    CONTROL_CAP_DISCONNECT,
+    CONTROL_CAP_MONITOR,
+    CONTROL_CAP_CLEAR,
 };
 
 enum ControlParseStatus : uint8_t {

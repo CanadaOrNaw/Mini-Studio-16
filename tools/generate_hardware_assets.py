@@ -21,6 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 LAYOUT = ROOT / "hardware" / "button-layout.json"
 SVG = ROOT / "hardware" / "mini-studio-16-button-layout.svg"
 STL = ROOT / "hardware" / "stl" / "mini-studio-16-bench-cradle.stl"
+CAP_BASE_STL = ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-base.stl"
+CAP_LID_STL = ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-lid.stl"
+CAP_GAUGE_STL = ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-14pin-fit-gauge.stl"
 
 # Published Cardputer-ADV envelope plus a conservative unverified clearance.
 DEVICE_X_MM = 84.0
@@ -128,6 +131,39 @@ def _occupied(x: float, y: float, z: float) -> bool:
     return side_clip or end_clip
 
 
+def _voxel_triangles(xs, ys, zs, occupied):
+    cells = set()
+    for ix in range(len(xs) - 1):
+        for iy in range(len(ys) - 1):
+            for iz in range(len(zs) - 1):
+                center = (
+                    (xs[ix] + xs[ix + 1]) / 2,
+                    (ys[iy] + ys[iy + 1]) / 2,
+                    (zs[iz] + zs[iz + 1]) / 2,
+                )
+                if occupied(*center):
+                    cells.add((ix, iy, iz))
+
+    faces = [
+        ((-1, 0, 0), lambda x0, x1, y0, y1, z0, z1: [(x0,y0,z0),(x0,y0,z1),(x0,y1,z1),(x0,y1,z0)]),
+        ((1, 0, 0), lambda x0, x1, y0, y1, z0, z1: [(x1,y0,z0),(x1,y1,z0),(x1,y1,z1),(x1,y0,z1)]),
+        ((0, -1, 0), lambda x0, x1, y0, y1, z0, z1: [(x0,y0,z0),(x1,y0,z0),(x1,y0,z1),(x0,y0,z1)]),
+        ((0, 1, 0), lambda x0, x1, y0, y1, z0, z1: [(x0,y1,z0),(x0,y1,z1),(x1,y1,z1),(x1,y1,z0)]),
+        ((0, 0, -1), lambda x0, x1, y0, y1, z0, z1: [(x0,y0,z0),(x0,y1,z0),(x1,y1,z0),(x1,y0,z0)]),
+        ((0, 0, 1), lambda x0, x1, y0, y1, z0, z1: [(x0,y0,z1),(x1,y0,z1),(x1,y1,z1),(x0,y1,z1)]),
+    ]
+    triangles = []
+    for ix, iy, iz in sorted(cells):
+        bounds = (xs[ix], xs[ix + 1], ys[iy], ys[iy + 1], zs[iz], zs[iz + 1])
+        for (dx, dy, dz), vertices in faces:
+            if (ix + dx, iy + dy, iz + dz) in cells:
+                continue
+            q = vertices(*bounds)
+            triangles.append((q[0], q[1], q[2]))
+            triangles.append((q[0], q[2], q[3]))
+    return triangles
+
+
 def cradle_triangles():
     cavity_x = DEVICE_X_MM / 2 + CLEARANCE_MM
     cavity_y = DEVICE_Y_MM / 2 + CLEARANCE_MM
@@ -156,43 +192,10 @@ def cradle_triangles():
         }
     )
     zs = [0.0, BASE_HEIGHT_MM, WALL_HEIGHT_MM]
-    cells = set()
-    for ix in range(len(xs) - 1):
-        for iy in range(len(ys) - 1):
-            for iz in range(len(zs) - 1):
-                center = (
-                    (xs[ix] + xs[ix + 1]) / 2,
-                    (ys[iy] + ys[iy + 1]) / 2,
-                    (zs[iz] + zs[iz + 1]) / 2,
-                )
-                if _occupied(*center):
-                    cells.add((ix, iy, iz))
-
-    # Outward-oriented quads for the six cell faces. Each quad becomes two
-    # triangles; internal faces are omitted, making the boolean union watertight.
-    faces = [
-        ((-1, 0, 0), lambda x0, x1, y0, y1, z0, z1: [(x0,y0,z0),(x0,y0,z1),(x0,y1,z1),(x0,y1,z0)]),
-        ((1, 0, 0), lambda x0, x1, y0, y1, z0, z1: [(x1,y0,z0),(x1,y1,z0),(x1,y1,z1),(x1,y0,z1)]),
-        ((0, -1, 0), lambda x0, x1, y0, y1, z0, z1: [(x0,y0,z0),(x1,y0,z0),(x1,y0,z1),(x0,y0,z1)]),
-        ((0, 1, 0), lambda x0, x1, y0, y1, z0, z1: [(x0,y1,z0),(x0,y1,z1),(x1,y1,z1),(x1,y1,z0)]),
-        ((0, 0, -1), lambda x0, x1, y0, y1, z0, z1: [(x0,y0,z0),(x0,y1,z0),(x1,y1,z0),(x1,y0,z0)]),
-        ((0, 0, 1), lambda x0, x1, y0, y1, z0, z1: [(x0,y0,z1),(x1,y0,z1),(x1,y1,z1),(x0,y1,z1)]),
-    ]
-    triangles = []
-    for ix, iy, iz in sorted(cells):
-        bounds = (xs[ix], xs[ix + 1], ys[iy], ys[iy + 1], zs[iz], zs[iz + 1])
-        for (dx, dy, dz), vertices in faces:
-            if (ix + dx, iy + dy, iz + dz) in cells:
-                continue
-            q = vertices(*bounds)
-            triangles.append((q[0], q[1], q[2]))
-            triangles.append((q[0], q[2], q[3]))
-    return triangles
+    return _voxel_triangles(xs, ys, zs, _occupied)
 
 
-def render_binary_stl() -> bytes:
-    triangles = cradle_triangles()
-    title = b"Mini Studio 16 bench cradle; original pre-hardware fit prototype"
+def _render_binary_stl(triangles, title: bytes) -> bytes:
     output = bytearray(title.ljust(80, b"\0")[:80])
     output.extend(struct.pack("<I", len(triangles)))
     for triangle in triangles:
@@ -202,6 +205,78 @@ def render_binary_stl() -> bytes:
             output.extend(struct.pack("<3f", *vertex))
         output.extend(struct.pack("<H", 0))
     return bytes(output)
+
+
+def render_binary_stl() -> bytes:
+    return _render_binary_stl(
+        cradle_triangles(),
+        b"Mini Studio 16 bench cradle; original pre-hardware fit prototype",
+    )
+
+
+def cap_base_triangles():
+    # Side-by-side bays: PCM1808 at the line-jack end, ATOM Lite at the bus end.
+    # The end windows deliberately have extra clearance; a printable fit gauge
+    # is supplied because module revisions and Cardputer shells vary.
+    xs = [-42, -40.4, -31, -29, -17, 10, 39.5, 40.4, 42]
+    ys = [-19, -17.4, -10, -7, 7, 10, 17.4, 19]
+    zs = [0, 1.6, 3.0, 5.0, 9.5, 11.5, 18.0, 20.0]
+
+    def occupied(x, y, z):
+        bottom = z < 1.6
+        side_wall = abs(y) > 17.4
+        end_wall = abs(x) > 40.4
+        # Open one end for the Cardputer header nose and the other for line-in.
+        header_window = x < -40.4 and abs(y) < 10 and 3.0 < z < 11.5
+        line_window = x > 40.4 and abs(y) < 7 and 3.0 < z < 11.5
+        shell = bottom or side_wall or (end_wall and not header_window and not line_window)
+        # Low rails prevent the two factory modules sliding after the lid closes.
+        atom_rails = x < -17 and (7 < abs(y) < 10) and z < 3.0
+        adc_rails = x > 10 and (10 < abs(y) < 12) and z < 3.0
+        divider = -17 < x < -15.4 and abs(y) > 10 and z < 5.0
+        return shell or atom_rails or adc_rails or divider
+
+    return _voxel_triangles(xs, ys, zs, occupied)
+
+
+def cap_lid_triangles():
+    xs = [-42, -40.2, -28, -26, 26, 28, 40.2, 42]
+    ys = [-19, -17.2, -14.5, -12.5, 12.5, 14.5, 17.2, 19]
+    zs = [0, 1.6, 2.8, 4.0]
+
+    def occupied(x, y, z):
+        top = z > 2.8
+        locating_lip = 1.6 < z < 2.8 and (
+            (40.2 > abs(x) > 39.0) or (17.2 > abs(y) > 16.0)
+        )
+        # Four compliant snap fingers. Their free lower ends deflect inward as
+        # the lid is pressed down; small printed nubs catch the base wall edge.
+        snap_finger = z < 2.8 and 26 < abs(x) < 28 and 14.5 < abs(y) < 17.2
+        return top or locating_lip or snap_finger
+
+    return _voxel_triangles(xs, ys, zs, occupied)
+
+
+def cap_gauge_triangles():
+    # A sacrificial 2x7 hole/pitch coupon. Print this first and push only the
+    # header through it; the real cap should not be printed until this fits.
+    pitch = 2.54
+    xs = sorted({-12.0, 12.0, *[(-7.62 + i * pitch + d) for i in range(7)
+                                for d in (-0.55, 0.55)]})
+    ys = sorted({-5.0, 5.0, *[(row + d) for row in (-1.27, 1.27)
+                              for d in (-0.55, 0.55)]})
+    zs = [0, 2.0]
+
+    def occupied(x, y, z):
+        del z
+        for col in range(7):
+            if abs(x - (-7.62 + col * pitch)) < 0.55:
+                for row in (-1.27, 1.27):
+                    if abs(y - row) < 0.55:
+                        return False
+        return True
+
+    return _voxel_triangles(xs, ys, zs, occupied)
 
 
 def _write_or_check(path: Path, content: bytes, check: bool) -> None:
@@ -223,6 +298,12 @@ def main() -> int:
         raise SystemExit("button layout must contain exactly 4 rows of 14 keys")
     _write_or_check(SVG, render_svg(layout), args.check)
     _write_or_check(STL, render_binary_stl(), args.check)
+    _write_or_check(CAP_BASE_STL, _render_binary_stl(
+        cap_base_triangles(), b"Mini Studio 16 Audio Cap base; pre-hardware prototype"), args.check)
+    _write_or_check(CAP_LID_STL, _render_binary_stl(
+        cap_lid_triangles(), b"Mini Studio 16 Audio Cap snap lid; pre-hardware prototype"), args.check)
+    _write_or_check(CAP_GAUGE_STL, _render_binary_stl(
+        cap_gauge_triangles(), b"Mini Studio 16 Audio Cap 2x7 header fit gauge"), args.check)
     return 0
 
 

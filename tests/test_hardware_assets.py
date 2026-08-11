@@ -14,6 +14,14 @@ ROOT = Path(__file__).resolve().parents[1]
 LAYOUT = ROOT / "hardware" / "button-layout.json"
 SVG = ROOT / "hardware" / "mini-studio-16-button-layout.svg"
 STL = ROOT / "hardware" / "stl" / "mini-studio-16-bench-cradle.stl"
+CAP_STLS = {
+    ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-base.stl":
+        ((-42.0, 42.0), (-19.0, 19.0), (0.0, 20.0)),
+    ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-lid.stl":
+        ((-42.0, 42.0), (-19.0, 19.0), (0.0, 4.0)),
+    ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-14pin-fit-gauge.stl":
+        ((-12.0, 12.0), (-5.0, 5.0), (0.0, 2.0)),
+}
 
 
 class HardwareAssetTests(unittest.TestCase):
@@ -75,6 +83,34 @@ class HardwareAssetTests(unittest.TestCase):
                 edge = tuple(sorted((triangle[index], triangle[(index + 1) % 3])))
                 edges[edge] += 1
         self.assertEqual(set(edges.values()), {2})
+
+    def test_audio_cap_stls_are_two_part_watertight_models_plus_gauge(self):
+        design = json.loads((ROOT / "hardware" / "audio-cap" / "design.json").read_text())
+        self.assertEqual(design["acceptance"]["enclosure_parts"], 2)
+        self.assertEqual(len(design["enclosure"]["parts"]), 2)
+        for path, expected_bounds in CAP_STLS.items():
+            data = path.read_bytes()
+            count = struct.unpack_from("<I", data, 80)[0]
+            self.assertEqual(len(data), 84 + count * 50, path.name)
+            self.assertGreater(count, 50, path.name)
+            triangles = []
+            offset = 84
+            for _ in range(count):
+                values = struct.unpack_from("<12fH", data, offset)
+                vertices = [tuple(values[3 + i * 3:6 + i * 3]) for i in range(3)]
+                self.assertEqual(len(set(vertices)), 3, path.name)
+                triangles.append(vertices)
+                offset += 50
+            flat = [vertex for triangle in triangles for vertex in triangle]
+            for axis, expected in enumerate(expected_bounds):
+                actual = (min(v[axis] for v in flat), max(v[axis] for v in flat))
+                self.assertEqual(actual, expected, path.name)
+            edges = collections.Counter()
+            for triangle in triangles:
+                for index in range(3):
+                    edge = tuple(sorted((triangle[index], triangle[(index + 1) % 3])))
+                    edges[edge] += 1
+            self.assertEqual(set(edges.values()), {2}, path.name)
 
 
 if __name__ == "__main__":

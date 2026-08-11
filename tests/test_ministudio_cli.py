@@ -130,6 +130,16 @@ class MiniStudioCliTests(unittest.TestCase):
         args = cli.parser().parse_args(["boot-mode", "normal"])
         self.assertEqual(cli.command_words(args), ["boot", "normal"])
 
+    def test_audio_cap_commands(self):
+        args = cli.parser().parse_args(["cap-status"])
+        self.assertEqual(cli.command_words(args), ["cap", "status"])
+        args = cli.parser().parse_args(["cap-pair"])
+        self.assertEqual(cli.command_words(args), ["cap", "pair"])
+        args = cli.parser().parse_args(["cap-monitor", "73"])
+        self.assertEqual(cli.command_words(args), ["cap", "monitor", 73])
+        args = cli.parser().parse_args(["cap-disconnect"])
+        self.assertEqual(cli.command_words(args), ["cap", "disconnect"])
+
 
 if __name__ == "__main__":
     unittest.main()

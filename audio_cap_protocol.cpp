@@ -40,3 +40,8 @@ bool audioCapPacketValidate(const AudioCapPacket& packet) {
     return packet.magic == AUDIO_CAP_MAGIC && packet.version == AUDIO_CAP_VERSION &&
            packet.frames <= AUDIO_CAP_FRAMES && packet.crc32 == audioCapPacketCrc(packet);
 }
+
+uint8_t audioCapPacketMonitor(const AudioCapPacket& packet) {
+    const uint16_t value = packet.status & AUDIO_CAP_MONITOR_MASK;
+    return static_cast<uint8_t>(value <= 100u ? value : 100u);
+}

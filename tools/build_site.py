@@ -22,6 +22,12 @@ ASSETS = [
     (ROOT / "hardware" / "button-layout.json", Path("downloads/button-layout.json")),
     (ROOT / "hardware" / "stl" / "mini-studio-16-bench-cradle.stl", Path("downloads/mini-studio-16-bench-cradle.stl")),
     (ROOT / "hardware" / "cad" / "mini-studio-16-bench-cradle.scad", Path("downloads/mini-studio-16-bench-cradle.scad")),
+    (ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-base.stl", Path("downloads/audio-cap-base.stl")),
+    (ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-lid.stl", Path("downloads/audio-cap-lid.stl")),
+    (ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-14pin-fit-gauge.stl", Path("downloads/audio-cap-14pin-fit-gauge.stl")),
+    (ROOT / "hardware" / "audio-cap" / "design.json", Path("downloads/audio-cap-design.json")),
+    (ROOT / "hardware" / "audio-cap" / "bom.json", Path("downloads/audio-cap-bom.json")),
+    (ROOT / "docs" / "AUDIO_CAP_BUILD_GUIDE.md", Path("downloads/AUDIO_CAP_BUILD_GUIDE.md")),
 ]
 
 

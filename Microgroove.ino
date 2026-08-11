@@ -37,6 +37,7 @@
 #include "usb_midi.h"
 #include "sd_io_arbiter.h"
 #include "boot_selector.h"
+#include "audio_cap.h"
 #include "ui.h"
 
 void inputInit();
@@ -101,6 +102,7 @@ void setup() {
     sdDiagnosticsInit(s_sdOk);
     masterRecorderInit(s_sdOk);
     stemRecorderInit(s_sdOk);
+    audioCapInit();
 
     // Modules
     const bool legacyCaptureOk = micSamplerInit();

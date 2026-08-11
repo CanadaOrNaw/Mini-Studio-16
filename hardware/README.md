@@ -8,10 +8,25 @@ The fork now has its own reproducible physical assets:
 | [`button-layout.json`](button-layout.json) | Canonical key and website-context data | Host-tested source of truth |
 | [`stl/mini-studio-16-bench-cradle.stl`](stl/mini-studio-16-bench-cradle.stl) | Original open Cardputer-ADV cradle | Watertight and dimension-validated; physical fit pending |
 | [`cad/mini-studio-16-bench-cradle.scad`](cad/mini-studio-16-bench-cradle.scad) | Editable OpenSCAD source | Parameters documented below |
+| [`audio-cap/stl/audio-cap-base.stl`](audio-cap/stl/audio-cap-base.stl) | Solderless bus-powered Audio Cap base | Watertight/dimension checked; physical fit pending |
+| [`audio-cap/stl/audio-cap-lid.stl`](audio-cap/stl/audio-cap-lid.stl) | Two-part enclosure's compliant snap lid | Watertight/dimension checked; physical fit pending |
+| [`audio-cap/stl/audio-cap-14pin-fit-gauge.stl`](audio-cap/stl/audio-cap-14pin-fit-gauge.stl) | Cheap first print for 2x7 header pitch/clearance | Generated and checked |
+| [`audio-cap/design.json`](audio-cap/design.json) | Hard one-plug/no-PCB/no-solder requirements and pin map | Enforced by host tests |
+| [`audio-cap/bom.json`](audio-cap/bom.json) | Canada/US/EU retail sourcing | Region-completeness tested |
 
 The previous `microgroove_labels_v6_preview.png` remains solely as inherited
 historical reference. It predates Mini Studio pages and is not the current
 legend.
+
+## Solderless Audio Cap
+
+The cap is a separate original pre-hardware design inspired by the finished
+plug-in form of M5Stack caps. It is 84 x 38 x 24 mm across its two closed parts;
+the extra thickness makes room for retail modules and two compact lever splices
+because the project deliberately refuses a custom PCB. It contains an ATOM
+Lite, preassembled PCM1808 line-input module and only factory/precrimped plug-in
+connections. Cardputer EXT `5VOUT/GND` provides all power through the same 14-pin
+plug that carries data. See [`../docs/AUDIO_CAP_BUILD_GUIDE.md`](../docs/AUDIO_CAP_BUILD_GUIDE.md).
 
 ## Cradle design
 

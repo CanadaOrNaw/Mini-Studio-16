@@ -12,6 +12,7 @@
 #include "stem_recorder.h"
 #include "loop_engine.h"
 #include "streaming_sampler.h"
+#include "audio_cap.h"
 
 float g_scopeBuf[SCREEN_W];
 volatile int g_scopeIdx = 0;
@@ -73,7 +74,12 @@ static void audioTask(void*) {
                 g_scopeBuf[g_scopeIdx++] = mix;
         }
 
+        // The cap receives the dry master before its line input is mixed back,
+        // preventing a Bluetooth feedback loop. Master/stem recording below
+        // receives the monitored signal exactly as heard at the output.
+        audioCapProcessAudioBlock(buf, AUDIO_BUF_LEN);
         streamingSamplerRecordPush(STREAM_SAMPLE_INPUT_BUS, buf, AUDIO_BUF_LEN);
+        for (int i = 0; i < AUDIO_BUF_LEN; ++i) s_stemBuf[i].master = buf[i];
         masterRecorderPush(buf, AUDIO_BUF_LEN);
         stemRecorderPush(s_stemBuf, AUDIO_BUF_LEN);
 

@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "name": "Mini Studio 16 Solderless Audio Cap",
+  "acceptance": {
+    "external_wired_connections": ["Cardputer-ADV EXT 2.54-14P"],
+    "power_source": "Cardputer-ADV EXT pin 6 5VOUT and pin 4 GND",
+    "external_power_connector": false,
+    "custom_pcb": false,
+    "soldering_required": false,
+    "module_strategy": "off-the-shelf preassembled modules",
+    "assembly_connections": "precrimped/plug-in only",
+    "enclosure_parts": 2,
+    "closure": "compliant snap tabs"
+  },
+  "modules": [
+    {
+      "id": "controller",
+      "part": "M5Stack ATOM Lite C008",
+      "size_mm": [24.0, 24.0, 9.5],
+      "requirements": ["factory-assembled", "original ESP32 with Bluetooth Classic", "Grove socket", "bottom GPIO sockets"]
+    },
+    {
+      "id": "line_adc",
+      "part": "PCM1808 48 kHz stereo I2S line-input module",
+      "size_mm_max": [50.5, 30.5, 12.0],
+      "requirements": ["factory-assembled", "installed I2S header", "3.5 mm input jack", "5 V input", "I2S clock master"]
+    }
+  ],
+  "external_openings": ["3.5 mm line input", "ATOM pair-button plunger", "ATOM status-light window"],
+  "service": "Flash ATOM before assembly; reopen snap lid for later updates",
+  "cardputer_pin_map": [
+    {"pin": 1, "gpio": "G3", "signal": "CAP_CS", "atom": "G19"},
+    {"pin": 3, "gpio": "G4", "signal": "CAP_IRQ", "atom": "G21"},
+    {"pin": 4, "gpio": "GND", "signal": "GND", "atom": "GND", "adc": "GND"},
+    {"pin": 5, "gpio": "G6", "signal": "CAP_SCLK", "atom": "G22"},
+    {"pin": 6, "gpio": "5VOUT", "signal": "+5V", "atom": "5V", "adc": "5V"},
+    {"pin": 12, "gpio": "G13", "signal": "CAP_MOSI", "atom": "G23"},
+    {"pin": 13, "gpio": "G5", "signal": "CAP_MISO", "atom": "G33"}
+  ],
+  "unused_cardputer_pins": [2, 7, 8, 9, 10, 11, 14],
+  "atom_adc_map": [
+    {"atom": "G25", "adc": "DOUT"},
+    {"atom": "G26", "adc": "BCK"},
+    {"atom": "G32", "adc": "LRCK"},
+    {"atom": "GND", "adc": "GND"}
+  ],
+  "enclosure": {
+    "outer_mm": [84.0, 38.0, 24.0],
+    "parts": ["audio-cap-base.stl", "audio-cap-lid.stl"],
+    "fit_gauge": "audio-cap-14pin-fit-gauge.stl",
+    "verified_status": "dimensioned pre-hardware prototype; physical tolerances require the Cardputer and purchased module revision"
+  }
+}

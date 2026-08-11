@@ -67,7 +67,7 @@ class SiteBuildTests(unittest.TestCase):
             info = json.loads((target / "BUILD_INFO.json").read_text(encoding="utf-8"))
             self.assertEqual(info["source_sha"], "0123456789abcdef")
             self.assertIn("0123456789ab", (target / "index.html").read_text(encoding="utf-8"))
-            self.assertEqual(len(info["generated_assets"]), 6)
+            self.assertEqual(len(info["generated_assets"]), 12)
 
     def test_site_sources_have_accessible_fallbacks(self):
         html = (ROOT / "site" / "index.html").read_text(encoding="utf-8")

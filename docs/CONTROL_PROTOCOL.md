@@ -54,6 +54,11 @@ bytes per main-loop iteration.
 | `synth TRACK engine mg\|mgx\|fm4` | Select a track engine without deleting the other engine patches |
 | `synth TRACK set PARAM VALUE` | Set a validated named synth parameter using integer wire units |
 | `synth dsp_reset` | Reset block count, last/max render time, and missed-deadline count |
+| `cap status` | Optional cap presence, ADC/A2DP state, monitor level and all bridge counters |
+| `cap pair` | Arm selection of the first discovered Bluetooth audio-rendering device |
+| `cap disconnect` | Disconnect the current Bluetooth audio sink |
+| `cap monitor PERCENT` | Set line-input monitor level 0–100; defaults to 0 |
+| `cap clear` | Zero displayed bridge counters and clear the cap fault latch without interrupting live audio |
 
 Motion sources are `tilt_x`, `tilt_y`, `accel`, `gyro`, `shake`, and `slap`.
 Targets are `synth1_cutoff`, `synth2_cutoff`, `synth3_cutoff`,
@@ -127,6 +132,9 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 2 fm.op2.ratio 200
 python tools/ministudio_cli.py --port /dev/ttyACM0 note 2 60 110
 python tools/ministudio_cli.py --port /dev/ttyACM0 note-off 2 60
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 cap-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 cap-monitor 25
+python tools/ministudio_cli.py --port /dev/ttyACM0 cap-pair
 python tools/ministudio_cli.py --port /dev/ttyACM0 monitor --seconds 30
 python tools/protocol_soak.py --port /dev/ttyACM0 --count 10000
 ```

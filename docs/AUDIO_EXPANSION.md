@@ -1,110 +1,123 @@
-# Line-input and conventional Bluetooth-audio expansion contract
+# Solderless Audio Cap architecture
 
-The stock Cardputer-ADV already provides speaker, built-in mic, headphone
-output, battery, and BLE MIDI. Its ESP32-S3 radio is Bluetooth LE-only, so it
-cannot be a conventional Bluetooth Classic A2DP source for ordinary headphones
-or speakers. The onboard 3.5 mm connector is output, not a line input.
+Mini Studio 16's optional Audio Cap adds a stereo 3.5 mm line input and sends
+the instrument master to ordinary Bluetooth Classic A2DP headphones or
+speakers. The finished cap has exactly one wired connection: its 14-pin male
+plug into the Cardputer-ADV EXT socket.
 
-Official references:
+These are hard design requirements, enforced by
+`tests/test_audio_cap_requirements.py`:
 
-- [M5Stack Cardputer-ADV documentation](https://docs.m5stack.com/en/core/Cardputer-Adv)
-- [M5Stack Cap-Bus example pin map](https://docs.m5stack.com/en/cap/Cap_LoRa-1262)
-- [Espressif ESP32-S3: Wi-Fi + Bluetooth 5 LE](https://www.espressif.com/en/products/socs/esp32-s3)
-- [Espressif original ESP32 A2DP API](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/bluetooth/esp_a2dp.html)
-- [ESP32-S3 I2S/full-duplex driver documentation](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/i2s.html)
+| Requirement | Rev A implementation |
+| --- | --- |
+| Cardputer-powered | EXT pin 6 `5VOUT` and pin 4 `GND` |
+| One plug | One keyed 2x7 2.54 mm male header |
+| No second cable | No power lead or data lead exits the closed cap |
+| No custom PCB | M5Stack ATOM Lite plus a preassembled PCM1808 module |
+| No soldering | Factory sockets, precrimped leads and two lever splices |
+| Off-the-shelf modules | Both active modules are retail products |
+| Plug-in assembly | Dupont/Grove plugs and WAGO 221-413 levers |
+| Two printed parts | Base plus compliant snap lid |
 
-## Proposed Audio Cap boundary
+The PCM1808 module's small USB power plug, where that module revision requires
+one, is a **hidden internal connector** fed from EXT `5VOUT`. It is installed
+inside the cap and does not leave the enclosure. The ATOM Lite is also powered
+from the same internal 5 V branch. The Cardputer battery or its normal USB-C
+charger therefore powers the entire finished instrument.
 
-Use a Cardputer-ADV Cap-Bus board containing:
+## Why these modules
 
-- an external line-input ADC/codec with input protection, biasing, antialiasing,
-  and gain control;
-- a Bluetooth Classic-capable coprocessor (original ESP32 or a purpose-built
-  certified audio module) providing A2DP source, and optionally A2DP sink;
-- local buffering/clock-domain conversion between the codec/Bluetooth side and
-  the Cardputer's 22.05 kHz mono engine;
-- correct level shifting, reset, power filtering, ESD protection, and jack
-  detect as required by the selected parts.
+The Cardputer's ESP32-S3 supports BLE but not Bluetooth Classic A2DP. The
+original ESP32-PICO-D4 inside the 24 x 24 mm ATOM Lite supports Bluetooth
+Classic, has factory USB-C, a Grove socket, six factory GPIO sockets, a button,
+and an RGB status LED. It runs a separately built cap firmware.
 
-Do not cut the Cardputer microphone/headphone traces for the first prototype.
-The cap is independently removable and the stock instrument remains usable.
+The selected PCM1808 module is already assembled with a 3.5 mm input, ADC,
+clocking, regulators and I2S header. It is the I2S clock master at 48 kHz. The
+ATOM receives stereo 24-bit samples in 32-bit slots, low-pass filters and
+converts them to Mini Studio's 22.05 kHz mono stream. The reverse path converts
+22.05 kHz mono to the 44.1 kHz stereo PCM required by A2DP.
 
-## Reserved Cap-Bus assignment
+Marketplace PCM1808 boards are not perfectly standardized. The purchase guide
+therefore requires a photo match and the printable fit gauge before the final
+cap is printed. USB-C versus Micro-USB on the module changes only the hidden
+internal power plug.
 
-The official Cardputer-ADV cap mapping exposes G3, G4, G5, G6, G13, and G15 in
-addition to pins already used by SD/I2C. Reserve:
+## Exact connections
 
-| Cardputer pin | Audio Cap signal | Purpose |
-| --- | --- | --- |
-| G3 | `CAP_CS` | SPI chip select |
-| G4 | `CAP_SCLK` | SPI clock |
-| G5 | `CAP_MOSI` | master mix/control to cap |
-| G6 | `CAP_MISO` | line/BT input and status to Cardputer |
-| G13 | `CAP_IRQ` | cap has capture/status packet ready |
-| G15 | `CAP_RESET` | controlled coprocessor reset/boot recovery |
-| 5V/GND | power | cap regulator and common reference |
+Cardputer pins used by SD (`G40/G14/G39`) and onboard I2C (`G8/G9`) are never
+connected. EXT pin 2 `5VIN` is deliberately empty so the cap cannot back-power
+the Cardputer.
 
-G40/G14/G39 remain untouched because the Cardputer microSD uses them. G8/G9
-remain the shared onboard I2C bus. G12 remains SD chip select. Pin ownership
-must be checked against the exact production board schematic before PCB layout.
+| EXT pin | Cardputer | Function | ATOM Lite |
+| ---: | --- | --- | --- |
+| 1 | G3 | SPI chip select | G19 |
+| 3 | G4 | Cap present/wake | G21 |
+| 4 | GND | Internal ground branch | GND and ADC GND |
+| 5 | G6 | SPI clock | G22 |
+| 6 | 5VOUT | Internal +5 V branch | 5V and ADC 5V |
+| 12 | G13 | SPI host-to-cap | G23 |
+| 13 | G5 | SPI cap-to-host | G33 |
 
-SPI is chosen instead of a second loosely coupled I2S clock domain because it
-provides framing, status, sequence/error detection, and two-way PCM without
-reassigning the onboard ES8311 path. A dedicated second ESP32-S3 SPI peripheral
-can route to these GPIOs; bus speed is deliberately unspecified until signal
-integrity is measured on the cap.
+| ATOM Lite | PCM1808 module |
+| --- | --- |
+| G25 | DOUT |
+| G26 / Grove yellow | BCK |
+| G32 / Grove white | LRCK |
+| GND | GND |
+| not connected | MCLK (module is clock master) |
 
-## Wire protocol already implemented here
+The canonical, machine-checked form is
+[`hardware/audio-cap/design.json`](../hardware/audio-cap/design.json).
 
-`audio_cap_protocol.h/.cpp` defines version 1:
+## Data path and failure behavior
 
-- fixed 272-byte full-duplex packets;
-- 128 mono signed-16 frames at 22,050 Hz (~5.8 ms);
-- sequence number, direction/status flags, and bounded frame count;
-- CRC-32 over header and PCM;
-- flags for valid PCM, selected line input, Bluetooth pair state, underrun, and
-  overrun.
+`audio_cap_protocol.*` and `audio_cap_bridge_core.*` implement fixed 272-byte
+full-duplex SPI packets containing 128 mono frames, a sequence number, bounded
+frame count, commands/status and CRC-32. At 22,050 Hz each packet covers about
+5.8 ms. Both sides use fixed 2,048-frame SPSC rings. There is no heap allocation
+or blocking device I/O in the Cardputer render loop or A2DP data callback.
 
-Payload bandwidth is about 47 KiB/s in each direction before framing, far below
-ordinary SPI capacity. The layout/CRC/bounds have host and sanitizer tests.
-The cap-side device/codec choice is intentionally not baked into the protocol.
+The Cardputer sends the dry master before line monitoring is mixed back, so an
+A2DP output cannot feed itself. The monitored line signal is then included in
+the speaker/headphone output, master WAV and master stem. Monitor level defaults
+to zero. Removing or resetting the cap substitutes silence and leaves every
+stock Mini Studio/Microgroove path operating.
 
-## Intended audio routing
+Host tests cover CRC corruption, bounds, sequence wrap/gaps, overflow,
+underrun, chunk-independent rate conversion, non-silent conversion and
+high-frequency attenuation. The pinned CI build compiles both Cardputer images
+and the ATOM Lite image.
 
-Host-to-cap PCM is the final master bus for A2DP output. Cap-to-host PCM is a
-selectable line/Bluetooth input that enters the same bounded recording/monitor
-path as other long inputs. Neither direction may block the audio renderer:
+## What still needs the physical parts
 
-- the renderer pushes/pops local SPSC rings;
-- an expansion task performs SPI transactions;
-- sequence gaps and CRC failures increment counters and substitute silence;
-- cap underrun/overrun flags appear in UI/`MS16/1` telemetry;
-- input monitoring has a user-controlled level and defaults off to prevent
-  feedback.
+The enclosure and firmware are complete pre-hardware prototypes, not a claim
+that unmeasured modules are electrically or mechanically proven. Hardware is
+required to verify:
 
-## Hardware-dependent decisions
+- Cardputer `5VOUT` current, voltage sag and temperature under A2DP peaks;
+- exact header insertion depth and shell clearances;
+- purchased PCM1808 dimensions, I2S format, clock stability, input level,
+  noise and channel polarity;
+- SPI reliability and clock drift during simultaneous SD recording;
+- A2DP discovery, pairing, reconnect, latency and headphone compatibility;
+- snap deflection, light pipe/button alignment and print shrinkage.
 
-These cannot be responsibly fixed without the actual parts/prototype:
+Use [`AUDIO_CAP_BUILD_GUIDE.md`](AUDIO_CAP_BUILD_GUIDE.md) for purchasing,
+printing, assembly, flashing and the required first-power tests.
 
-- codec/module choice and availability;
-- analog input impedance, maximum level, gain, noise, and protection;
-- A2DP codec/latency behavior and certification constraints;
-- power draw from 5 V, battery impact, regulator temperature, and RF layout;
-- SPI clock, reservoir size, clock drift correction, and acceptable latency;
-- whether stereo is worth a v2 protocol (the current engine is mono);
-- simultaneous A2DP source/sink feasibility on the selected coprocessor.
+## Sources and attribution
 
-## Acceptance gates
-
-- Line input handles the documented level without clipping/damage and meets the
-  chosen noise/frequency-response target.
-- Ten-minute bidirectional PCM soak has zero unreported sequence/CRC errors.
-- Bluetooth pair/reconnect and 30-minute output cause no Cardputer underrun.
-- End-to-end latency and clock drift are measured, not estimated.
-- Cap removal leaves the stock firmware fully functional.
-- A power fault/reset on the cap cannot crash, back-power, or corrupt the
-  Cardputer/SD card.
-
-The packet contract and firmware-side architecture are ready; electrical/codec
-selection and the production driver are now legitimately gated by expansion
-hardware rather than SD capacity or an undefined interface.
+- [M5Stack Cardputer-ADV](https://docs.m5stack.com/en/core/Cardputer-Adv) for
+  EXT pinout, power and dimensions.
+- [M5Stack ATOM Lite](https://docs.m5stack.com/en/core/ATOM%20Lite) for module
+  dimensions, GPIO and original-ESP32 capabilities.
+- [M5Stack Cap LoRa868](https://docs.m5stack.com/en/cap/Cap_LoRa868) as the
+  product-form reference for a bus-powered plug-in cap. No M5Stack enclosure
+  mesh is copied.
+- [Espressif's A2DP source example](https://github.com/espressif/esp-idf/tree/master/examples/bluetooth/bluedroid/classic_bt/a2dp_source)
+  for the original ESP32 A2DP source role.
+- [ESP32-A2DP](https://github.com/pschatzmann/ESP32-A2DP) by Phil Schatzmann,
+  Apache-2.0 licensed, is used by the ATOM firmware and pinned by commit.
+- [bmorcelli/Launcher](https://github.com/bmorcelli/Launcher) informed earlier
+  Cardputer SD research only. No Launcher code is included in the Audio Cap.

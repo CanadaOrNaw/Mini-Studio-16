@@ -20,12 +20,21 @@ struct StaticSemaphore_t { int value; };
 #define portENTER_CRITICAL(mux) ((void)(mux))
 #define portEXIT_CRITICAL(mux) ((void)(mux))
 #define taskYIELD() ((void)0)
+#define pdMS_TO_TICKS(ms) (ms)
+#define LOW 0
+#define HIGH 1
+#define OUTPUT 1
+#define INPUT_PULLDOWN 2
+#define INPUT_PULLUP 3
 
 inline uint32_t micros() { static uint32_t value = 0; return ++value; }
 inline uint32_t millis() { static uint32_t value = 0; return ++value; }
 inline void delay(uint32_t) {}
 inline void vTaskDelete(void*) {}
 inline void vTaskDelay(uint32_t) {}
+inline void pinMode(int, int) {}
+inline void digitalWrite(int, int) {}
+inline int digitalRead(int) { return LOW; }
 inline SemaphoreHandle_t xSemaphoreCreateRecursiveMutexStatic(StaticSemaphore_t* storage) {
     return storage;
 }

@@ -302,6 +302,21 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
         else if (sameWord(action, "host") || sameWord(action, "usb_host"))
             request.command = CONTROL_BOOT_USB_HOST;
         else return CONTROL_PARSE_BAD_ARGUMENTS;
+    } else if (sameWord(verb, "cap")) {
+        char* action = nextToken(cursor);
+        if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(action, "monitor")) {
+            if (!parseNumber(nextToken(cursor), 0, 100, request.arg1) ||
+                !noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CAP_MONITOR;
+        } else {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            if (sameWord(action, "status")) request.command = CONTROL_CAP_STATUS;
+            else if (sameWord(action, "pair")) request.command = CONTROL_CAP_PAIR;
+            else if (sameWord(action, "disconnect")) request.command = CONTROL_CAP_DISCONNECT;
+            else if (sameWord(action, "clear")) request.command = CONTROL_CAP_CLEAR;
+            else return CONTROL_PARSE_BAD_ARGUMENTS;
+        }
     } else if (sameWord(verb, "synth")) {
         char* trackOrAction = nextToken(cursor);
         if (!trackOrAction) return CONTROL_PARSE_BAD_ARGUMENTS;

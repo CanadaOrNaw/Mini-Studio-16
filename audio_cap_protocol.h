@@ -14,7 +14,20 @@ enum AudioCapFlags : uint8_t {
     AUDIO_CAP_BT_PAIRED = 1u << 2,
     AUDIO_CAP_UNDERRUN = 1u << 3,
     AUDIO_CAP_OVERRUN = 1u << 4,
+    AUDIO_CAP_CMD_PAIR = 1u << 5,
+    AUDIO_CAP_CMD_DISCONNECT = 1u << 6,
+    AUDIO_CAP_CMD_CLEAR = 1u << 7,
 };
+
+enum AudioCapStatus : uint16_t {
+    AUDIO_CAP_STATUS_PRESENT = 1u << 8,
+    AUDIO_CAP_STATUS_A2DP_CONNECTED = 1u << 9,
+    AUDIO_CAP_STATUS_DISCOVERING = 1u << 10,
+    AUDIO_CAP_STATUS_ADC_LOCKED = 1u << 11,
+    AUDIO_CAP_STATUS_FAULT = 1u << 12,
+};
+
+constexpr uint16_t AUDIO_CAP_MONITOR_MASK = 0x007Fu;
 
 // Fixed-size full-duplex SPI packet. Host->cap PCM is the master mix; cap->host
 // PCM is line/Bluetooth input. At 128 frames it represents ~5.8 ms and only
@@ -36,3 +49,4 @@ void audioCapPacketInit(AudioCapPacket& packet, uint32_t sequence, uint8_t flags
                         const int16_t* pcm, uint16_t frames);
 uint32_t audioCapPacketCrc(const AudioCapPacket& packet);
 bool audioCapPacketValidate(const AudioCapPacket& packet);
+uint8_t audioCapPacketMonitor(const AudioCapPacket& packet);

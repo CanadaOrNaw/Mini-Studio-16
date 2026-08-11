@@ -154,6 +154,13 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 
 "$build_dir/test_audio_cap_protocol"
 
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_audio_cap_bridge_core.cpp" \
+  "$test_dir/../audio_cap_bridge_core.cpp" "$test_dir/../audio_cap_protocol.cpp" \
+  -o "$build_dir/test_audio_cap_bridge_core"
+
+"$build_dir/test_audio_cap_bridge_core"
+
 g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
   "$test_dir/../sd_diagnostics.cpp"
@@ -191,7 +198,9 @@ g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   "$test_dir/../synth_dsp.cpp" "$test_dir/../synth_engine.cpp" \
   "$test_dir/../synth_parameters.cpp" "$test_dir/../synth_project.cpp" \
   "$test_dir/../synth_ui_model.cpp" \
-  "$test_dir/../boot_selector_core.cpp" "$test_dir/../boot_selector.cpp"
+  "$test_dir/../boot_selector_core.cpp" "$test_dir/../boot_selector.cpp" \
+  "$test_dir/../audio_cap_protocol.cpp" "$test_dir/../audio_cap_bridge_core.cpp" \
+  "$test_dir/../audio_cap.cpp"
 
 echo "audio/sequencer/sampler: host syntax checks passed"
 
@@ -211,4 +220,5 @@ PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_check_firmware_siz
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_factory_project.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_hardware_smoke.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_hardware_assets.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_audio_cap_requirements.py"
 PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_site_build.py"
