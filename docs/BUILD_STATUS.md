@@ -7,7 +7,7 @@ means the production firmware path exists, its hardware-independent behavior is
 host-tested, and both target profiles compile/link. “Hardware-verified” remains
 false until a physical Cardputer-ADV produces measurements.
 
-## Verified pre-hardware code checkpoint
+## Verified firmware code checkpoint
 
 - Firmware source head: `8a7c1238012f0860438223fd0e33ef0fe4e7c01d`
 - Pull-request workflow merge SHA: `442eab0fadfc24129261a93e0b22c5375d609972`
@@ -46,6 +46,36 @@ instructions, manifest, and build provenance. A later documentation-only head
 can produce a different outer ZIP digest because `BUILD_INFO.txt` embeds its
 workflow merge SHA; the four firmware image hashes above identify this code
 checkpoint.
+
+## Verified beginner/distribution checkpoint
+
+- Package source head: `088843be972dde1401db055e8bb1f291729f1166`
+- Pull-request workflow merge SHA: `c984e152058320741a9ce8d0c08f117a2594064e`
+- GitHub Actions: [run 31450635085](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31450635085)
+- Host tests, AddressSanitizer, UndefinedBehaviorSanitizer, all three pinned
+  firmware builds, both Cardputer resource gates, all one-file merges,
+  packaging and artifact upload: **passed**
+- [Artifact ID 9086267632](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31450635085/artifacts/9086267632);
+  GitHub/ZIP SHA-256
+  `60e5a884bae06a6dd317c5c3f72345ca1468744820e4ffa1ef5d55a359deae01`
+- The artifact contains 35 files. All 33 entries in `SHA256SUMS.txt` passed.
+  The Normal application at `0x10000`, USB-host application at `0x300000`, and
+  ATOM application at `0x10000` were byte-compared with their combined images.
+- New one-file ATOM Lite image SHA-256:
+  `48b9b6e5b9157e4429a122c4165e22d354322a957c84edad93a59e2a9b777873`
+- The artifact now includes `START_HERE.md`, the OS-specific no-compilation
+  flashing/recovery guide, exact regional Audio Cap shopping sheet, tested
+  machine BOM, key legend, cradle files, cap STLs/design, and the starter SD
+  image in addition to the firmware/debug payloads.
+- Audio Cap shopping is pinned to exact orderable product pages/SKUs for
+  Canada, the United States and the European Union. The power harness is fixed
+  at 24/22 AWG within the WAGO 221-413 24–12 AWG range; generic 28-AWG signal
+  jumpers are explicitly rejected for power.
+- Standalone public-site commit
+  [`8beba958`](https://github.com/CanadaOrNaw/MiniStudio.github.io/commit/8beba9584aa720eefa79bed07a7e27b8a810350d)
+  publishes package source `088843be`. `tools/check_live_site.py` fetched the
+  deployed Pages endpoint and verified HTTP content size/SHA-256 for all 15
+  manifested assets (181,411 bytes total).
 
 ## Implemented
 
