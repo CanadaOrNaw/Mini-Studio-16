@@ -175,45 +175,79 @@ jobs:
 
   # P1-6 (reconciliation report): Actions artifacts require a GitHub sign-in
   # and are deleted ~90 days after each run, which silently breaks the
-  # beginner download path in START_HERE.md and on the site. Pushing a v*
-  # tag runs the full validation above (host tests, sanitizers, firmware,
-  # budgets, merges) and then publishes the same verified payload as a
-  # permanent, login-free GitHub Release. The per-run artifact remains the
-  # "newest unreleased build" developer path. Operator flow:
-  #   git tag v3.0.0-alpha.N <verified-sha> && git push origin v3.0.0-alpha.N
+  # beginner download path in START_HERE.md and on the site. A v* tag still
+  # publishes normally. Branch pushes also consult the checked-in
+  # RELEASE_VERSION marker and publish only when that release does not yet
+  # exist. Existing releases are never moved or overwritten; changing the
+  # marker is therefore the explicit next-release action. Every release still
+  # waits for the full validation above (host tests, sanitizers, firmware,
+  # budgets and merges). The per-run artifact remains the newest unreleased
+  # developer path.
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'push' &&
+      github.ref == 'refs/heads/agent/v3-alpha-sd-streaming')
     needs: [host-tests, sanitizers, firmware]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+      - name: Resolve release version
+        id: release-info
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            release_tag="$GITHUB_REF_NAME"
+          else
+            release_tag="$(tr -d '[:space:]' < RELEASE_VERSION)"
+          fi
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: $release_tag" >&2
+            exit 1
+          fi
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $release_tag already exists; leaving it unchanged."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/download-artifact@v6
+        if: steps.release-info.outputs.exists != 'true'
         with:
           name: microgroove-v3-alpha-cardputer-adv
           path: artifact
       - name: Assemble one beginner package ZIP
+        if: steps.release-info.outputs.exists != 'true'
+        env:
+          RELEASE_TAG: ${{ steps.release-info.outputs.release_tag }}
         # One clearly-named ZIP under Assets, so START_HERE.md can say
         # "download the file ending in -package.zip" without a beginner
         # confusing it with GitHub's automatic "Source code" archives.
         # It is the artifact tree verbatim, so `sha256sum -c SHA256SUMS.txt`
         # works from the extracted root exactly as documented.
         run: |
-          (cd artifact && zip -qr "../Mini-Studio-16-${GITHUB_REF_NAME}-package.zip" .)
-          sha256sum "Mini-Studio-16-${GITHUB_REF_NAME}-package.zip" > RELEASE_SHA256SUMS.txt
+          (cd artifact && zip -qr "../Mini-Studio-16-${RELEASE_TAG}-package.zip" .)
+          sha256sum "Mini-Studio-16-${RELEASE_TAG}-package.zip" > RELEASE_SHA256SUMS.txt
       - name: Publish GitHub Release
+        if: steps.release-info.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release-info.outputs.release_tag }}
         run: >-
-          gh release create "$GITHUB_REF_NAME"
+          gh release create "$RELEASE_TAG"
           --repo "$GITHUB_REPOSITORY"
-          --title "Mini Studio 16 $GITHUB_REF_NAME"
+          --target "$GITHUB_SHA"
+          --title "Mini Studio 16 $RELEASE_TAG"
           --notes "Verified pre-hardware alpha build of commit $GITHUB_SHA.
           Start with START_HERE.md inside the package ZIP (or read it in the
           repository). Flash mini-studio-16-dual-role.bin once at offset 0x0;
           see FLASHING.md. All binaries here passed the host, sanitizer,
           firmware-budget and merge checks of this workflow run."
-          "Mini-Studio-16-${GITHUB_REF_NAME}-package.zip"
+          "Mini-Studio-16-${RELEASE_TAG}-package.zip"
           "RELEASE_SHA256SUMS.txt"
           "artifact/mini-studio-16-dual-role.bin"
           "artifact/SHA256SUMS.txt"
