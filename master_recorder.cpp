@@ -19,8 +19,17 @@ namespace {
 constexpr uint32_t kRingFrames = 4096;
 constexpr size_t kWriteFrames = 2048;
 constexpr const char* kTempPath = DIR_RECORDINGS "/.master.tmp";
+// P3 (reconciliation report): hard capture ceiling (~13.3 h at 22.05 kHz,
+// ~2.0 GiB of data) far below both the u32 RIFF-size wrap and the FAT32
+// file limit; the worker auto-stops cleanly when it is reached.
+constexpr uint32_t kMaximumCaptureFrames = 0x3F000000u;
 
 SpscRing<int16_t, kRingFrames> s_ring;
+// P3: frames the audio task could not push because the ring was full. The
+// worker writes the missing span as silence so an SD stall shortens
+// nothing — the file keeps its exact duration and stays sample-aligned
+// with the stem capture (drops remain counted in the session telemetry).
+alignas(4) uint32_t s_pendingZeroFrames = 0;
 portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 MasterRecorderSession s_session;
 TaskHandle_t s_task = nullptr;
@@ -134,7 +143,32 @@ void recorderTask(void*) {
                     break;
                 }
                 noteWrite(available, micros() - started);
+                portENTER_CRITICAL(&s_mux);
+                const uint32_t total = s_session.snapshot().framesWritten;
+                if (total >= kMaximumCaptureFrames) s_session.requestStop();
+                portEXIT_CRITICAL(&s_mux);
             } else {
+                // Ring drained: any drop deficit belongs before whatever the
+                // audio task pushes next; write it as silence now (P3).
+                const uint32_t deficit = __atomic_exchange_n(
+                    &s_pendingZeroFrames, 0u, __ATOMIC_ACQ_REL);
+                if (deficit > 0) {
+                    memset(block, 0, sizeof(block));
+                    uint32_t remaining = deficit;
+                    while (remaining > 0 && ok) {
+                        const size_t chunk = remaining > kWriteFrames
+                            ? kWriteFrames : remaining;
+                        const uint32_t started = micros();
+                        bool wrote = false;
+                        { SdIoGuard guard; wrote = file.write(
+                            reinterpret_cast<const uint8_t*>(block),
+                            chunk * sizeof(int16_t)) == chunk * sizeof(int16_t); }
+                        if (!wrote) { addError(); ok = false; break; }
+                        noteWrite(chunk, micros() - started);
+                        remaining -= static_cast<uint32_t>(chunk);
+                    }
+                    continue;
+                }
                 const MasterRecorderState state = getState();
                 if (state == MASTER_REC_STOPPING) break;
                 if (state != MASTER_REC_RECORDING && state != MASTER_REC_STARTING) {
@@ -159,7 +193,15 @@ void recorderTask(void*) {
         if (ok) {
             const MasterRecorderSnapshot finalizing = masterRecorderSnapshot();
             SdIoGuard guard;
-            if (!SD.rename(kTempPath, finalizing.path)) {
+            if (finalizing.framesWritten == 0) {
+                // P3 (reconciliation report): a stop that lands before the
+                // first frame used to publish a valid-but-empty 44-byte
+                // MASTER###.wav; delete the temp instead.
+                if (SD.exists(kTempPath) && !SD.remove(kTempPath)) {
+                    addError();
+                    ok = false;
+                }
+            } else if (!SD.rename(kTempPath, finalizing.path)) {
                 addError();
                 ok = false;
             }
@@ -202,11 +244,26 @@ bool masterRecorderStart() {
         sdDiagnosticsIsRunning() || micRecActive() || loopEngineIsRecording() ||
         streamingSamplerIsRecording())
         return false;
-    { SdIoGuard guard; if (SD.exists(kTempPath)) return false; }
+    {
+        bool tempExists = false;
+        { SdIoGuard guard; tempExists = SD.exists(kTempPath); }
+        if (tempExists) {
+            // P2-7 (reconciliation report): the temp is kept after a
+            // mid-session write error so its audio can be recovered, but
+            // recovery used to run only at boot — one failure locked out
+            // master recording until reboot. The recorder is provably idle
+            // here (the busy checks above passed), so recover or
+            // quarantine inline and continue with a fresh start.
+            recoverInterruptedRecording();
+            SdIoGuard guard;
+            if (SD.exists(kTempPath)) return false;
+        }
+    }
     char path[64];
     if (!selectAvailablePath("MASTER", "wav", path, sizeof(path))) return false;
 
     s_ring.reset();
+    __atomic_store_n(&s_pendingZeroFrames, 0u, __ATOMIC_RELEASE);
     portENTER_CRITICAL(&s_mux);
     s_session.begin(path);
     portEXIT_CRITICAL(&s_mux);
@@ -243,6 +300,10 @@ bool masterRecorderIsBusy() {
 void masterRecorderPush(const int16_t* frames, size_t count) {
     if (!frames || count == 0 || getState() != MASTER_REC_RECORDING) return;
     const size_t pushed = s_ring.push(frames, count);
+    if (pushed < count)
+        __atomic_add_fetch(&s_pendingZeroFrames,
+                           static_cast<uint32_t>(count - pushed),
+                           __ATOMIC_ACQ_REL);  // written as silence (P3)
     const uint32_t highWater = s_ring.size();
     portENTER_CRITICAL(&s_mux);
     s_session.noteProduced(static_cast<uint32_t>(count), static_cast<uint32_t>(pushed),

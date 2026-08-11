@@ -36,6 +36,15 @@ int main() {
     assert(recovery.dataBytes == 88200);
     assert(recovery.ignoredTrailingBytes == 1);
     assert(!wavPlanMono16Recovery(45).recoverable);
+
+    // P3 regression: an absurd frame count clamps instead of wrapping the
+    // u32 RIFF/data size fields.
+    uint8_t huge[WAV_PCM_HEADER_BYTES];
+    wavBuildMono16Header(huge, 22050, 0xFFFFFFFFu);
+    WavMono16Info clamped = {};
+    assert(wavParseCanonicalMono16Header(huge, clamped));
+    assert(clamped.frames == WAV_MONO16_MAX_FRAMES);
+
     std::cout << "wav_file: all tests passed\n";
     return 0;
 }

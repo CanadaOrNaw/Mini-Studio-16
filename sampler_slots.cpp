@@ -19,9 +19,41 @@ bool SamplerSlotBank::validRegion(const SamplerSlot& slot, const SamplerRegion& 
            trimEnd <= slot.sourceFrames;
 }
 
+uint32_t SamplerSlotBank::slotGeneration(uint8_t index) const {
+    return validSlot(index)
+        ? __atomic_load_n(&_generations[index], __ATOMIC_ACQUIRE) : 0;
+}
+
+void SamplerSlotBank::beginEdit(uint8_t index) {
+    if (validSlot(index))                       // generation becomes odd
+        __atomic_add_fetch(&_generations[index], 1u, __ATOMIC_ACQ_REL);
+}
+
+void SamplerSlotBank::endEdit(uint8_t index) {
+    if (validSlot(index))                       // generation becomes even
+        __atomic_add_fetch(&_generations[index], 1u, __ATOMIC_RELEASE);
+}
+
+bool SamplerSlotBank::snapshotSlot(uint8_t index, SamplerSlot& out) const {
+    if (!validSlot(index)) return false;
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        const uint32_t before =
+            __atomic_load_n(&_generations[index], __ATOMIC_ACQUIRE);
+        if (before & 1u) continue;              // writer in progress
+        memcpy(&out, &_slots[index], sizeof(out));
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        const uint32_t after =
+            __atomic_load_n(&_generations[index], __ATOMIC_ACQUIRE);
+        if (before == after) return true;
+    }
+    return false;                               // persistent writer churn
+}
+
 void SamplerSlotBank::clear() {
+    for (uint8_t index = 0; index < SAMPLER_SLOT_COUNT; ++index) beginEdit(index);
     memset(_slots, 0, sizeof(_slots));
     _quotaUsedFrames = 0;
+    for (uint8_t index = 0; index < SAMPLER_SLOT_COUNT; ++index) endEdit(index);
 }
 
 bool SamplerSlotBank::assign(uint8_t index, const char* filename, uint32_t sourceFrames,
@@ -50,15 +82,20 @@ bool SamplerSlotBank::assign(uint8_t index, const char* filename, uint32_t sourc
     replacement.gainQ15 = 32767;
     replacement.cutoffQ15 = 32767;
     replacement.resonanceQ15 = 0;
+    beginEdit(index);
     _slots[index] = replacement;
     _quotaUsedFrames = static_cast<uint32_t>(nextQuota);
-    return autoSlice(index);
+    const bool sliced = autoSlice(index);
+    endEdit(index);
+    return sliced;
 }
 
 bool SamplerSlotBank::remove(uint8_t index) {
     if (!validSlot(index)) return false;
+    beginEdit(index);
     _quotaUsedFrames -= _slots[index].quotaFrames;
     memset(&_slots[index], 0, sizeof(_slots[index]));
+    endEdit(index);
     return true;
 }
 
@@ -66,8 +103,11 @@ bool SamplerSlotBank::setMode(uint8_t index, SamplerSlotMode mode) {
     if (!validSlot(index) || _slots[index].mode == SAMPLER_SLOT_EMPTY ||
         (mode != SAMPLER_SLOT_MELODIC && mode != SAMPLER_SLOT_SLICED))
         return false;
+    beginEdit(index);
     _slots[index].mode = mode;
-    return mode == SAMPLER_SLOT_SLICED ? autoSlice(index) : true;
+    const bool sliced = mode == SAMPLER_SLOT_SLICED ? autoSlice(index) : true;
+    endEdit(index);
+    return sliced;
 }
 
 bool SamplerSlotBank::setTrim(uint8_t index, uint32_t startFrame, uint32_t lengthFrames) {
@@ -76,9 +116,12 @@ bool SamplerSlotBank::setTrim(uint8_t index, uint32_t startFrame, uint32_t lengt
         static_cast<uint64_t>(startFrame) + lengthFrames >
                                  _slots[index].sourceFrames)
         return false;
+    beginEdit(index);
     _slots[index].trimStart = startFrame;
     _slots[index].trimLength = lengthFrames;
-    return autoSlice(index);
+    const bool sliced = autoSlice(index);
+    endEdit(index);
+    return sliced;
 }
 
 bool SamplerSlotBank::setSlice(uint8_t index, uint8_t slice, uint32_t startFrame,
@@ -86,12 +129,17 @@ bool SamplerSlotBank::setSlice(uint8_t index, uint8_t slice, uint32_t startFrame
     if (!validSlot(index) || slice >= SAMPLER_SLICE_COUNT) return false;
     const SamplerRegion replacement = {startFrame, lengthFrames};
     if (!validRegion(_slots[index], replacement)) return false;
+    beginEdit(index);
     _slots[index].slices[slice] = replacement;
+    endEdit(index);
     return true;
 }
 
 bool SamplerSlotBank::autoSlice(uint8_t index) {
+    // Nested begin/endEdit from assign/setMode/setTrim keeps the generation
+    // odd across the whole outer write, which is exactly what readers need.
     if (!validSlot(index) || _slots[index].mode == SAMPLER_SLOT_EMPTY) return false;
+    beginEdit(index);
     SamplerSlot& item = _slots[index];
     const uint32_t base = item.trimLength / SAMPLER_SLICE_COUNT;
     const uint32_t remainder = item.trimLength % SAMPLER_SLICE_COUNT;
@@ -102,6 +150,7 @@ bool SamplerSlotBank::autoSlice(uint8_t index) {
         item.slices[slice].lengthFrames = length;
         cursor += length;
     }
+    endEdit(index);
     return true;
 }
 

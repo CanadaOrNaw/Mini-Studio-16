@@ -73,7 +73,10 @@ bool synthSetParameter(SynthTrack& track, SynthParameter parameter, int32_t valu
     if (parameter >= SYNTH_PARAM_COUNT) return false;
     if (parameter == SYNTH_PARAM_ENGINE) {
         if (value < 0 || value >= SYNTH_ENGINE_COUNT) return false;
-        track.setEngine(static_cast<SynthEngine>(value));
+        // P2-8: parameter writes arrive from the UI/serial task while the
+        // audio task renders; the switch is applied at the next block
+        // boundary instead of re-initialising voices mid-render.
+        track.requestEngine(static_cast<SynthEngine>(value));
         return true;
     }
     if (parameter == SYNTH_PARAM_VOICES) {
@@ -208,7 +211,7 @@ bool synthSetParameter(SynthTrack& track, SynthParameter parameter, int32_t valu
 
 bool synthGetParameter(const SynthTrack& track, SynthParameter parameter, int32_t& value) {
     if (parameter >= SYNTH_PARAM_COUNT) return false;
-    if (parameter == SYNTH_PARAM_ENGINE) value = track.engine;
+    if (parameter == SYNTH_PARAM_ENGINE) value = track.displayEngine();
     else if (parameter == SYNTH_PARAM_VOICES) value = track.voices;
     else if (parameter == SYNTH_PARAM_VOLUME) value = percent(track.volume());
     else if (parameter == SYNTH_PARAM_MG_OSC) value = track.v[0].oscMode;

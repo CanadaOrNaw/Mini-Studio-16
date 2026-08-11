@@ -564,7 +564,7 @@ void dispatch(const ControlRequest& request) {
                 const SynthTrack& synth = g_synths[track];
                 Serial.printf(" t%u=%s,%u,%u,%u,%u",
                               static_cast<unsigned>(track + 1),
-                              synthEngineName(synth.engine),
+                              synthEngineName(synth.displayEngine()),
                               static_cast<unsigned>(synth.voices),
                               static_cast<unsigned>(synth.volume() * 100.0f + 0.5f),
                               static_cast<unsigned>(synth.cutoff() * 100.0f + 0.5f),
@@ -576,11 +576,13 @@ void dispatch(const ControlRequest& request) {
 
         case CONTROL_SYNTH_ENGINE: {
             SynthTrack& synth = g_synths[request.arg1 - 1u];
-            synth.setEngine(static_cast<SynthEngine>(request.arg2));
+            // P2-8: this handler runs on the serial task while core 0 renders;
+            // the switch is applied at the audio task's next block boundary.
+            synth.requestEngine(static_cast<SynthEngine>(request.arg2));
             Serial.printf(CONTROL_PROTOCOL_PREFIX
                           " %s OK synth=%u engine=%s\n", request.id,
                           static_cast<unsigned>(request.arg1),
-                          synthEngineName(synth.engine));
+                          synthEngineName(synth.displayEngine()));
             break;
         }
 

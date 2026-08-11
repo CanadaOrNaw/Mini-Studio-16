@@ -126,6 +126,18 @@ struct SynthTrack {
     SynthEngine engine;
     uint8_t voices;
     uint8_t rr;
+    // P2-9 (reconciliation report): bit i marks voice i as started by a live
+    // source (keyboard audition, MIDI in, serial `note`). The sequencer's
+    // per-step housekeeping releases only sequencer-owned voices, so a note
+    // a player is holding is never clipped by empty pattern steps. Any
+    // release or reallocation of a voice clears its bit.
+    uint8_t liveMask;
+    // P2-8: engine switches requested from the UI/serial/storage side are
+    // parked here and applied by the audio task at the next block boundary
+    // (applyPendingEngine), so setEngine's multi-word voice re-init can
+    // never interleave with an in-flight render() on the other core.
+    // 0xFF = no request pending. Accessed only through __atomic builtins.
+    uint8_t pendingEngine;
 
     void init();
 
@@ -134,12 +146,21 @@ struct SynthTrack {
     }
 
     void setEngine(SynthEngine selected);
+    // Cross-task-safe engine selection: request from any task, apply on the
+    // audio task. displayEngine() lets UI/serial/save paths observe the
+    // requested engine immediately instead of lagging one audio block.
+    void requestEngine(SynthEngine selected);
+    void applyPendingEngine();
+    SynthEngine displayEngine() const;
     void setVoices(uint8_t count);
     void noteOn(float frequency, bool accent, bool slide);
-    void noteOn(float frequency, bool accent, bool slide,
-                uint8_t midiNote, uint8_t velocity);
+    int noteOn(float frequency, bool accent, bool slide,
+               uint8_t midiNote, uint8_t velocity);
+    void noteOnLive(float frequency, bool accent, bool slide,
+                    uint8_t midiNote, uint8_t velocity);
     void noteOff(uint8_t midiNote);
     void releaseAll();
+    void releaseSequenced();
     void prepareStep(bool hasNotes, bool legato);
     float render();
     void setCutoff(float normalized);

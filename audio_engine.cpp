@@ -41,6 +41,11 @@ static void audioTask(void*) {
         int16_t* buf = buffers[cur];
         const uint32_t renderStartedUs = micros();
 
+        // P2-8: engine switches requested by the UI/serial/storage tasks are
+        // applied here, at the block boundary, so setEngine's voice re-init
+        // can never interleave with the per-sample render() calls below.
+        for (int s = 0; s < NUM_SYNTHS; s++) g_synths[s].applyPendingEngine();
+
         for (int i = 0; i < AUDIO_BUF_LEN; i++) {
             float synthBus[NUM_SYNTHS] = {0.0f, 0.0f, 0.0f};
             float drumBus = 0.0f;

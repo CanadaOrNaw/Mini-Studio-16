@@ -52,6 +52,7 @@ public:
             store(&track.droppedFrames, 0);
             store(&track.underruns, 0);
             store(&track.volumeQ15, 32767);
+            store(&track.mutedFlag, 0);
         }
     }
 
@@ -118,6 +119,7 @@ public:
         store(&track.capturedFrames, 0);
         store(&track.droppedFrames, 0);
         store(&track.underruns, 0);
+        store(&track.mutedFlag, 0);
         store(&track.scheduledFrame, scheduledFrame);
         store(&track.lengthFrames, targetFrames);
         store(&_recordTrack, index);
@@ -168,9 +170,25 @@ public:
     bool setMuted(uint8_t index, bool muted) {
         if (!validTrack(index)) return false;
         Track& track = _tracks[index];
+        const LoopStreamState state = trackState(index);
+        // P3 (reconciliation report): mute intent used to live only in the
+        // PLAYING<->MUTED state pair, so an underrun resync silently
+        // unmuted the track (and muting during PLAY_WAIT/UNDERRUN was
+        // refused). The intent now lives in mutedFlag, which the audio task
+        // applies at every PLAY_WAIT -> playing transition.
+        if (state != LOOP_STREAM_PLAY_WAIT && state != LOOP_STREAM_PLAYING &&
+            state != LOOP_STREAM_MUTED && state != LOOP_STREAM_UNDERRUN &&
+            state != LOOP_STREAM_PREPARING)
+            return false;
+        store(&track.mutedFlag, muted ? 1u : 0u);
         uint32_t expected = muted ? LOOP_STREAM_PLAYING : LOOP_STREAM_MUTED;
         const uint32_t desired = muted ? LOOP_STREAM_MUTED : LOOP_STREAM_PLAYING;
-        return compareExchange(&track.state, expected, desired);
+        compareExchange(&track.state, expected, desired);
+        return true;
+    }
+
+    bool muted(uint8_t index) const {
+        return validTrack(index) && load(&_tracks[index].mutedFlag) != 0;
     }
 
     bool setVolumeQ15(uint8_t index, int16_t volume) {
@@ -185,12 +203,19 @@ public:
         if (isRecordingState(state)) return false;
         Track& track = _tracks[index];
         store(&track.state, LOOP_STREAM_EMPTY);
-        track.playback.reset();
+        // P2-5 (reconciliation report): deliberately NOT resetting the
+        // playback ring here. The audio task may have sampled the state as
+        // PLAYING/MUTED for the current frame and be inside popOne(), and
+        // a producer-side reset would write the consumer-owned read index
+        // concurrently. Stale ring contents are harmless: only playing
+        // states pop, and preparePlayback() resets the ring (from a state
+        // where the consumer provably is not popping) before any reuse.
         store(&track.lengthFrames, 0);
         store(&track.scheduledFrame, 0);
         store(&track.capturedFrames, 0);
         store(&track.droppedFrames, 0);
         store(&track.underruns, 0);
+        store(&track.mutedFlag, 0);
         if (index == 0) store(&_timelineFrames, 0);
         return true;
     }
@@ -212,8 +237,12 @@ public:
             LoopStreamState state = static_cast<LoopStreamState>(load(&track.state));
             if (state == LOOP_STREAM_PLAY_WAIT &&
                 frameReached(now, load(&track.scheduledFrame))) {
-                store(&track.state, LOOP_STREAM_PLAYING);
-                state = LOOP_STREAM_PLAYING;
+                // Apply the stored mute intent so a resync after an
+                // underrun cannot silently unmute the track (P3).
+                const LoopStreamState resumed = load(&track.mutedFlag)
+                    ? LOOP_STREAM_MUTED : LOOP_STREAM_PLAYING;
+                store(&track.state, resumed);
+                state = resumed;
             } else if (state == LOOP_STREAM_RECORD_WAIT &&
                        frameReached(now, load(&track.scheduledFrame))) {
                 store(&track.state, LOOP_STREAM_RECORDING);
@@ -278,6 +307,7 @@ private:
         alignas(4) uint32_t droppedFrames;
         alignas(4) uint32_t underruns;
         alignas(4) uint32_t volumeQ15;
+        alignas(4) uint32_t mutedFlag;
     };
 
     Track _tracks[LOOP_STREAM_TRACKS];

@@ -25,6 +25,11 @@ int main() {
     SynthTrack loaded = {};
     loaded.init();
     assert(synthProjectDecode(saved, loaded));
+    // P2-8: decode requests the engine; the audio task applies it at the
+    // next block boundary. displayEngine() reflects it immediately, and
+    // applyPendingEngine() simulates that audio-task step here.
+    assert(loaded.displayEngine() == SYNTH_ENGINE_FM4);
+    loaded.applyPendingEngine();
     assert(loaded.engine == SYNTH_ENGINE_FM4);
     assert(loaded.mgxPatch.filterMode == SYNTH_FILTER_HP);
     assert(fabsf(loaded.mgxPatch.pulseWidth - 0.37f) < 0.0001f);
@@ -55,6 +60,7 @@ int main() {
     legacy.init();
     legacy.setEngine(SYNTH_ENGINE_FM4);
     synthProjectMigrateLegacy(legacy);
+    legacy.applyPendingEngine();
     assert(legacy.engine == SYNTH_ENGINE_MG);
     return 0;
 }

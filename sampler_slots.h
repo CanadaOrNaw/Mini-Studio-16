@@ -59,7 +59,11 @@ struct SamplerLockEntry {
 
 class SamplerSlotBank {
 public:
-    SamplerSlotBank() { clear(); }
+    SamplerSlotBank() {
+        for (uint8_t index = 0; index < SAMPLER_SLOT_COUNT; ++index)
+            _generations[index] = 0;
+        clear();
+    }
     void clear();
     bool assign(uint8_t slot, const char* filename, uint32_t sourceFrames,
                 uint32_t sourceRate, SamplerSlotMode mode);
@@ -79,9 +83,22 @@ public:
     const SamplerSlot& slot(uint8_t index) const { return _slots[index]; }
     SamplerSlot& slot(uint8_t index) { return _slots[index]; }
 
+    // P3 (reconciliation report): slots are mutated on the sampler worker
+    // task while the main task copies them at trigger time; a torn copy of
+    // the 190-byte struct could silently drop a trigger or play a wrong
+    // region. snapshotSlot() takes a seqlock-consistent copy. Every writer
+    // must hold the slot generation odd while writing: the bank's own
+    // mutators do this internally, and the few direct-field edit sites
+    // (project load, SAMPLE-page parameter edits) call beginEdit/endEdit.
+    bool snapshotSlot(uint8_t index, SamplerSlot& out) const;
+    uint32_t slotGeneration(uint8_t index) const;
+    void beginEdit(uint8_t index);
+    void endEdit(uint8_t index);
+
 private:
     SamplerSlot _slots[SAMPLER_SLOT_COUNT];
     uint32_t _quotaUsedFrames;
+    alignas(4) uint32_t _generations[SAMPLER_SLOT_COUNT];
 
     static uint32_t normalizedFrames(uint32_t sourceFrames, uint32_t sourceRate);
     static bool validSlot(uint8_t slot) { return slot < SAMPLER_SLOT_COUNT; }

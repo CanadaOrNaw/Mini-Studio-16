@@ -147,5 +147,108 @@ int main() {
     assert(!synthSetParameter(switched, SYNTH_PARAM_FM_OP4_RATIO, 1601));
     assert(switched.fmPatch.operators[3].ratio == oldRatio);
     assert(!synthSetParameter(switched, static_cast<SynthParameter>(255), 0));
+
+    // P1-1 regression: the MGX filter must actually move with cutoff. With
+    // the legacy 0.45 coefficient domain the 0.85 clamp engages near
+    // cutoff ~0.31 (the same ~3.1 kHz ceiling the MG/303 engine has), so
+    // probe inside the active region: renders must differ pairwise, and the
+    // ratio of 20th-harmonic (2,200 Hz) to 3rd-harmonic (330 Hz) energy of
+    // a 110 Hz saw must rise strictly as the low-pass opens. Before the
+    // fix, everything from cutoff 0.14 upward rendered bit-identically.
+    {
+        float spectralRatio[3] = {0.0f, 0.0f, 0.0f};
+        uint32_t hashes[3] = {0u, 0u, 0u};
+        const float cutoffs[3] = {0.06f, 0.15f, 0.28f};
+        static float window[2048];
+        for (int c = 0; c < 3; ++c) {
+            SynthTrack track = {};
+            track.init();
+            track.setEngine(SYNTH_ENGINE_MGX);
+            track.mgxPatch.cutoff = cutoffs[c];
+            track.mgxPatch.filterEnvAmount = 0.0f;   // isolate the knob
+            track.mgxPatch.velocityFilter = 0.0f;
+            track.noteOn(110.0f, false, false, 45, 100);
+            uint32_t hash = 2166136261u;
+            for (uint32_t frame = 0; frame < 2048; ++frame)
+                (void)track.render();                // skip the attack
+            for (uint32_t frame = 0; frame < 2048; ++frame) {
+                window[frame] = track.render();
+                hash ^= static_cast<uint16_t>(
+                    static_cast<int16_t>(window[frame] * 32767.0f));
+                hash *= 16777619u;
+            }
+            float magnitudes[2] = {0.0f, 0.0f};
+            const float probes[2] = {330.0f, 2200.0f};
+            for (int p = 0; p < 2; ++p) {
+                float re = 0.0f, im = 0.0f;
+                for (int i = 0; i < 2048; ++i) {
+                    const float w = 2.0f * 3.14159265f * probes[p] *
+                                    static_cast<float>(i) / 22050.0f;
+                    re += window[i] * cosf(w);
+                    im += window[i] * sinf(w);
+                }
+                magnitudes[p] = sqrtf(re * re + im * im);
+            }
+            spectralRatio[c] = magnitudes[1] / (magnitudes[0] + 1e-6f);
+            hashes[c] = hash;
+        }
+        assert(hashes[0] != hashes[1] && hashes[1] != hashes[2] &&
+               hashes[0] != hashes[2]);
+        assert(spectralRatio[0] < spectralRatio[1] &&
+               spectralRatio[1] < spectralRatio[2]);
+        printf("mgx-cutoff spectral ratios %.4f %.4f %.4f\n",
+               static_cast<double>(spectralRatio[0]),
+               static_cast<double>(spectralRatio[1]),
+               static_cast<double>(spectralRatio[2]));
+    }
+
+    // P2-9 regression: a live-held note must survive the sequencer's
+    // per-step housekeeping; a sequenced voice on the same track must not.
+    {
+        SynthTrack track = {};
+        track.init();
+        track.setVoices(3);
+        track.setEngine(SYNTH_ENGINE_MGX);
+        track.noteOnLive(261.6256f, false, false, 60, 100);   // player holds C4
+        const int seqVoice = track.noteOn(329.6276f, false, false, 64, 100);
+        assert(track.mgxVoices[seqVoice].note == 64);
+        for (int frame = 0; frame < 64; ++frame) (void)track.render();
+        track.prepareStep(false, false);                       // empty step
+        int liveVoice = -1;
+        for (int i = 0; i < 3; ++i)
+            if (track.mgxVoices[i].note == 60) liveVoice = i;
+        assert(liveVoice >= 0);
+        assert(track.mgxVoices[liveVoice].ampEnvelope.stage != SYNTH_ENV_RELEASE);
+        assert(track.mgxVoices[seqVoice].ampEnvelope.stage == SYNTH_ENV_RELEASE);
+        track.noteOff(60);                                     // player lets go
+        assert(track.mgxVoices[liveVoice].ampEnvelope.stage == SYNTH_ENV_RELEASE);
+        assert(track.liveMask == 0);
+    }
+
+    // P2-8 regression: engine switches requested cross-task are deferred to
+    // applyPendingEngine (the audio task's block boundary) while
+    // displayEngine() reflects the request immediately.
+    {
+        SynthTrack track = {};
+        track.init();
+        assert(track.engine == SYNTH_ENGINE_MG);
+        track.requestEngine(SYNTH_ENGINE_FM4);
+        assert(track.engine == SYNTH_ENGINE_MG);
+        assert(track.displayEngine() == SYNTH_ENGINE_FM4);
+        track.applyPendingEngine();
+        assert(track.engine == SYNTH_ENGINE_FM4);
+        assert(track.displayEngine() == SYNTH_ENGINE_FM4);
+        track.applyPendingEngine();                            // idempotent
+        assert(track.engine == SYNTH_ENGINE_FM4);
+        assert(!synthSetParameter(track, SYNTH_PARAM_ENGINE, 99));
+        assert(synthSetParameter(track, SYNTH_PARAM_ENGINE, SYNTH_ENGINE_MGX));
+        int32_t shown = -1;
+        assert(synthGetParameter(track, SYNTH_PARAM_ENGINE, shown));
+        assert(shown == SYNTH_ENGINE_MGX);                     // display value
+        assert(track.engine == SYNTH_ENGINE_FM4);              // not yet applied
+        track.applyPendingEngine();
+        assert(track.engine == SYNTH_ENGINE_MGX);
+    }
+
     return 0;
 }

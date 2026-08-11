@@ -270,8 +270,10 @@ void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent,
     // poly: legato means "chord", not slide
     const uint8_t midi = static_cast<uint8_t>((octave + 1u) * 12u + note - 1u);
     if (velocity == 0) velocity = accent ? 127 : 96;
-    g_synths[track].noteOn(noteToFreq(note, octave), accent, !poly && legato,
-                           midi, velocity);
+    // P2-9: live sources (keyboard, MIDI in, serial `note`) get live-marked
+    // voices so prepareStep() cannot clip them while the transport runs.
+    g_synths[track].noteOnLive(noteToFreq(note, octave), accent,
+                               !poly && legato, midi, velocity);
     if (!midiInputIsDispatching())
         midiOutputNoteOn(track, midi, velocity);
     eventLooperRecordSynth(sequencerEventRecordStep(), track, midi, velocity);

@@ -20,11 +20,22 @@ constexpr size_t kReadFrames = 256;
 constexpr size_t kWriteFrames = 1024;
 constexpr uint32_t kPrimeFrames = 512;
 constexpr uint32_t kMaximumLoopFrames = SAMPLE_RATE * 20UL;
+// P3 (reconciliation report): a boundary can land arbitrarily close to
+// "now"; if the storage task is preempted between reading the frame counter
+// and arming, the start is missed and the track stays phase-shifted for
+// good. Schedules landing closer than this margin (~2.9 ms) are pushed one
+// full loop later — still boundary-aligned, never late.
+constexpr uint32_t kScheduleMarginFrames = 64;
 
 using FirmwareLoopCore = LoopStreamCore<kPlaybackRingFrames, kRecordRingFrames>;
 
 FirmwareLoopCore s_core;
 File s_playbackFiles[LOOP_STREAM_TRACKS];
+// P3: playback wraps at the WAV data-chunk end, not the physical file end,
+// so a hand-copied file with trailing bytes cannot leak them into audio or
+// stretch the audible period past lengthFrames.
+uint32_t s_playbackDataFrames[LOOP_STREAM_TRACKS] = {};
+uint32_t s_playbackFramesLeft[LOOP_STREAM_TRACKS] = {};
 File s_recordFile;
 uint32_t s_recordFileFrames = 0;
 alignas(4) uint32_t s_recordFileTrack = LOOP_NO_TRACK;
@@ -87,6 +98,15 @@ void closePlayback(uint8_t track) {
     }
 }
 
+bool seekLoopDataStart(uint8_t track) {
+    const uint32_t started = micros();
+    bool ok = false;
+    { SdIoGuard guard; ok = s_playbackFiles[track].seek(WAV_PCM_HEADER_BYTES); }
+    noteLatency(false, micros() - started);
+    if (ok) s_playbackFramesLeft[track] = s_playbackDataFrames[track];
+    return ok;
+}
+
 bool openPlayback(uint8_t track, uint32_t requiredFrames) {
     char path[64];
     trackPath(track, path, sizeof(path));
@@ -102,6 +122,8 @@ bool openPlayback(uint8_t track, uint32_t requiredFrames) {
         closePlayback(track);
         return false;
     }
+    s_playbackDataFrames[track] = info.frames;
+    s_playbackFramesLeft[track] = info.frames;
     return s_core.preparePlayback(track, info.frames);
 }
 
@@ -110,8 +132,23 @@ bool refillTrack(uint8_t track) {
         return false;
     int16_t frames[kReadFrames];
     size_t filled = 0;
+    // P2-6 (reconciliation report): the EOF-wrap retry used to be unbounded;
+    // a degraded card that keeps returning 0 while seeks succeed would spin
+    // this loop forever and wedge every loop track's service. Two
+    // consecutive wraps with no progress now fail the track instead.
+    size_t filledAtLastWrap = SIZE_MAX;
     while (filled < kReadFrames) {
-        const size_t wantedBytes = (kReadFrames - filled) * sizeof(int16_t);
+        if (s_playbackFramesLeft[track] == 0) {
+            // Wrap at the data-chunk end (P3), never at the physical EOF.
+            if (filled == filledAtLastWrap) return false;
+            filledAtLastWrap = filled;
+            if (!seekLoopDataStart(track)) return false;
+            continue;
+        }
+        size_t wantedFrames = kReadFrames - filled;
+        if (wantedFrames > s_playbackFramesLeft[track])
+            wantedFrames = s_playbackFramesLeft[track];
+        const size_t wantedBytes = wantedFrames * sizeof(int16_t);
         const uint32_t started = micros();
         int got = 0;
         { SdIoGuard guard; got = s_playbackFiles[track].read(
@@ -119,16 +156,20 @@ bool refillTrack(uint8_t track) {
         noteLatency(false, micros() - started);
         if (got < 0 || (got & 1) != 0) return false;
         if (got == 0) {
-            const uint32_t seekStarted = micros();
-            bool seekOk = false;
-            { SdIoGuard guard; seekOk = s_playbackFiles[track].seek(WAV_PCM_HEADER_BYTES); }
-            noteLatency(false, micros() - seekStarted);
-            if (!seekOk) return false;
-            continue;
+            // Physical EOF before the header-promised frame count: broken.
+            return false;
         }
-        filled += static_cast<size_t>(got) / sizeof(int16_t);
+        const size_t gotFrames = static_cast<size_t>(got) / sizeof(int16_t);
+        filled += gotFrames;
+        s_playbackFramesLeft[track] -= static_cast<uint32_t>(gotFrames);
     }
     return s_core.pushPlayback(track, frames, filled) == filled;
+}
+
+uint32_t scheduleWithMargin(uint32_t now, uint32_t length) {
+    uint32_t scheduled = FirmwareLoopCore::nextBoundary(now, length, true);
+    if (scheduled - now < kScheduleMarginFrames) scheduled += length;
+    return scheduled;
 }
 
 bool primeAndArm(uint8_t track) {
@@ -136,8 +177,7 @@ bool primeAndArm(uint8_t track) {
         if (!refillTrack(track)) return false;
     const uint32_t length = s_core.snapshot(track).lengthFrames;
     const uint32_t now = s_core.absoluteFrame();
-    const uint32_t scheduled = now == 0 ? 0 :
-        FirmwareLoopCore::nextBoundary(now, length, true);
+    const uint32_t scheduled = now == 0 ? 0 : scheduleWithMargin(now, length);
     return s_core.armPlayback(track, scheduled);
 }
 
@@ -223,15 +263,19 @@ bool startRecording(uint8_t track) {
     }
     noteLatency(true, micros() - started);
     if (!ok) {
+        // P1-2: never leave the temp behind — its existence blocks every
+        // future startRecording for this track until reboot.
         if (s_recordFile) { SdIoGuard guard; s_recordFile.close(); }
+        { SdIoGuard guard; if (SD.exists(temp)) SD.remove(temp); }
         return false;
     }
     const uint32_t timeline = s_core.timelineFrames();
     const uint32_t scheduled = track == 0 ? s_core.absoluteFrame() :
-        FirmwareLoopCore::nextBoundary(s_core.absoluteFrame(), timeline, true);
+        scheduleWithMargin(s_core.absoluteFrame(), timeline);
     const uint32_t target = track == 0 ? kMaximumLoopFrames : timeline;
     if (!s_core.beginRecording(track, scheduled, target)) {
         { SdIoGuard guard; s_recordFile.close(); }
+        { SdIoGuard guard; if (SD.exists(temp)) SD.remove(temp); }  // P1-2
         return false;
     }
     __atomic_store_n(&s_recordFileTrack, track, __ATOMIC_RELEASE);
@@ -284,6 +328,34 @@ bool finalizeRecording(uint8_t track) {
     if (!ok) {
         s_core.markError(track);
         noteError();
+        // P1-2 (reconciliation report): a failed finalize used to leave
+        // .L{n}.tmp on the card; startRecording refuses while it exists and
+        // recovery only runs at boot, so one ordinary early stop (overdub
+        // shorter than the timeline, or a stop during RECORD_WAIT) locked
+        // the track until reboot. Salvage a structurally valid take the
+        // same way boot recovery does, otherwise delete the temp.
+        bool tempPresent = false;
+        { SdIoGuard guard; tempPresent = SD.exists(temp); }
+        if (tempPresent) {
+            bool salvage = s_recordFileFrames > 0 &&
+                           s_recordFileFrames <= kMaximumLoopFrames;
+            if (salvage) {
+                SdIoGuard guard;
+                File file = SD.open(temp, "r+");
+                salvage = file && file.seek(0) &&
+                          file.write(header, sizeof(header)) == sizeof(header);
+                if (file) {
+                    if (salvage) file.flush();
+                    file.close();
+                }
+            }
+            if (salvage) {
+                quarantineTemp(track, temp, true, s_recordFileFrames);
+            } else {
+                SdIoGuard guard;
+                if (!SD.remove(temp)) noteError();
+            }
+        }
     }
     __atomic_store_n(&s_recordFileTrack, LOOP_NO_TRACK, __ATOMIC_RELEASE);
     s_recordFileFrames = 0;
@@ -350,8 +422,7 @@ void storageTask(void*) {
         for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
             LoopStreamState state = s_core.trackState(track);
             if (state == LOOP_STREAM_UNDERRUN) {
-                bool seekOk = false;
-                { SdIoGuard guard; seekOk = s_playbackFiles[track].seek(WAV_PCM_HEADER_BYTES); }
+                const bool seekOk = seekLoopDataStart(track);
                 if (!s_core.prepareResync(track) || !seekOk) {
                     s_core.markError(track);
                     noteError();

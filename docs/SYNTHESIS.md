@@ -65,7 +65,7 @@ Host gates cover ADSR sample progression, ratios/increments, all algorithms,
 feedback bounds, deterministic note reset, three-voice allocation, engine
 switching, named parameter bounds, v8 encode/decode/malformed data, bank
 cycling, legacy PCM hash `a202afdc`, and offline FM hashes/spectral sidebands.
-The fixed state is 952 bytes per track (2,856 bytes for all three) in the host
+The fixed state is 956 bytes per track (2,868 bytes for all three) in the host
 C++11 layout; target linker reports remain authoritative for ESP32-S3 memory.
 
 The renderer publishes block count, last/max render microseconds, missed

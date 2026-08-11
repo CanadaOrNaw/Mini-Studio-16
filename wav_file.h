@@ -3,6 +3,12 @@
 #include <stdint.h>
 
 static const uint32_t WAV_PCM_HEADER_BYTES = 44;
+// P3 (reconciliation report): keep every produced WAV below 2 GiB total so
+// the u32 RIFF/data size fields can never wrap and FAT32/parser limits are
+// never approached. The recorders stop long before this; the builder also
+// clamps defensively (recovery of an oversized temp truncates, not wraps).
+static const uint32_t WAV_MONO16_MAX_FRAMES =
+    (0x7FFFFFFFu - WAV_PCM_HEADER_BYTES) / 2u;
 
 struct WavRecoveryPlan {
     bool recoverable;

@@ -30,6 +30,7 @@ uint32_t getU32(const uint8_t* source) {
 
 void wavBuildMono16Header(uint8_t header[WAV_PCM_HEADER_BYTES],
                           uint32_t sampleRate, uint32_t frames) {
+    if (frames > WAV_MONO16_MAX_FRAMES) frames = WAV_MONO16_MAX_FRAMES;  // P3
     memset(header, 0, WAV_PCM_HEADER_BYTES);
     memcpy(header + 0, "RIFF", 4);
     putU32(header + 4, 36u + frames * 2u);

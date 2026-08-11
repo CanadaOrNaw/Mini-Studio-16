@@ -47,6 +47,7 @@ public:
             store(&voice.underruns, 0);
             store(&voice.generation, 0);
             store(&voice.eof, 0);
+            store(&voice.resetPending, 0);
             voice.filterLow = 0.0f;
             voice.filterBand = 0.0f;
         }
@@ -75,8 +76,23 @@ public:
         if (voiceIndex >= VoiceCount || regionFrames < 2 || incrementQ16 == 0 ||
             gainQ15 > 32767 || cutoffQ15 > 32767 || resonanceQ15 > 32767) return false;
         Voice& voice = _voices[voiceIndex];
+        // P2-4 (reconciliation report): when stealing a voice the consumer
+        // may have loaded state==PLAYING for the current render call and be
+        // between peek() and discard(); a producer-side ring.reset() would
+        // then write the consumer-owned read index concurrently. For states
+        // the consumer can be popping in (PLAYING, or a producer-set ERROR
+        // that raced a pop), the reset is deferred to the consumer: render()
+        // performs it and clears resetPending, and push/arm/freeSpace treat
+        // the ring as empty-but-unusable until then (on hardware that is at
+        // most one 45 us sample period, since the audio task always runs).
+        const SampleStreamState previous = voiceState(voiceIndex);
         store(&voice.state, SAMPLE_STREAM_PREPARING);
-        voice.ring.reset();
+        if (previous == SAMPLE_STREAM_PLAYING || previous == SAMPLE_STREAM_ERROR) {
+            store(&voice.resetPending, 1);
+        } else {
+            voice.ring.reset();
+            store(&voice.resetPending, 0);
+        }
         store(&voice.slot, slot);
         store(&voice.regionFrames, regionFrames);
         store(&voice.consumedFrames, 0);
@@ -95,6 +111,7 @@ public:
 
     size_t push(uint8_t voiceIndex, const int16_t* frames, size_t count) {
         if (voiceIndex >= VoiceCount) return 0;
+        if (load(&_voices[voiceIndex].resetPending)) return 0;  // P2-4
         const SampleStreamState state = voiceState(voiceIndex);
         if (state != SAMPLE_STREAM_PREPARING && state != SAMPLE_STREAM_PLAYING)
             return 0;
@@ -102,11 +119,14 @@ public:
     }
 
     uint32_t freeSpace(uint8_t voiceIndex) const {
-        return voiceIndex < VoiceCount ? _voices[voiceIndex].ring.freeSpace() : 0;
+        if (voiceIndex >= VoiceCount) return 0;
+        if (load(&_voices[voiceIndex].resetPending)) return 0;  // P2-4
+        return _voices[voiceIndex].ring.freeSpace();
     }
 
     bool arm(uint8_t voiceIndex, uint32_t minimumFrames) {
         if (voiceIndex >= VoiceCount || voiceState(voiceIndex) != SAMPLE_STREAM_PREPARING ||
+            load(&_voices[voiceIndex].resetPending) != 0 ||
             _voices[voiceIndex].ring.size() < minimumFrames)
             return false;
         store(&_voices[voiceIndex].state, SAMPLE_STREAM_PLAYING);
@@ -129,6 +149,12 @@ public:
         int32_t mix = 0;
         for (uint8_t index = 0; index < VoiceCount; ++index) {
             Voice& voice = _voices[index];
+            // P2-4: the consumer owns both ring indices, so deferred steal
+            // resets are performed here, never on the producer side.
+            if (load(&voice.resetPending)) {
+                voice.ring.reset();
+                store(&voice.resetPending, 0);
+            }
             if (voiceState(index) != SAMPLE_STREAM_PLAYING) continue;
             int16_t first = 0;
             int16_t second = 0;
@@ -200,7 +226,8 @@ public:
         result.slot = static_cast<uint8_t>(load(&voice.slot));
         result.regionFrames = load(&voice.regionFrames);
         result.consumedFrames = load(&voice.consumedFrames);
-        result.bufferedFrames = voice.ring.size();
+        result.bufferedFrames =
+            load(&voice.resetPending) ? 0 : voice.ring.size();  // P2-4
         result.underruns = load(&voice.underruns);
         result.generation = load(&voice.generation);
         result.eof = load(&voice.eof) != 0;
@@ -222,6 +249,7 @@ private:
         alignas(4) uint32_t underruns;
         alignas(4) uint32_t generation;
         alignas(4) uint32_t eof;
+        alignas(4) uint32_t resetPending;
         float filterLow;
         float filterBand;
     };

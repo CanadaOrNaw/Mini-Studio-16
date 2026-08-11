@@ -263,7 +263,7 @@ static void drawSynthParameterValue(const SynthTrack& track,
         canvas.print("?");
         return;
     }
-    if (parameter == SYNTH_PARAM_ENGINE) canvas.print(synthEngineName(track.engine));
+    if (parameter == SYNTH_PARAM_ENGINE) canvas.print(synthEngineName(track.displayEngine()));
     else if (parameter == SYNTH_PARAM_MG_OSC || parameter == SYNTH_PARAM_MGX_OSC)
         canvas.print(oscNames[value]);
     else if (parameter == SYNTH_PARAM_MG_WAVETABLE ||
@@ -303,6 +303,11 @@ static void drawSynthParameterValue(const SynthTrack& track,
 
 static void drawSoundPage() {
     bool onDrums = (g_curTrack == NUM_SYNTHS);
+    // P3: keep the displayed bank valid for the (possibly just-requested)
+    // engine, so out-of-band engine changes can't leave stale banks on screen.
+    if (!onDrums)
+        g_soundBank = synthEnsureSoundBank(
+            g_synths[g_curTrack].displayEngine(), g_soundBank);
     canvas.setTextColor(trackCols[g_curTrack]);
     canvas.setCursor(2, 14);
     if (onDrums) {
@@ -310,7 +315,7 @@ static void drawSoundPage() {
         canvas.printf("DRUM LANE %d  [%s]", g_curDrumLane + 1, engNames[d.engine]);
     } else {
         canvas.printf("SYNTH %d %s [%s]", g_curTrack + 1,
-                      synthEngineName(g_synths[g_curTrack].engine),
+                      synthEngineName(g_synths[g_curTrack].displayEngine()),
                       synthSoundBankName(g_soundBank));
     }
 

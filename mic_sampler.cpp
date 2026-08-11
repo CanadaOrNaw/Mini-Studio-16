@@ -136,6 +136,7 @@ bool micStreamRecStart(uint8_t slot, SamplerSlotMode mode) {
 
 void micSamplerUpdate() {
     if (s_recActive) {
+        uint8_t stalledRequeues = 0;
         while (!M5Cardputer.Mic.isRecording() ||
                M5Cardputer.Mic.isRecording() == 1) {
             int16_t* done = s_chunk[s_curChunk];
@@ -159,6 +160,15 @@ void micSamplerUpdate() {
             M5Cardputer.Mic.record(done, MIC_CAPTURE_CHUNK, MIC_RATE);
             s_curChunk ^= 1;
             if (M5Cardputer.Mic.isRecording() >= 2) break;
+            // P3 (reconciliation report): if the driver refuses to arm the
+            // next chunk, this loop would push the same buffer until the
+            // frame target — a garbage take. Two consecutive failed
+            // re-queues abort the capture instead.
+            if (M5Cardputer.Mic.isRecording() == 0) {
+                if (++stalledRequeues >= 2) { micRecStop(); break; }
+            } else {
+                stalledRequeues = 0;
+            }
         }
         g_holdProg = s_level > 1.0f ? 1.0f : s_level;
         strncpy(g_holdLabel, "SAMPLING", sizeof(g_holdLabel));

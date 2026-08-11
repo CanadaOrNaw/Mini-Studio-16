@@ -27,6 +27,8 @@ struct SynthUiRow {
 
 SynthSoundBank synthFirstSoundBank(SynthEngine engine);
 SynthSoundBank synthNextSoundBank(SynthEngine engine, SynthSoundBank current);
+bool synthSoundBankBelongs(SynthEngine engine, SynthSoundBank bank);
+SynthSoundBank synthEnsureSoundBank(SynthEngine engine, SynthSoundBank bank);
 const char* synthSoundBankName(SynthSoundBank bank);
 uint8_t synthSoundBankRows(SynthSoundBank bank);
 SynthUiRow synthSoundBankRow(SynthSoundBank bank, uint8_t row);

@@ -17,8 +17,16 @@ namespace {
 constexpr uint32_t kRingFrames = 2048;
 constexpr size_t kWriteFrames = 256;
 constexpr const char* kTempPath = DIR_RECORDINGS "/.stems.tmp";
+// P3 (reconciliation report): hard capture ceiling (~2.5 h at 22.05 kHz,
+// ~2.0 GiB of 10-byte frames) far below u32/FAT32 limits; the worker
+// auto-stops cleanly when it is reached.
+constexpr uint32_t kMaximumCaptureFrames = 0x0C000000u;
 
 SpscRing<StemPcmFrame, kRingFrames> s_ring;
+// P3: frames dropped at push time are written as silence by the worker so
+// an SD stall never shortens the capture — the stem container keeps its
+// exact duration and stays sample-aligned with the master WAV.
+alignas(4) uint32_t s_pendingZeroFrames = 0;
 portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 StemRecorderSnapshot s_snapshot = {STEM_REC_UNAVAILABLE, "", 0, 0, 0, 0, 0};
 TaskHandle_t s_task = nullptr;
@@ -103,12 +111,43 @@ void stemTask(void*) {
             { SdIoGuard guard;
               ok = file.write(reinterpret_cast<uint8_t*>(frames), bytes) == bytes; }
             const uint32_t elapsed = micros() - started;
+            bool atCeiling = false;
             portENTER_CRITICAL(&s_mux);
             if (ok) s_snapshot.framesWritten += static_cast<uint32_t>(available);
             else ++s_snapshot.errors;
             if (elapsed > s_snapshot.maxWriteUs) s_snapshot.maxWriteUs = elapsed;
+            atCeiling = s_snapshot.framesWritten >= kMaximumCaptureFrames;
+            if (ok && atCeiling) s_snapshot.state = STEM_REC_STOPPING;  // P3 cap
             portEXIT_CRITICAL(&s_mux);
         } else {
+            // Ring drained: write any drop deficit as silence first (P3).
+            const uint32_t deficit = __atomic_exchange_n(
+                &s_pendingZeroFrames, 0u, __ATOMIC_ACQ_REL);
+            if (deficit > 0) {
+                memset(frames, 0, sizeof(frames));
+                uint32_t remaining = deficit;
+                while (remaining > 0 && ok) {
+                    const size_t chunk = remaining > kWriteFrames
+                        ? kWriteFrames : remaining;
+                    const uint32_t started = micros();
+                    bool wrote = false;
+                    { SdIoGuard guard; wrote = file.write(
+                        reinterpret_cast<uint8_t*>(frames),
+                        chunk * sizeof(StemPcmFrame)) ==
+                        chunk * sizeof(StemPcmFrame); }
+                    const uint32_t elapsed = micros() - started;
+                    portENTER_CRITICAL(&s_mux);
+                    if (wrote) s_snapshot.framesWritten +=
+                        static_cast<uint32_t>(chunk);
+                    else ++s_snapshot.errors;
+                    if (elapsed > s_snapshot.maxWriteUs)
+                        s_snapshot.maxWriteUs = elapsed;
+                    portEXIT_CRITICAL(&s_mux);
+                    if (!wrote) ok = false;
+                    remaining -= static_cast<uint32_t>(chunk);
+                }
+                continue;
+            }
             const StemRecorderState state = getState();
             if (state == STEM_REC_STOPPING) break;
             if (state != STEM_REC_RECORDING && state != STEM_REC_STARTING) { ok = false; break; }
@@ -133,7 +172,15 @@ void stemTask(void*) {
 
     if (ok) {
         const StemRecorderSnapshot finalizing = stemRecorderSnapshot();
-        { SdIoGuard guard; ok = SD.rename(kTempPath, finalizing.path); }
+        if (finalizing.framesWritten == 0) {
+            // P3 (reconciliation report): a stop before the first frame used
+            // to publish a valid-but-empty 32-byte STEM###.mss; delete it.
+            SdIoGuard guard;
+            if (SD.exists(kTempPath) && !SD.remove(kTempPath)) ok = false;
+        } else {
+            SdIoGuard guard;
+            ok = SD.rename(kTempPath, finalizing.path);
+        }
         if (!ok) addError();
     }
     setState(ok ? STEM_REC_COMPLETE : STEM_REC_ERROR);
@@ -170,11 +217,23 @@ void stemRecorderInit(bool sdMounted) {
 bool stemRecorderStart() {
     if (!s_sdMounted || stemRecorderIsBusy() || masterRecorderIsBusy() ||
         sdDiagnosticsIsRunning() || micRecActive() || loopEngineIsRecording() ||
-        streamingSamplerIsRecording() ||
-        [&]() { SdIoGuard guard; return SD.exists(kTempPath); }()) return false;
+        streamingSamplerIsRecording()) return false;
+    {
+        bool tempExists = false;
+        { SdIoGuard guard; tempExists = SD.exists(kTempPath); }
+        if (tempExists) {
+            // P2-7 (reconciliation report): same inline recovery as the
+            // master recorder — a mid-session error must not lock out stem
+            // recording until reboot. The recorder is idle here.
+            recoverInterruptedStems();
+            SdIoGuard guard;
+            if (SD.exists(kTempPath)) return false;
+        }
+    }
     char path[64];
     if (!selectPath("STEM", "mss", path, sizeof(path))) return false;
     s_ring.reset();
+    __atomic_store_n(&s_pendingZeroFrames, 0u, __ATOMIC_RELEASE);
     portENTER_CRITICAL(&s_mux);
     memset(&s_snapshot, 0, sizeof(s_snapshot));
     s_snapshot.state = STEM_REC_STARTING;
@@ -206,6 +265,10 @@ bool stemRecorderIsBusy() {
 void stemRecorderPush(const StemPcmFrame* frames, size_t count) {
     if (!frames || !count || getState() != STEM_REC_RECORDING) return;
     const size_t pushed = s_ring.push(frames, count);
+    if (pushed < count)
+        __atomic_add_fetch(&s_pendingZeroFrames,
+                           static_cast<uint32_t>(count - pushed),
+                           __ATOMIC_ACQ_REL);  // written as silence (P3)
     const uint32_t highWater = s_ring.size();
     portENTER_CRITICAL(&s_mux);
     if (pushed < count) s_snapshot.droppedFrames += static_cast<uint32_t>(count - pushed);

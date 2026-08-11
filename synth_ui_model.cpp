@@ -67,19 +67,43 @@ SynthSoundBank synthFirstSoundBank(SynthEngine engine) {
     return SYNTH_BANK_FM_GLOBAL;
 }
 
-SynthSoundBank synthNextSoundBank(SynthEngine engine, SynthSoundBank current) {
+namespace {
+const SynthSoundBank* engineBanks(SynthEngine engine, uint8_t& length) {
     static const SynthSoundBank mg[] = {SYNTH_BANK_LEGACY, SYNTH_BANK_COMMON};
     static const SynthSoundBank mgx[] = {SYNTH_BANK_MGX_OSC, SYNTH_BANK_MGX_FILTER,
         SYNTH_BANK_MGX_AMP, SYNTH_BANK_MGX_FILTER_ENV, SYNTH_BANK_MGX_LFO,
         SYNTH_BANK_COMMON};
     static const SynthSoundBank fm[] = {SYNTH_BANK_FM_GLOBAL, SYNTH_BANK_FM_OP1,
         SYNTH_BANK_FM_OP2, SYNTH_BANK_FM_OP3, SYNTH_BANK_FM_OP4, SYNTH_BANK_COMMON};
-    const SynthSoundBank* banks = engine == SYNTH_ENGINE_MG ? mg :
-                                  engine == SYNTH_ENGINE_MGX ? mgx : fm;
-    const uint8_t length = engine == SYNTH_ENGINE_MG ? 2 : 6;
+    length = engine == SYNTH_ENGINE_MG ? 2 : 6;
+    return engine == SYNTH_ENGINE_MG ? mg :
+           engine == SYNTH_ENGINE_MGX ? mgx : fm;
+}
+}  // namespace
+
+SynthSoundBank synthNextSoundBank(SynthEngine engine, SynthSoundBank current) {
+    uint8_t length = 0;
+    const SynthSoundBank* banks = engineBanks(engine, length);
     for (uint8_t index = 0; index < length; ++index)
         if (banks[index] == current) return banks[(index + 1u) % length];
     return banks[0];
+}
+
+bool synthSoundBankBelongs(SynthEngine engine, SynthSoundBank bank) {
+    uint8_t length = 0;
+    const SynthSoundBank* banks = engineBanks(engine, length);
+    for (uint8_t index = 0; index < length; ++index)
+        if (banks[index] == bank) return true;
+    return false;
+}
+
+SynthSoundBank synthEnsureSoundBank(SynthEngine engine, SynthSoundBank bank) {
+    // P3 (reconciliation report): after an out-of-band engine change (serial
+    // command, project load) the SOUND page could keep editing a bank that
+    // belongs to the previous engine — silently mutating the inactive patch.
+    // Callers re-derive the bank through this before using it.
+    return synthSoundBankBelongs(engine, bank) ? bank
+                                               : synthFirstSoundBank(engine);
 }
 
 const char* synthSoundBankName(SynthSoundBank bank) {

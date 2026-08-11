@@ -126,22 +126,32 @@ static void adjustSampleParameter(int direction) {
     SamplerSlot& slot = g_samplerSlotBank.slot(g_streamSampleSlot);
     if (slot.mode == SAMPLER_SLOT_EMPTY) { uiStatus("EMPTY SLOT"); return; }
     if (g_sampleEditMode == 1) {
+        // Direct-field edits hold the slot seqlock so a concurrent trigger
+        // snapshot on another task can never observe a torn struct (P3).
         switch (g_sampleParam) {
             case 0:
+                g_samplerSlotBank.beginEdit(g_streamSampleSlot);
                 slot.pitchQ8 = static_cast<int16_t>(constrain(
                     static_cast<int>(slot.pitchQ8) + direction * 256, -24 * 256, 24 * 256));
+                g_samplerSlotBank.endEdit(g_streamSampleSlot);
                 break;
             case 1:
+                g_samplerSlotBank.beginEdit(g_streamSampleSlot);
                 slot.gainQ15 = static_cast<uint16_t>(constrain(
                     static_cast<int>(slot.gainQ15) + direction * 2048, 0, 32767));
+                g_samplerSlotBank.endEdit(g_streamSampleSlot);
                 break;
             case 2:
+                g_samplerSlotBank.beginEdit(g_streamSampleSlot);
                 slot.cutoffQ15 = static_cast<uint16_t>(constrain(
                     static_cast<int>(slot.cutoffQ15) + direction * 2048, 0, 32767));
+                g_samplerSlotBank.endEdit(g_streamSampleSlot);
                 break;
             case 3:
+                g_samplerSlotBank.beginEdit(g_streamSampleSlot);
                 slot.resonanceQ15 = static_cast<uint16_t>(constrain(
                     static_cast<int>(slot.resonanceQ15) + direction * 2048, 0, 32767));
+                g_samplerSlotBank.endEdit(g_streamSampleSlot);
                 break;
             case 4: {
                 const uint32_t amount = min<uint32_t>(256, slot.sourceFrames);
@@ -229,7 +239,9 @@ static void adjustSynthParam(SynthTrack& track, uint8_t row, int direction, bool
     }
     if (!synthSetParameter(track, item.parameter, next)) return;
     if (item.parameter == SYNTH_PARAM_ENGINE) {
-        g_soundBank = synthFirstSoundBank(track.engine);
+        // displayEngine() reflects the just-requested engine even though the
+        // audio task applies the switch at its next block boundary (P2-8).
+        g_soundBank = synthFirstSoundBank(track.displayEngine());
         g_soundParam = 0;
     }
 }
@@ -282,6 +294,11 @@ static void arrow(uint8_t act, const KeySnap& now) {
             break;
 
         case PAGE_SOUND: {
+            // P3: an engine changed via serial/project-load may have left
+            // g_soundBank pointing at the previous engine's banks.
+            if (g_curTrack < NUM_SYNTHS)
+                g_soundBank = synthEnsureSoundBank(
+                    g_synths[g_curTrack].displayEngine(), g_soundBank);
             uint8_t rows = (g_curTrack == NUM_SYNTHS) ? DRUM_PARAMS :
                 synthSoundBankRows(g_soundBank);
             if (dy) g_soundParam = (uint8_t)((g_soundParam + rows + dy) % rows);
@@ -411,8 +428,8 @@ static void doImmediate(uint8_t act, const KeySnap& now) {
                 uiStatus(g_sampleEditMode == 0 ? "SAMPLE BROWSER" :
                          g_sampleEditMode == 1 ? "SLOT SOUND" : "STEP LOCK");
             } else if (g_curPage == PAGE_SOUND && g_curTrack < NUM_SYNTHS) {
-                g_soundBank = synthNextSoundBank(g_synths[g_curTrack].engine,
-                                                 g_soundBank);
+                g_soundBank = synthNextSoundBank(
+                    g_synths[g_curTrack].displayEngine(), g_soundBank);
                 g_soundParam = 0;
                 uiStatus(synthSoundBankName(g_soundBank));
             } else {
@@ -432,7 +449,7 @@ static void doShort(uint8_t act) {
     if (act >= ACT_TRACK1 && act <= ACT_TRACKD) {
         g_curTrack = (uint8_t)(act - ACT_TRACK1);          // 0..2, 3 = drums
         if (g_curPage == PAGE_SOUND && g_curTrack < NUM_SYNTHS) {
-            g_soundBank = synthFirstSoundBank(g_synths[g_curTrack].engine);
+            g_soundBank = synthFirstSoundBank(g_synths[g_curTrack].displayEngine());
             g_soundParam = 0;
         }
         g_needRedraw = true; return;
@@ -681,8 +698,10 @@ static void doPiano(uint8_t kc, const KeySnap& now) {
     const uint8_t midiNote = static_cast<uint8_t>((oct + 1u) * 12u + note - 1u);
 
     if (g_curPage == PAGE_SOUND) {
-        g_synths[g_curTrack].noteOn(noteToFreq(note, oct), accent, false,
-                                    midiNote, accent ? 127 : 96);  // audition
+        // P2-9: audition notes are live-held; mark them so a running
+        // sequencer's per-step housekeeping cannot clip them.
+        g_synths[g_curTrack].noteOnLive(noteToFreq(note, oct), accent, false,
+                                        midiNote, accent ? 127 : 96);
         midiOutputNoteOn(g_curTrack, midiNote, accent ? 127 : 96);
     } else {
         bool legato = heldPianoCount(s_prev) >= 1;

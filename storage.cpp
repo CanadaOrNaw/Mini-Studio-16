@@ -543,11 +543,13 @@ static bool stageSamplerV4(const ProjectFileV4& pf, SamplerStage& staged) {
             !bank.setTrim(index, in.trimStart, in.trimLength))
             return false;
         SamplerSlot& out = bank.slot(index);
+        bank.beginEdit(index);  // direct-field writes need the seqlock (P3)
         out.rootMidi = in.rootMidi;
         out.pitchQ8 = in.pitchQ8;
         out.gainQ15 = in.gainQ15;
         out.cutoffQ15 = in.cutoffQ15;
         out.resonanceQ15 = in.resonanceQ15;
+        bank.endEdit(index);
         for (uint8_t slice = 0; slice < SAMPLER_SLICE_COUNT; ++slice)
             if (!bank.setSlice(index, slice, in.slices[slice].startFrame,
                                in.slices[slice].lengthFrames))
@@ -801,11 +803,19 @@ bool storageLoadProject(uint8_t slot) {
         if (ok && version >= 7)
             ok = applyLoopMixV7(version == 8 ? loaded.v8.base.loopMix : loaded.v7.loopMix);
         if (ok && version == 8)
-            for (uint8_t synth = 0; synth < NUM_SYNTHS; ++synth)
+            for (uint8_t synth = 0; synth < NUM_SYNTHS; ++synth) {
                 if (!synthProjectDecode(loaded.v8.synthEngines[synth], g_synths[synth])) {
                     ok = false;
                     break;
                 }
+                // P3 (reconciliation report): the save format validates the
+                // wavetable index against NUM_WT_TOTAL, but only
+                // g_numWavetables tables are actually loaded on this boot; an
+                // out-of-range index would select a zeroed (silent) table.
+                // Clamp to 0 exactly like the legacy per-voice path does.
+                if (g_synths[synth].mgxPatch.wavetable >= g_numWavetables)
+                    g_synths[synth].mgxPatch.wavetable = 0;
+            }
     } else if (version == 2) {
         const ProjectFileV2& pf = loaded.v2;
         g_bpm = pf.bpm;

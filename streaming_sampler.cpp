@@ -5,6 +5,7 @@
 #include "master_recorder.h"
 #include "mic_sampler.h"
 #include "pcm_ring.h"
+#include "sampler.h"
 #include "sd_diagnostics.h"
 #include "sd_io_arbiter.h"
 #include "stem_recorder.h"
@@ -371,8 +372,13 @@ uint32_t playbackIncrement(uint32_t sourceRate, int32_t pitchQ8) {
 
 SamplerRegion lockedRegion(const SamplerRegion& input, const SamplerLockEntry& lock) {
     if ((lock.flags & SAMPLER_LOCK_TRIM) == 0) return input;
-    const uint32_t offset = static_cast<uint32_t>(
+    uint32_t offset = static_cast<uint32_t>(
         (static_cast<uint64_t>(input.lengthFrames - 1u) * lock.trimStartQ15) / 32767u);
+    // P3 (reconciliation report): a fully right-shifted trim lock could
+    // leave a 1-frame region, which startVoice rejects — silently muting
+    // the step. Clamp the offset so at least two playable frames remain.
+    if (input.lengthFrames >= 2 && offset > input.lengthFrames - 2u)
+        offset = input.lengthFrames - 2u;
     const uint32_t available = input.lengthFrames - offset;
     uint32_t length = static_cast<uint32_t>(
         (static_cast<uint64_t>(available) * lock.trimLengthQ15) / 32767u);
@@ -496,8 +502,21 @@ void processCommand(const SamplerCommand& command) {
     bool ok = true;
     switch (command.type) {
         case COMMAND_TRIGGER: ok = startVoice(command); break;
-        case COMMAND_ASSIGN: ok = assignSlot(command); break;
-        case COMMAND_CLEAR: ok = g_samplerSlotBank.remove(command.slot); break;
+        case COMMAND_ASSIGN:
+            ok = assignSlot(command);
+            // P3 (reconciliation report): a mic/resample fallback reserves
+            // the slot bit before this async assign lands; once the bank
+            // entry is authoritative the reservation must not outlive it,
+            // or a later slot clear leaves the bit set and the slot is
+            // skipped by every future reservation until project reload.
+            if (ok) samplerReleaseStreamReference(
+                samplerMakeStreamReference(command.slot));
+            break;
+        case COMMAND_CLEAR:
+            ok = g_samplerSlotBank.remove(command.slot);
+            if (ok) samplerReleaseStreamReference(
+                samplerMakeStreamReference(command.slot));  // P3, see above
+            break;
         case COMMAND_STOP_ALL: stopAllVoices(); break;
         case COMMAND_RECORD_START: ok = beginRecordWorker(command); break;
         default: ok = false; break;
@@ -598,13 +617,15 @@ int32_t streamingSamplerRender() {
 bool streamingSamplerTrigger(uint8_t slot, uint8_t key,
                              const SamplerLockEntry* lock) {
     if (slot >= SAMPLER_SLOT_COUNT || key >= SAMPLER_SLICE_COUNT) return false;
-    const SamplerSlot& source = g_samplerSlotBank.slot(slot);
-    if (source.mode == SAMPLER_SLOT_EMPTY) return false;
     SamplerCommand command = {};
     command.type = COMMAND_TRIGGER;
     command.slot = slot;
     command.key = key;
-    command.slotData = source;
+    // P3 (reconciliation report): the sampler worker mutates the same slot
+    // struct this task is copying; a torn copy could drop the trigger or
+    // play a wrong region. Take a seqlock-consistent snapshot instead.
+    if (!g_samplerSlotBank.snapshotSlot(slot, command.slotData)) return false;
+    if (command.slotData.mode == SAMPLER_SLOT_EMPTY) return false;
     if (lock) { command.lock = *lock; command.hasLock = true; }
     return queueCommand(command);
 }

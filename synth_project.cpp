@@ -128,11 +128,15 @@ bool synthProjectDecode(const SaveSynthEngineState& input, SynthTrack& track) {
         decodeAdsr(input.fm.operators[index].envelope,
                    fm.operators[index].envelope);
     }
-    track.setEngine(static_cast<SynthEngine>(input.engine));
+    // P2-8: project loads run on the storage/main task while the audio task
+    // renders; the engine switch is applied at the next audio block. The
+    // patches written above are engine-specific structs, so writing them
+    // before the switch lands is safe.
+    track.requestEngine(static_cast<SynthEngine>(input.engine));
     return true;
 }
 
 void synthProjectMigrateLegacy(SynthTrack& track) {
-    track.setEngine(SYNTH_ENGINE_MG);
+    track.requestEngine(SYNTH_ENGINE_MG);
 }
 

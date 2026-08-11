@@ -80,6 +80,57 @@ int main() {
     assert(overrun.snapshot(0).capturedFrames == 9);
     assert(overrun.snapshot(0).droppedFrames == 5);
 
+    // P3 regression: mute intent must survive an underrun resync. Before the
+    // fix the resync path always resumed as PLAYING, silently unmuting.
+    {
+        LoopStreamCore<8, 4> mutedCore;
+        int16_t primed[4] = {1, 2, 3, 4};
+        assert(mutedCore.preparePlayback(0, 4));
+        assert(mutedCore.pushPlayback(0, primed, 4) == 4);
+        assert(mutedCore.armPlayback(0, 0));
+        mutedCore.processFrame(0);                      // PLAY_WAIT -> PLAYING
+        assert(mutedCore.setMuted(0, true));
+        assert(mutedCore.snapshot(0).state == LOOP_STREAM_MUTED);
+        for (int frame = 0; frame < 4; ++frame) mutedCore.processFrame(0);
+        mutedCore.processFrame(0);                      // ring dry -> UNDERRUN
+        assert(mutedCore.snapshot(0).state == LOOP_STREAM_UNDERRUN);
+        assert(mutedCore.muted(0));                     // intent survives
+        assert(mutedCore.prepareResync(0));
+        assert(mutedCore.pushPlayback(0, primed, 4) == 4);
+        assert(mutedCore.armPlayback(0, 0));
+        mutedCore.processFrame(0);                      // resumes...
+        assert(mutedCore.snapshot(0).state == LOOP_STREAM_MUTED);  // ...muted
+        assert(mutedCore.setMuted(0, false));
+        assert(mutedCore.snapshot(0).state == LOOP_STREAM_PLAYING);
+        // Muting is also accepted while waiting/resyncing, not only PLAYING.
+        LoopStreamCore<8, 4> waiting;
+        assert(waiting.preparePlayback(0, 4));
+        assert(waiting.pushPlayback(0, primed, 4) == 4);
+        assert(waiting.armPlayback(0, 100));
+        assert(waiting.snapshot(0).state == LOOP_STREAM_PLAY_WAIT);
+        assert(waiting.setMuted(0, true));
+        while (waiting.absoluteFrame() < 100) waiting.processFrame(0);
+        waiting.processFrame(0);
+        assert(waiting.snapshot(0).state == LOOP_STREAM_MUTED);
+        assert(!waiting.setMuted(1, true));             // EMPTY track refuses
+    }
+
+    // P2-5 regression: clearTrack must not touch the playback ring (the
+    // audio task may be mid-pop); preparePlayback resets it before reuse,
+    // so a cleared-then-reused track starts empty regardless.
+    {
+        LoopStreamCore<8, 4> cleared;
+        int16_t stale[4] = {11, 12, 13, 14};
+        assert(cleared.preparePlayback(0, 4));
+        assert(cleared.pushPlayback(0, stale, 4) == 4);
+        assert(cleared.armPlayback(0, 0));
+        assert(cleared.clearTrack(0));
+        assert(cleared.snapshot(0).state == LOOP_STREAM_EMPTY);
+        assert(!cleared.muted(0));
+        assert(cleared.preparePlayback(0, 4));
+        assert(cleared.snapshot(0).ringFrames == 0);    // reset at reuse time
+    }
+
     std::cout << "loop_stream_core: scheduling, stall recovery and recording passed\n";
     return 0;
 }
