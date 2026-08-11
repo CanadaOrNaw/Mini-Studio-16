@@ -7,81 +7,58 @@ means the production firmware path exists, its hardware-independent behavior is
 host-tested, and both target profiles compile/link. “Hardware-verified” remains
 false until a physical Cardputer-ADV produces measurements.
 
-## Verified firmware code checkpoint
+## Verified final pre-hardware checkpoint
 
-- Firmware source head: `8a7c1238012f0860438223fd0e33ef0fe4e7c01d`
-- Pull-request workflow merge SHA: `442eab0fadfc24129261a93e0b22c5375d609972`
-- GitHub Actions: [run 31447147591](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31447147591)
-- Host tests, AddressSanitizer, UndefinedBehaviorSanitizer, normal firmware,
-  USB-host firmware, resource gates, merged-image generation, SD-card package,
-  checksum manifest, and artifact upload: **passed**
-- Normal image: 189,800 bytes static DRAM; 942,365-byte flash estimate;
-  standalone merged-image SHA-256
-  `f2829148202a1f01ffda985100d1c525d8c412576b0388a84487e37d248d3679`
-- USB-host image: 178,216 bytes static DRAM; 960,821-byte flash estimate;
-  standalone merged-image SHA-256
-  `458f237ce037e2d660d660e43f9051d41b2d9ee4621dadb83d93ce12eac56623`
-- Combined dual-role image SHA-256
-  `bbfefce8d9a281d6e71bab5e0cabdc17e52c857db4ac8ed57c42643c82013574`
-- ATOM Lite Audio Cap image: 49,008 bytes PlatformIO RAM; 1,132,117-byte
-  PlatformIO flash use; firmware-bin SHA-256
-  `b0ded7a5617f9fc869dcc17b2df4120fd90c2721546fac3d700a243f418cf383`
-- Artifact ID 9085034679 from
-  [run 31447147591](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31447147591)
-  (artifact downloads require GitHub sign-in and expire ~90 days after the
-  run; the ID and hash below remain the durable evidence);
-  ZIP SHA-256
-  `ac24ef611469b827c04f214e39bea62c8b21c5089711e005ebc4d17377cc896f`
-- Starter SD ZIP SHA-256
-  `708e868ea108fee26cbdcd150740ba96e665e31712bca774d4ededb40d174256`
-
-The downloaded artifact was independently extracted; all twenty manifest
-payload entries passed `sha256sum -c SHA256SUMS.txt`. The Normal application at
-`0x10000` and USB-host application at `0x300000` were independently compared
-against the combined image and are byte-identical. The embedded partition-table SHA-256 is
-`b7c4e29a17187775d3a5579a872259c376c47092a8a8d79803aaa4dc37f7e1e2`,
-matching `dual-image-layout.json`. The 2,137,456-byte inter-slot gap contains
-only `0xFF`. The artifact contains the combined image,
-both standalone recovery images, application binaries and ELFs, both resource
-reports, the independently compiled ATOM Lite cap binary/ELF, Audio Cap guide
-and third-party notice/license, partition/layout files, starter SD ZIP,
-instructions, manifest, and build provenance. A later documentation-only head
-can produce a different outer ZIP digest because `BUILD_INFO.txt` embeds its
-workflow merge SHA; the four firmware image hashes above identify this code
-checkpoint.
-
-## Verified beginner/distribution checkpoint
-
-- Package source head: `088843be972dde1401db055e8bb1f291729f1166`
-- Pull-request workflow merge SHA: `c984e152058320741a9ce8d0c08f117a2594064e`
-- GitHub Actions: [run 31450635085](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31450635085)
+- Verified firmware/package source head:
+  `f978bd991cc578ff080d63ebac5fec743c92f52c`
+- Push workflow:
+  [run 31542626067](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31542626067)
+- Pull-request workflow:
+  [run 31542628616](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31542628616)
 - Host tests, AddressSanitizer, UndefinedBehaviorSanitizer, all three pinned
   firmware builds, both Cardputer resource gates, all one-file merges,
-  packaging and artifact upload: **passed**
-- Artifact ID 9086267632 from
-  [run 31450635085](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31450635085)
-  (artifact downloads require GitHub sign-in and expire ~90 days after the
-  run; the ID and hash below remain the durable evidence);
-  GitHub/ZIP SHA-256
-  `60e5a884bae06a6dd317c5c3f72345ca1468744820e4ffa1ef5d55a359deae01`
-- The artifact contains 35 files. All 33 entries in `SHA256SUMS.txt` passed.
-  The Normal application at `0x10000`, USB-host application at `0x300000`, and
-  ATOM application at `0x10000` were byte-compared with their combined images.
-- New one-file ATOM Lite image SHA-256:
-  `48b9b6e5b9157e4429a122c4165e22d354322a957c84edad93a59e2a9b777873`
-- The artifact now includes `START_HERE.md`, the OS-specific no-compilation
-  flashing/recovery guide, exact regional Audio Cap shopping sheet, tested
-  machine BOM, key legend, cradle files, cap STLs/design, and the starter SD
-  image in addition to the firmware/debug payloads.
-- Audio Cap shopping is pinned to exact orderable product pages/SKUs for
-  Canada, the United States and the European Union. The power harness is fixed
-  at 24/22 AWG within the WAGO 221-413 24–12 AWG range; generic 28-AWG signal
-  jumpers are explicitly rejected for power.
-- Standalone public-site commit
-  [`8beba958`](https://github.com/CanadaOrNaw/MiniStudio.github.io/commit/8beba9584aa720eefa79bed07a7e27b8a810350d)
-  publishes package source `088843be`. `tools/check_live_site.py` fetched the
-  deployed Pages endpoint and verified HTTP content size/SHA-256 for all 15
-  manifested assets (181,411 bytes total).
+  packaging, and artifact upload: **passed**
+- Normal image: 190,024 bytes static DRAM; 946,205-byte flash estimate;
+  application SHA-256
+  `9732e2a9d8eab9f8ed9ca089a1c94700742ae8e9a9fb3d7051b88a46dc1a6e1f`
+- USB-host image: 178,456 bytes static DRAM; 964,741-byte flash estimate;
+  application SHA-256
+  `5b00e69dcc49214a574cf01775cabf4fa0c97d6fd6df3148a7e5b85bdd7bd6d9`
+- Combined dual-role image SHA-256
+  `2fe97106a7fc91423a0b668368d81831045699f74bfb65deb95b2ba609061c67`
+- ATOM Lite Audio Cap image: 49,016 bytes PlatformIO RAM; 1,132,225-byte
+  PlatformIO flash use; one-file merged-image SHA-256
+  `eab53ff27a135cc58844a2fa67ff2f10728a64b76f424d155f98d283ae85f1ca`
+- Artifact ID
+  [9121376552](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31542626067/artifacts/9121376552)
+  (Actions artifact downloads require GitHub sign-in and expire; the release
+  workflow is the durable beginner-distribution path); outer ZIP SHA-256
+  `76f856fd378d3286cfa7b6fa61fba205caa8eae5442c6bdc378ad4d59a8d13d7`
+- Starter SD ZIP SHA-256
+  `3564b1d151e6b4f7ac622d1f2d33ce6f75f9166b7a80f616be54a2eae69af680`
+
+The 32,861,874-byte artifact was downloaded and extracted independently. All
+33 entries in `SHA256SUMS.txt` passed. The starter SD ZIP passed archive
+testing. The Normal application at `0x10000` and USB-host application at
+`0x300000` were byte-compared against the combined image and are identical.
+The combined-image, application, and partition-table hashes match
+`dual-image-layout.json`.
+
+The package includes the combined image, standalone recovery images,
+application binaries and ELFs, resource reports, the independently compiled
+ATOM Lite cap image/ELF, beginner flashing and cap guides, attribution,
+partition/layout files, starter SD ZIP, generated hardware assets, manifest,
+and build provenance.
+
+The branch can contain a later documentation-only commit carrying this record;
+the source SHA above is the exact tree from which the verified binaries and
+published site were generated.
+
+Standalone public-site commit
+[`92012249`](https://github.com/CanadaOrNaw/MiniStudio.github.io/commit/92012249fcf009dcf0e750bdc6f0a76790ce6d87)
+publishes source `f978bd99`. `tools/check_live_site.py` fetched the deployed
+Pages endpoint and verified content size and SHA-256 for all 15 manifested
+downloads (272,341 bytes total), including the regenerated snap-fit cap lid.
 
 ## Implemented
 
@@ -223,23 +200,20 @@ Boot telemetry reports internal free heap and largest block after subsystem
 initialization; only hardware can validate task stacks, library allocations,
 and the adaptive legacy sample pool together.
 
-Compared with the prior verified dual-role checkpoint, the fixed Audio Cap
-transport/rings and Cardputer bridge add 8,360 bytes of static DRAM and 3,176
-bytes estimated flash to Normal, and 8,344 bytes static DRAM and 3,212 bytes
-estimated flash to USB Host. The resulting resource boundary is:
+The final reconciled firmware resource boundary is:
 
 | Profile | Static DRAM | Gate headroom | Flash estimate | Flash headroom |
 | --- | ---: | ---: | ---: | ---: |
-| USB CDC+MIDI device | 189,800 B | 15,000 B | 942,365 B | 2,057,635 B |
-| USB MIDI host | 178,216 B | 26,584 B | 960,821 B | 2,039,179 B |
-| ATOM Lite Audio Cap | 49,008 B* | 278,672 B* | 1,132,117 B* | 178,603 B* |
+| USB CDC+MIDI device | 190,024 B | 14,776 B | 946,205 B | 2,053,795 B |
+| USB MIDI host | 178,456 B | 26,344 B | 964,741 B | 2,035,259 B |
+| ATOM Lite Audio Cap | 49,016 B* | 278,664 B* | 1,132,225 B* | 178,495 B* |
 
 \* The ATOM row uses PlatformIO's original-ESP32 board totals (327,680-byte RAM
 and 1,310,720-byte application partition), not the Cardputer ELF section gate.
 
 Fixed host-layout measurements are 60 bytes per original voice, 76 bytes per
-MGX voice, 124 bytes per FM voice, and 952 bytes for one `SynthTrack` containing
-all engine state. All three synth tracks therefore reserve 2,856 bytes of
+MGX voice, 124 bytes per FM voice, and 956 bytes for one `SynthTrack` containing
+all engine state. All three synth tracks therefore reserve 2,868 bytes of
 bounded engine state before target ABI differences. Hardware still determines
 the safe *active* FM polyphony under the complete audio/storage workload.
 
