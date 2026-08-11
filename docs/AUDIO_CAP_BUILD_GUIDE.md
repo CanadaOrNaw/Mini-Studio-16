@@ -6,9 +6,13 @@ no circuit board is ordered or fabricated.
 
 ## What you are making
 
-When closed, the cap has a 3.5 mm line-input hole, a pairing button, a status
-light and one 14-pin plug. It plugs directly into the Cardputer. There is no
-second power cord: the Cardputer powers it through the 14-pin plug.
+When closed, the cap has a 3.5 mm line-input hole, one 14-pin plug, and four
+small snap windows on its long sides. It plugs directly into the Cardputer.
+There is no second power cord: the Cardputer powers it through the 14-pin
+plug. The ATOM's physical button and status light are inside the closed lid
+in this revision, so pairing and status use the Cardputer commands
+(`cap-pair`, `cap-status`) shown in step 8; a button plunger and light window
+are planned for enclosure rev-B.
 
 ## 1. Buy the parts
 
@@ -45,9 +49,13 @@ Download and print:
 3. `audio-cap-lid.stl` after the purchased modules sit in the base.
 
 Recommended first pass: PLA, 0.20 mm layers, 0.40 mm nozzle, 3 walls, 20% infill,
-no support. The base and lid print flat. Press the exact Samtec header into the small fit
-gauge by itself—never use the Cardputer as a hammer. If it needs force, scale
-only X/Y by 101%, reprint the gauge and record the result.
+no support. The base and lid print flat exactly as downloaded — the lid prints
+plate-down with its lip and four snap fingers pointing up, and is flipped over
+for assembly. The gauge's one notched corner marks header pin 1 (the `G3`
+end); keep that notch in the same corner as pin 1 whenever you test-fit.
+Press the exact Samtec header into the small fit gauge by itself—never use the
+Cardputer as a hammer. If it needs force, scale only X/Y by 101%, reprint the
+gauge and record the result.
 
 The generated models are watertight and have checked bounds. Their real fit is
 unverified until the Cardputer and the exact retail module revision arrive.
@@ -71,9 +79,10 @@ is a programming cable used before assembly; it is not part of the finished cap.
 ## 4. Make the signal harness
 
 Power must be off. Use the table exactly. Slide the female ends of five
-Adafruit 4635 leads onto the rear pins of the 2x7 header, then slide the other ends
-onto the named ATOM sockets. Put each single connector into the printed keyed
-header holder so it cannot rotate.
+Adafruit 4635 leads onto the rear pins of the 2x7 header, then slide the other
+ends onto the named ATOM sockets. Double-check each lead against the table
+before moving on — this revision has no keyed holder (planned for rev-B), so
+the table and the gauge's pin-1 notch are your orientation references.
 
 | Header position | Connect to |
 | --- | --- |
@@ -134,14 +143,24 @@ bench measurement is removed before closing the finished cap.
 
 ## 7. Close and plug in
 
-Seat the PCM1808 jack in its end window, seat the ATOM button/light under the
-lid features, install the two nylon module retainers and fold wires into the
-channels. Hook one long lid edge, press the other until all four compliant tabs
-click. To reopen, press one tab at a time with a plastic pick; do not pry at the
-Cardputer.
+**Known rev-B gap — read before closing.** With straight precrimped jumpers in
+the ATOM's bottom sockets, the ATOM-plus-housing stack is taller than this
+revision's interior, so the current base closes over the PCM1808 and harness
+but not over a fully jumpered ATOM. Until enclosure rev-B (deeper interior,
+retainer bosses, wire channels), bench-test the cap open, or close the lid
+with the ATOM resting beside its bay unlidded. Record the measured stack
+height of your real parts in `CARDPUTER_TESTING.md` so rev-B uses evidence,
+not estimates. The nylon M2 retainers from the BOM are for rev-B.
 
-With the Cardputer off, align the keyed 14-pin plug and push straight in. Never
-offset it by one pin. Power the Cardputer from its battery or normal USB-C.
+Seat the PCM1808 jack in its end window. Set the lid on the base — its
+locating lip squares it automatically — then press down over each corner until
+all four snap fingers click into the side windows. To reopen, press the two
+visible nubs on one long side inward through their windows with a plastic
+pick and lift; do not pry at the Cardputer.
+
+With the Cardputer off, align the 14-pin plug (the bare header itself is not
+keyed — match pin 1 `G3` to the gauge's notched corner and the EXT port's pin-1
+end) and push straight in. Never offset it by one pin. Power the Cardputer from its battery or normal USB-C.
 
 ## 8. Use it
 
@@ -154,8 +173,9 @@ python tools/ministudio_cli.py --port PORT cap-monitor 25
 python tools/ministudio_cli.py --port PORT cap-pair
 ```
 
-Put one Bluetooth speaker/headset in pairing mode, then press the cap button or
-run `cap-pair`. The first discovered audio-rendering device is selected.
+Put one Bluetooth speaker/headset in pairing mode, then run `cap-pair` (the
+ATOM's physical button also works whenever the lid is open). The first
+discovered audio-rendering device is selected.
 
 | RGB | Meaning |
 | --- | --- |

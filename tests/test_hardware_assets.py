@@ -14,14 +14,27 @@ ROOT = Path(__file__).resolve().parents[1]
 LAYOUT = ROOT / "hardware" / "button-layout.json"
 SVG = ROOT / "hardware" / "mini-studio-16-button-layout.svg"
 STL = ROOT / "hardware" / "stl" / "mini-studio-16-bench-cradle.stl"
+CAP_BASE = ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-base.stl"
+CAP_LID = ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-lid.stl"
+CAP_GAUGE = ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-14pin-fit-gauge.stl"
 CAP_STLS = {
-    ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-base.stl":
-        ((-42.0, 42.0), (-19.0, 19.0), (0.0, 20.0)),
-    ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-lid.stl":
-        ((-42.0, 42.0), (-19.0, 19.0), (0.0, 4.0)),
-    ROOT / "hardware" / "audio-cap" / "stl" / "audio-cap-14pin-fit-gauge.stl":
-        ((-12.0, 12.0), (-5.0, 5.0), (0.0, 2.0)),
+    CAP_BASE: ((-42.0, 42.0), (-19.0, 19.0), (0.0, 20.0)),
+    CAP_LID: ((-42.0, 42.0), (-19.0, 19.0), (0.0, 8.2)),
+    CAP_GAUGE: ((-12.0, 12.0), (-5.0, 5.0), (0.0, 2.0)),
 }
+
+
+def _stl_vertices(path):
+    data = path.read_bytes()
+    count = struct.unpack_from("<I", data, 80)[0]
+    vertices = set()
+    offset = 84
+    for _ in range(count):
+        values = struct.unpack_from("<12fH", data, offset)
+        for i in range(3):
+            vertices.add(tuple(round(v, 4) for v in values[3 + i * 3:6 + i * 3]))
+        offset += 50
+    return vertices
 
 
 class HardwareAssetTests(unittest.TestCase):
@@ -103,7 +116,9 @@ class HardwareAssetTests(unittest.TestCase):
                 offset += 50
             flat = [vertex for triangle in triangles for vertex in triangle]
             for axis, expected in enumerate(expected_bounds):
-                actual = (min(v[axis] for v in flat), max(v[axis] for v in flat))
+                # Round away float32 storage error (e.g. 8.2 -> 8.19999980...).
+                actual = (round(min(v[axis] for v in flat), 4),
+                          round(max(v[axis] for v in flat), 4))
                 self.assertEqual(actual, expected, path.name)
             edges = collections.Counter()
             for triangle in triangles:
@@ -111,6 +126,68 @@ class HardwareAssetTests(unittest.TestCase):
                     edge = tuple(sorted((triangle[index], triangle[(index + 1) % 3])))
                     edges[edge] += 1
             self.assertEqual(set(edges.values()), {2}, path.name)
+
+    def test_cap_internal_bays_fit_the_specified_modules(self):
+        # Outer bounds alone once hid a bay that was 0.6 mm shorter than the
+        # ATOM it must hold; assert interior spans against design.json.
+        gen = self._generator()
+        design = json.loads((ROOT / "hardware" / "audio-cap" / "design.json").read_text())
+        modules = {module["id"]: module for module in design["modules"]}
+        atom = modules["controller"]["size_mm"]
+        adc = modules["line_adc"]["size_mm_max"]
+        self.assertGreaterEqual(gen.CAP_ATOM_BAY_SPAN_MM, atom[0] + 0.4)
+        self.assertGreaterEqual(gen.CAP_ADC_BAY_SPAN_MM, adc[0] + 0.4)
+        # ATOM locating brackets leave clearance on both sides of the module.
+        self.assertGreater(gen.CAP_ATOM_BRACKET_Y0 * 2, atom[1])
+        self.assertLess(gen.CAP_ATOM_BRACKET_Y1, gen.CAP_WALL_INNER_Y)
+        # Lip and fingers stay clear of the widest module.
+        self.assertGreater(gen.CAP_FINGER_Y0 * 2, adc[1])
+
+    def test_cap_lid_mechanism_exists_in_committed_meshes(self):
+        gen = self._generator()
+        lid = _stl_vertices(CAP_LID)
+        base = _stl_vertices(CAP_BASE)
+        # Locating lip materialized: end-lip band vertices below the plate.
+        self.assertTrue(any(abs(v[0]) == gen.CAP_LID_LIP_X0
+                            and v[2] <= gen.CAP_LID_LIP_TOP for v in lid))
+        self.assertTrue(any(abs(v[1]) == gen.CAP_FINGER_Y0
+                            and v[2] <= gen.CAP_LID_LIP_TOP for v in lid))
+        # Snap nubs materialized: each step's exact protrusion exists, and the
+        # widest step engages past the base's inner wall face.
+        protrusions = {abs(v[1]) for v in lid if v[2] > gen.CAP_LID_LIP_TOP}
+        widest = max(step[2] for step in gen.CAP_NUB_STEPS)
+        for _, _, y_out in gen.CAP_NUB_STEPS:
+            self.assertIn(y_out, protrusions)
+        self.assertGreaterEqual(widest - gen.CAP_WALL_INNER_Y, 0.25)
+        self.assertEqual(max(protrusions), widest)
+        # Catch windows materialized in the base side walls at the assembled
+        # nub position (window corner vertices exist on the wall faces).
+        for z_edge in (gen.CAP_WINDOW_Z0, gen.CAP_WINDOW_Z1):
+            self.assertTrue(any(abs(v[0]) == gen.CAP_WINDOW_X0
+                                and abs(v[1]) >= gen.CAP_WALL_INNER_Y
+                                and v[2] == z_edge for v in base))
+        # Seated engagement lands inside the window: assembled nub z is
+        # (base height + plate) - lid z for each step's span.
+        assembled_top = 20.0 + gen.CAP_LID_PLATE_MM
+        for z0, z1, y_out in gen.CAP_NUB_STEPS:
+            if y_out <= gen.CAP_WALL_INNER_Y:
+                continue  # lead-in steps may ride inside the wall clearance
+            self.assertGreaterEqual(assembled_top - z1, gen.CAP_WINDOW_Z0)
+            self.assertLessEqual(assembled_top - z0, gen.CAP_WINDOW_Z1)
+
+    def test_gauge_pin_one_corner_is_notched(self):
+        vertices = {(v[0], v[1]) for v in _stl_vertices(CAP_GAUGE)}
+        self.assertNotIn((-12.0, -5.0), vertices)  # pin-1 corner cut away
+        for corner in ((-12.0, 5.0), (12.0, -5.0), (12.0, 5.0)):
+            self.assertIn(corner, vertices)
+
+    @staticmethod
+    def _generator():
+        spec = importlib.util.spec_from_file_location(
+            "generate_hardware_assets", ROOT / "tools" / "generate_hardware_assets.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
 
 if __name__ == "__main__":

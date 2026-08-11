@@ -21,12 +21,41 @@ legend.
 ## Solderless Audio Cap
 
 The cap is a separate original pre-hardware design inspired by the finished
-plug-in form of M5Stack caps. It is 84 x 38 x 24 mm across its two closed parts;
-the extra thickness makes room for retail modules and two compact lever splices
-because the project deliberately refuses a custom PCB. It contains an ATOM
-Lite, preassembled PCM1808 line-input module and only factory/precrimped plug-in
-connections. Cardputer EXT `5VOUT/GND` provides all power through the same 14-pin
-plug that carries data. See [`../docs/AUDIO_CAP_BUILD_GUIDE.md`](../docs/AUDIO_CAP_BUILD_GUIDE.md).
+plug-in form of M5Stack caps. Assembled it is 84 x 38 x 21.2 mm (20.0 mm base
+plus the 1.2 mm lid plate; the lid part prints 8.2 mm tall because its
+locating lip and snap fingers sit inside the base); the thickness makes room
+for retail modules and two compact lever splices because the project
+deliberately refuses a custom PCB. It contains an ATOM Lite, preassembled
+PCM1808 line-input module and only factory/precrimped plug-in connections.
+Cardputer EXT `5VOUT/GND` provides all power through the same 14-pin plug that
+carries data. See [`../docs/AUDIO_CAP_BUILD_GUIDE.md`](../docs/AUDIO_CAP_BUILD_GUIDE.md).
+
+### Cap closure mechanism
+
+Both parts print flat with no supports; the lid prints plate-down with its lip
+and four snap fingers rising straight up (flip it fingers-down to assemble).
+Each finger is a 2.0 x 1.2 mm blade, 7.0 mm below the plate, ending in a
+stepped catch nub. The step taper is the insertion lead-in; the widest step
+engages 0.30 mm past the base's inner wall into a through-wall window
+(engagement strain about 1.6%, safe for PLA). The four windows double as
+release slots: press the two nubs on one side inward with a plastic pick and
+lift. A perimeter locating lip (1.2 mm engagement, 0.2 mm clearance) squares
+the lid before the fingers load. Automated tests assert the lip, nub steps,
+window positions, zero seated interference, and that both module bays exceed
+the `design.json` module envelopes.
+
+### Known interior gaps deferred to enclosure rev-B
+
+The closure and bay dimensions above are geometry-verified, but the interior
+still cannot host the full documented assembly: an ATOM Lite with straight
+precrimped jumper housings in its bottom sockets stacks to roughly 24 mm
+(9.5 mm module + ~14 mm housings) against an 18.4 mm cavity, in any
+orientation. Rev-B (gated on measuring the real purchased parts) will deepen
+the interior and add the pair-button plunger, status-light window, keyed
+header holder, and module-retainer bosses that earlier documentation
+referenced. Until then the build guide pairs the cap with the Cardputer
+`cap pair` CLI command instead of the physical button, and `design.json`
+lists the same gaps under `rev_b_planned`.
 
 ## Cradle design
 

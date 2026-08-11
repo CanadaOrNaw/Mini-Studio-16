@@ -38,6 +38,42 @@ CENTER_OPENING_Y_MM = 40.0
 SIDE_CLIP_SPAN_Y_MM = 32.0
 END_CLIP_SPAN_X_MM = 62.0
 
+# Audio Cap enclosure mechanism constants (mm). Shared with the host tests so
+# internal fits are asserted, not just outer bounds. The voxel mesher samples
+# cell centers, so every band below must have matching grid lines in the
+# functions that use it; tests assert the resulting geometry directly.
+CAP_WALL_INNER_X = 40.4          # base end-wall inner face
+CAP_WALL_INNER_Y = 17.4          # base side-wall inner face
+CAP_DIVIDER_X0 = -15.8           # bay divider (moved from -17.0 so the
+CAP_DIVIDER_X1 = -14.2           # 24.0 mm ATOM fits with 0.6 mm slack)
+CAP_ATOM_SIZE_MM = 24.0
+CAP_ADC_MAX_LEN_MM = 50.5
+CAP_ATOM_BAY_SPAN_MM = CAP_DIVIDER_X0 + CAP_WALL_INNER_X      # 24.6
+CAP_ADC_BAY_SPAN_MM = CAP_WALL_INNER_X - CAP_DIVIDER_X1       # 54.6
+CAP_ATOM_BRACKET_Y0 = 12.25      # locating brackets flanking the ATOM
+CAP_ATOM_BRACKET_Y1 = 13.45
+CAP_LID_PLATE_MM = 1.2           # lid prints plate-down, fingers up
+CAP_LID_LIP_TOP = 2.4            # locating lip: plate..2.4 (1.2 mm engagement)
+CAP_LID_HEIGHT = 8.2
+CAP_LID_LIP_X0 = 39.0            # end-lip band (0.2 mm clearance to 40.4 wall)
+CAP_LID_LIP_X1 = 40.2
+CAP_FINGER_X0 = 26.0             # four snap-finger blades, 2.0 x 1.2 mm
+CAP_FINGER_X1 = 28.0
+CAP_FINGER_Y0 = 16.0
+CAP_FINGER_Y1 = 17.2
+# Stepped catch nubs at the finger tips: protrusion tapers toward the tip so
+# insertion is a lead-in ramp; max engagement past the 17.4 wall face is
+# 0.30 mm (~1.6% strain over the 5.8 mm blade - safe for PLA), and the stepped
+# shoulder keeps the lid deliberately removable for service.
+CAP_NUB_STEPS = ((6.4, 7.0, 17.70), (7.0, 7.6, 17.50), (7.6, 8.2, 17.30))
+# Through-wall catch/release windows in the base side walls. Assembled nub
+# z = 21.2 - lid z, so the 17.70 step (lid 6.4..7.0) lands at 14.2..14.8 and
+# the 17.50 step at 13.6..14.2; the window clears both seated steps.
+CAP_WINDOW_X0 = 25.7
+CAP_WINDOW_X1 = 28.3
+CAP_WINDOW_Z0 = 13.4
+CAP_WINDOW_Z1 = 15.0
+
 
 def _tspan(text: str, css_class: str, x: float, y: float) -> str:
     return (
@@ -218,41 +254,72 @@ def cap_base_triangles():
     # Side-by-side bays: PCM1808 at the line-jack end, ATOM Lite at the bus end.
     # The end windows deliberately have extra clearance; a printable fit gauge
     # is supplied because module revisions and Cardputer shells vary.
-    xs = [-42, -40.4, -31, -29, -17, 10, 39.5, 40.4, 42]
-    ys = [-19, -17.4, -10, -7, 7, 10, 17.4, 19]
-    zs = [0, 1.6, 3.0, 5.0, 9.5, 11.5, 18.0, 20.0]
+    xs = [-42, -CAP_WALL_INNER_X, -CAP_WINDOW_X1, -CAP_WINDOW_X0,
+          CAP_DIVIDER_X0, CAP_DIVIDER_X1, 10,
+          CAP_WINDOW_X0, CAP_WINDOW_X1, CAP_WALL_INNER_X, 42]
+    ys = [-19, -CAP_WALL_INNER_Y, -CAP_ATOM_BRACKET_Y1, -CAP_ATOM_BRACKET_Y0,
+          -12, -10, -7, 7, 10, 12,
+          CAP_ATOM_BRACKET_Y0, CAP_ATOM_BRACKET_Y1, CAP_WALL_INNER_Y, 19]
+    zs = [0, 1.6, 3.0, 5.0, 9.5, 11.5, CAP_WINDOW_Z0, CAP_WINDOW_Z1, 18.0, 20.0]
 
     def occupied(x, y, z):
         bottom = z < 1.6
-        side_wall = abs(y) > 17.4
-        end_wall = abs(x) > 40.4
+        side_wall = abs(y) > CAP_WALL_INNER_Y
+        end_wall = abs(x) > CAP_WALL_INNER_X
         # Open one end for the Cardputer header nose and the other for line-in.
-        header_window = x < -40.4 and abs(y) < 10 and 3.0 < z < 11.5
-        line_window = x > 40.4 and abs(y) < 7 and 3.0 < z < 11.5
-        shell = bottom or side_wall or (end_wall and not header_window and not line_window)
-        # Low rails prevent the two factory modules sliding after the lid closes.
-        atom_rails = x < -17 and (7 < abs(y) < 10) and z < 3.0
-        adc_rails = x > 10 and (10 < abs(y) < 12) and z < 3.0
-        divider = -17 < x < -15.4 and abs(y) > 10 and z < 5.0
-        return shell or atom_rails or adc_rails or divider
+        header_window = x < -CAP_WALL_INNER_X and abs(y) < 10 and 3.0 < z < 11.5
+        line_window = x > CAP_WALL_INNER_X and abs(y) < 7 and 3.0 < z < 11.5
+        # Through-wall catch windows for the lid's four snap nubs. They double
+        # as release slots: press the two nubs on a side inward to pop the lid.
+        snap_window = (CAP_WINDOW_X0 < abs(x) < CAP_WINDOW_X1
+                       and CAP_WINDOW_Z0 < z < CAP_WINDOW_Z1)
+        shell = bottom or (side_wall and not snap_window) or (
+            end_wall and not header_window and not line_window)
+        # The ATOM's retail size is exact, so brackets locate it against y
+        # drift; the PCM1808 bay keeps low friction ribs only, because retail
+        # module widths vary (modules rest on the ribs under lid pressure).
+        atom_brackets = (x < CAP_DIVIDER_X0 and z < 3.0
+                         and CAP_ATOM_BRACKET_Y0 < abs(y) < CAP_ATOM_BRACKET_Y1)
+        adc_ribs = x > 10 and (10 < abs(y) < 12) and z < 3.0
+        divider = CAP_DIVIDER_X0 < x < CAP_DIVIDER_X1 and abs(y) > 10 and z < 5.0
+        return shell or atom_brackets or adc_ribs or divider
 
     return _voxel_triangles(xs, ys, zs, occupied)
 
 
 def cap_lid_triangles():
-    xs = [-42, -40.2, -28, -26, 26, 28, 40.2, 42]
-    ys = [-19, -17.2, -14.5, -12.5, 12.5, 14.5, 17.2, 19]
-    zs = [0, 1.6, 2.8, 4.0]
+    # Printed plate-down: the 1.2 mm plate lies on the bed and the locating
+    # lip plus four snap fingers rise straight up, so no supports are needed.
+    # Flip fingers-down to assemble; the plate then rests on the base rim.
+    xs = [-42, -CAP_LID_LIP_X1, -CAP_LID_LIP_X0, -CAP_FINGER_X1, -CAP_FINGER_X0,
+          CAP_FINGER_X0, CAP_FINGER_X1, CAP_LID_LIP_X0, CAP_LID_LIP_X1, 42]
+    ys = [-19, -17.7, -17.5, -17.3, -CAP_FINGER_Y1, -CAP_FINGER_Y0,
+          CAP_FINGER_Y0, CAP_FINGER_Y1, 17.3, 17.5, 17.7, 19]
+    zs = [0, CAP_LID_PLATE_MM, CAP_LID_LIP_TOP,
+          CAP_NUB_STEPS[0][0], CAP_NUB_STEPS[1][0], CAP_NUB_STEPS[2][0],
+          CAP_LID_HEIGHT]
 
     def occupied(x, y, z):
-        top = z > 2.8
-        locating_lip = 1.6 < z < 2.8 and (
-            (40.2 > abs(x) > 39.0) or (17.2 > abs(y) > 16.0)
-        )
-        # Four compliant snap fingers. Their free lower ends deflect inward as
-        # the lid is pressed down; small printed nubs catch the base wall edge.
-        snap_finger = z < 2.8 and 26 < abs(x) < 28 and 14.5 < abs(y) < 17.2
-        return top or locating_lip or snap_finger
+        plate = z < CAP_LID_PLATE_MM
+        # Perimeter locating lip: 1.2 mm engagement into the base opening with
+        # 0.2 mm clearance to the 40.4/17.4 inner wall faces.
+        lip = (CAP_LID_PLATE_MM < z < CAP_LID_LIP_TOP
+               and abs(x) < CAP_LID_LIP_X1 and abs(y) < CAP_FINGER_Y1 and (
+                   CAP_LID_LIP_X0 < abs(x) < CAP_LID_LIP_X1
+                   or CAP_FINGER_Y0 < abs(y) < CAP_FINGER_Y1
+               ))
+        # Four compliant snap-finger blades with stepped catch nubs at the
+        # tips; the taper is the insertion lead-in and the stepped shoulder
+        # snaps into the base's through-wall windows (removable for service).
+        finger = (CAP_FINGER_X0 < abs(x) < CAP_FINGER_X1
+                  and CAP_FINGER_Y0 < abs(y) < CAP_FINGER_Y1
+                  and z < CAP_LID_HEIGHT)
+        nub = False
+        if CAP_FINGER_X0 < abs(x) < CAP_FINGER_X1:
+            for z0, z1, y_out in CAP_NUB_STEPS:
+                if z0 < z < z1 and CAP_FINGER_Y0 < abs(y) < y_out:
+                    nub = True
+        return plate or lip or finger or nub
 
     return _voxel_triangles(xs, ys, zs, occupied)
 
@@ -261,14 +328,18 @@ def cap_gauge_triangles():
     # A sacrificial 2x7 hole/pitch coupon. Print this first and push only the
     # header through it; the real cap should not be printed until this fits.
     pitch = 2.54
-    xs = sorted({-12.0, 12.0, *[(-7.62 + i * pitch + d) for i in range(7)
-                                for d in (-0.55, 0.55)]})
-    ys = sorted({-5.0, 5.0, *[(row + d) for row in (-1.27, 1.27)
-                              for d in (-0.55, 0.55)]})
+    xs = sorted({-12.0, -10.9, 12.0, *[(-7.62 + i * pitch + d) for i in range(7)
+                                       for d in (-0.55, 0.55)]})
+    ys = sorted({-5.0, -3.9, 5.0, *[(row + d) for row in (-1.27, 1.27)
+                                    for d in (-0.55, 0.55)]})
     zs = [0, 2.0]
 
     def occupied(x, y, z):
         del z
+        # Notched corner marks EXT pin 1 (the G3 end) so the gauge also
+        # teaches header orientation, not just pitch.
+        if x < -10.9 and y < -3.9:
+            return False
         for col in range(7):
             if abs(x - (-7.62 + col * pitch)) < 0.55:
                 for row in (-1.27, 1.27):

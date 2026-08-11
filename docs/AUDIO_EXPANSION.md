@@ -11,7 +11,7 @@ These are hard design requirements, enforced by
 | Requirement | Rev A implementation |
 | --- | --- |
 | Cardputer-powered | EXT pin 6 `5VOUT` and pin 4 `GND` |
-| One plug | One keyed 2x7 2.54 mm male header |
+| One plug | One 2x7 2.54 mm male header (orientation set by the fit gauge's pin-1 notch) |
 | No second cable | No power lead or data lead exits the closed cap |
 | No custom PCB | M5Stack ATOM Lite plus a preassembled PCM1808 module |
 | No soldering | Factory sockets, precrimped leads and two lever splices |

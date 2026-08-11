@@ -26,8 +26,14 @@
       "requirements": ["factory-assembled", "installed I2S header", "3.5 mm input jack", "5 V input", "I2S clock master"]
     }
   ],
-  "external_openings": ["3.5 mm line input", "ATOM pair-button plunger", "ATOM status-light window"],
-  "service": "Flash ATOM before assembly; reopen snap lid for later updates",
+  "external_openings": ["3.5 mm line input", "14-pin harness window", "4 snap catch/release windows"],
+  "service": "Flash ATOM before assembly; press the two snap nubs on one side inward through their windows to reopen the lid; pair anytime with the Cardputer `cap pair` command",
+  "rev_b_planned": [
+    "interior depth for the ATOM-plus-jumper-housing stack (about 24 mm; current cavity 18.4 mm)",
+    "ATOM pair-button plunger and status-light window",
+    "keyed 2x7 header holder",
+    "module retainer bosses and wire channels"
+  ],
   "cardputer_pin_map": [
     {"pin": 1, "gpio": "G3", "signal": "CAP_CS", "atom": "G19"},
     {"pin": 3, "gpio": "G4", "signal": "CAP_IRQ", "atom": "G21"},
@@ -45,9 +51,16 @@
     {"atom": "GND", "adc": "GND"}
   ],
   "enclosure": {
-    "outer_mm": [84.0, 38.0, 24.0],
+    "outer_mm": [84.0, 38.0, 21.2],
+    "outer_note": "assembled envelope: 20.0 mm base plus the 1.2 mm lid plate; the lid part prints 8.2 mm tall because its lip and snap fingers sit inside the base",
     "parts": ["audio-cap-base.stl", "audio-cap-lid.stl"],
     "fit_gauge": "audio-cap-14pin-fit-gauge.stl",
-    "verified_status": "dimensioned pre-hardware prototype; physical tolerances require the Cardputer and purchased module revision"
+    "closure_spec": {
+      "snap_fingers": 4,
+      "finger_blade_mm": [2.0, 1.2, 7.0],
+      "engagement_mm": 0.3,
+      "catch": "stepped nubs into through-wall windows; removable by design"
+    },
+    "verified_status": "dimensioned pre-hardware prototype; physical tolerances require the Cardputer and purchased module revision; interior height rev-B is gated on measuring the real jumper-housing stack"
   }
 }
