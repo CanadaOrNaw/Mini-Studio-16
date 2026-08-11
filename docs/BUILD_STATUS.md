@@ -26,7 +26,10 @@ false until a physical Cardputer-ADV produces measurements.
 - ATOM Lite Audio Cap image: 49,008 bytes PlatformIO RAM; 1,132,117-byte
   PlatformIO flash use; firmware-bin SHA-256
   `b0ded7a5617f9fc869dcc17b2df4120fd90c2721546fac3d700a243f418cf383`
-- [Artifact ID 9085034679](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31447147591/artifacts/9085034679);
+- Artifact ID 9085034679 from
+  [run 31447147591](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31447147591)
+  (artifact downloads require GitHub sign-in and expire ~90 days after the
+  run; the ID and hash below remain the durable evidence);
   ZIP SHA-256
   `ac24ef611469b827c04f214e39bea62c8b21c5089711e005ebc4d17377cc896f`
 - Starter SD ZIP SHA-256
@@ -55,7 +58,10 @@ checkpoint.
 - Host tests, AddressSanitizer, UndefinedBehaviorSanitizer, all three pinned
   firmware builds, both Cardputer resource gates, all one-file merges,
   packaging and artifact upload: **passed**
-- [Artifact ID 9086267632](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31450635085/artifacts/9086267632);
+- Artifact ID 9086267632 from
+  [run 31450635085](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31450635085)
+  (artifact downloads require GitHub sign-in and expire ~90 days after the
+  run; the ID and hash below remain the durable evidence);
   GitHub/ZIP SHA-256
   `60e5a884bae06a6dd317c5c3f72345ca1468744820e4ffa1ef5d55a359deae01`
 - The artifact contains 35 files. All 33 entries in `SHA256SUMS.txt` passed.

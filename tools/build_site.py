@@ -7,10 +7,12 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +42,36 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+# Markdown docs copied into downloads/ lose their repository context: a
+# relative link to a file that is not shipped beside them (for example
+# START_HERE.md -> CARDPUTER_TESTING.md, or the build guide's
+# ../hardware/audio-cap/bom.json) would 404 on the published site. Rewrite
+# such links to absolute GitHub URLs at the pinned integration branch;
+# links between docs that ship together in downloads/ stay relative.
+REPO_BLOB_BASE = ("https://github.com/CanadaOrNaw/Mini-Studio-16/blob/"
+                  "agent/v3-alpha-sd-streaming/")
+_MD_LINK = re.compile(r"(\]\()([^)\s#][^)#]*)((?:#[^)]*)?\))")
+
+
+def _rewrite_downloads_markdown(source: Path, text: str,
+                                shipped: set) -> str:
+    def replace(match: "re.Match[str]") -> str:
+        target = match.group(2)
+        if urlsplit(target).scheme or target.startswith("/"):
+            return match.group(0)
+        resolved = (source.parent / target).resolve()
+        try:
+            repo_relative = resolved.relative_to(ROOT)
+        except ValueError:
+            return match.group(0)
+        if resolved.parent == source.parent and resolved.name in shipped:
+            return match.group(0)
+        return (f"{match.group(1)}{REPO_BLOB_BASE}"
+                f"{repo_relative.as_posix()}{match.group(3)}")
+
+    return _MD_LINK.sub(replace, text)
+
+
 def build(output: Path) -> None:
     subprocess.run(
         [sys.executable, str(ROOT / "tools" / "generate_hardware_assets.py"), "--check"],
@@ -58,10 +90,16 @@ def build(output: Path) -> None:
     shutil.copytree(SITE, output)
 
     copied = {}
+    shipped_markdown = {destination.name for _, destination in ASSETS
+                        if destination.suffix == ".md"}
     for source, destination in ASSETS:
         target = output / destination
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
+        if destination.suffix == ".md" and destination.parts[0] == "downloads":
+            rewritten = _rewrite_downloads_markdown(
+                source, target.read_text(encoding="utf-8"), shipped_markdown)
+            target.write_text(rewritten, encoding="utf-8", newline="\n")
         copied[destination.as_posix()] = {
             "bytes": target.stat().st_size,
             "sha256": sha256(target),

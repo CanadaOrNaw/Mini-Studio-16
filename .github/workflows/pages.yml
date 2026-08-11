@@ -97,3 +97,61 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # P2-14 (reconciliation report): the public site actually lives in the
+  # separate CanadaOrNaw/MiniStudio.github.io repository and was previously
+  # synced by hand with no automated drift check — the deploy job above
+  # targets this repo's own Pages, which is a different URL. This job closes
+  # that gap: when the SITE_PUSH_TOKEN secret exists (a fine-grained PAT
+  # with contents read/write on MiniStudio.github.io only), every push
+  # publishes the freshly built tree there and then FAILS the workflow if
+  # the live site does not serve this exact commit within ~5 minutes.
+  # Without the secret (forks, first-time setup) the job explains itself
+  # and exits green; the manual flow remains:
+  #   python tools/build_site.py && push build/pages to MiniStudio.github.io
+  publish-site:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v6
+        with:
+          name: mini-studio-16-pages
+          path: build/pages
+      - name: Push built site to MiniStudio.github.io
+        id: push
+        env:
+          SITE_PUSH_TOKEN: ${{ secrets.SITE_PUSH_TOKEN }}
+        run: |
+          if [ -z "$SITE_PUSH_TOKEN" ]; then
+            echo "::notice::SITE_PUSH_TOKEN is not configured; site publish skipped. Add a fine-grained PAT (contents: read/write on CanadaOrNaw/MiniStudio.github.io) as the SITE_PUSH_TOKEN repository secret to enable automatic publishing, or publish manually with tools/build_site.py."
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git clone --depth 1 "https://x-access-token:${SITE_PUSH_TOKEN}@github.com/CanadaOrNaw/MiniStudio.github.io.git" live-site
+          rsync -a --delete --exclude ".git" build/pages/ live-site/
+          cd live-site
+          git add -A
+          # BUILD_INFO.json embeds this commit's SHA, so a push always
+          # produces a change; the guard only protects manual re-runs.
+          if git diff --cached --quiet; then
+            echo "site already current"
+          else
+            git -c user.name="mini-studio-16-site" \
+                -c user.email="mini-studio-16-site@users.noreply.github.com" \
+                commit -m "Publish site from Mini-Studio-16@${GITHUB_SHA}"
+            git push
+          fi
+          echo "published=true" >> "$GITHUB_OUTPUT"
+      - name: Verify the live site serves this commit
+        if: steps.push.outputs.published == 'true'
+        # check_live_site.py re-downloads every manifested asset and compares
+        # SHA-256s, so this also proves the CDN finished propagating.
+        run: >-
+          python tools/check_live_site.py
+          --expected-source "$GITHUB_SHA"
+          --retries 10 --retry-delay 30

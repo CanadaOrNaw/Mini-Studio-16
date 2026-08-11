@@ -5,8 +5,9 @@ require PlatformIO, Arduino IDE or a DAW.
 
 ## Before you start
 
-You need the unzipped green Actions artifact described in
-[`START_HERE.md`](START_HERE.md), a USB-C **data** cable and Python 3.
+You need the unzipped download described in [`START_HERE.md`](START_HERE.md)
+(the Releases package, or the sign-in-gated Actions artifact for unreleased
+builds), a USB-C **data** cable and Python 3.
 
 Install the pinned flashing tool:
 

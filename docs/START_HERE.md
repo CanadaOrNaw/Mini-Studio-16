@@ -24,10 +24,23 @@ test. Its exact shopping list and two-part enclosure are covered later in
 
 ### 1. Download the verified package
 
+The easy way — no account needed:
+
+1. Open the [Releases page](https://github.com/CanadaOrNaw/Mini-Studio-16/releases/latest).
+2. Under **Assets**, download the one file whose name ends in
+   `-package.zip`. Ignore the automatic "Source code" downloads — those are
+   the program's source, not the ready-to-flash package.
+3. Unzip it into a new empty folder.
+
+The developer way — only if you want the newest unreleased build:
+
 1. Open [Build v3 alpha](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml).
 2. Open the newest green run for `agent/v3-alpha-sd-streaming`.
 3. At the bottom, download the artifact named
-   `microgroove-v3-alpha-cardputer-adv`. GitHub may ask you to sign in.
+   `microgroove-v3-alpha-cardputer-adv`. **This path always requires a free
+   GitHub account sign-in, and each run's artifact is deleted about 90 days
+   after the run** — if the download link is gone or gives a 404, use the
+   Releases page above instead.
 4. Unzip it into a new empty folder.
 
 The file for a first Cardputer flash is:
@@ -45,7 +58,13 @@ the exact `0x0` address, recovery steps and separate optional Audio Cap flashing
 
 ### 3. Prepare the SD card
 
-1. Format the card as **FAT32** with an MBR partition table.
+1. Format the card as **FAT32** with an MBR partition table ("MBR" is the
+   older, more compatible partition style — most cards 32 GB or smaller ship
+   that way already). Windows: right-click the card in Explorer → Format →
+   FAT32 (Windows cannot FAT32-format cards larger than 32 GB — use a 32 GB
+   or smaller card). macOS: Disk Utility → Erase → format "MS-DOS (FAT)",
+   scheme "Master Boot Record". Linux: `mkfs.vfat -F 32` on the card's
+   partition.
 2. Open `Mini-Studio-16_SD.zip` from the downloaded package.
 3. Copy its `groovebox` folder to the root of the SD card.
 4. Safely eject the card and insert it into the powered-off Cardputer.
@@ -57,8 +76,11 @@ Normal mode for the first test. Press any key other than `Tab` to continue.
 ## Make the first sound
 
 1. Keep headphone volume low or use the built-in speaker.
-2. Hold `LOAD`, tap `SONG`, then release `LOAD` to load the factory project.
-3. Press `PLAY`.
+2. Hold the `=` key (LOAD) until the load completes — a hold takes about half
+   a second.
+3. Tap the `n` key (SONG) so the whole factory song plays, not just one
+   pattern.
+4. Press the space bar (PLAY).
 4. Use the [interactive button map](https://canadaornaw.github.io/MiniStudio.github.io/#controls)
    or the included `mini-studio-16-button-layout.svg` while learning the pages.
 

@@ -72,6 +72,24 @@ class SiteBuildTests(unittest.TestCase):
             self.assertIn("downloads/FLASHING.md", info["generated_assets"])
             self.assertIn("downloads/AUDIO_CAP_BOM.md", info["generated_assets"])
 
+    def test_downloads_markdown_has_no_dangling_relative_links(self):
+        # Docs copied into downloads/ must not carry repo-relative links to
+        # files that are not shipped beside them (they would 404 on Pages);
+        # build_site.py rewrites those to absolute GitHub URLs.
+        import re
+        link = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "pages"
+            self.build(target)
+            for doc in sorted((target / "downloads").glob("*.md")):
+                text = doc.read_text(encoding="utf-8")
+                for match in link.finditer(text):
+                    reference = match.group(1)
+                    if urlsplit(reference).scheme:
+                        continue
+                    self.assertTrue((doc.parent / reference).exists(),
+                                    f"{doc.name} -> {reference}")
+
     def test_site_sources_have_accessible_fallbacks(self):
         html = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
         script = (ROOT / "site" / "app.js").read_text(encoding="utf-8")
