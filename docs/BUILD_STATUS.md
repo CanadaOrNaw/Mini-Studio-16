@@ -54,6 +54,15 @@ The branch can contain a later documentation-only commit carrying this record;
 the source SHA above is the exact tree from which the verified binaries and
 published site were generated.
 
+Permanent release
+[`v3.0.0-alpha.1`](https://github.com/CanadaOrNaw/Mini-Studio-16/releases/tag/v3.0.0-alpha.1)
+targets release-workflow head `5c9b82ab75c1743a5f2d6a2df6613b292eaddb8e`.
+Its 32,243,142-byte beginner package has SHA-256
+`60a8e327a3a871e0d47eb049a40ac61c8c1ee692518a101bb5b4708c43410671`.
+A fresh public, signed-out download passed that release checksum and all 33
+inner `SHA256SUMS.txt` entries. Its firmware images are byte-identical to the
+verified package-source artifact above.
+
 Standalone public-site commit
 [`92012249`](https://github.com/CanadaOrNaw/MiniStudio.github.io/commit/92012249fcf009dcf0e750bdc6f0a76790ce6d87)
 publishes source `f978bd99`. `tools/check_live_site.py` fetched the deployed

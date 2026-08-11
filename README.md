@@ -27,8 +27,10 @@ official Microgroove or lebiro.studio release.
 1. **Print:** download the original
    [Mini Studio 16 bench-cradle STL](hardware/stl/mini-studio-16-bench-cradle.stl)
    and [full-resolution SVG key legend](hardware/mini-studio-16-button-layout.svg).
-2. **Flash:** build locally or download the verified GitHub Actions artifact;
-   write the combined image once at offset `0x0`.
+2. **Flash:** download the permanent
+   [latest release package](https://github.com/CanadaOrNaw/Mini-Studio-16/releases/latest)
+   (no GitHub sign-in required), or build locally; write the combined image
+   once at offset `0x0`.
 3. **Play:** insert a FAT32 microSD card and choose computer-facing USB Device
    or controller-facing USB Host at startup. Switching roles requires a reboot,
    not another flash.
@@ -135,11 +137,12 @@ On the startup screen, press `Tab` to validate/select the other USB role and
 reboot; press any other key to continue. Normal mode is selected after the
 initial flash. See [`docs/DUAL_BOOT.md`](docs/DUAL_BOOT.md).
 
-Each artifact includes `SHA256SUMS.txt`, `BUILD_INFO.txt`, both Cardputer
+Each release package (and each temporary CI artifact) includes
+`SHA256SUMS.txt`, `BUILD_INFO.txt`, both Cardputer
 application ELFs/images, both standalone Cardputer recovery images, the
 combined dual-role image and layout report, the one-file ATOM Lite Audio Cap
 image, both resource reports, beginner flashing/build guides, the license, and
-a `Mini-Studio-16_SD.zip` starter card image. Verify the extracted artifact with
+a `Mini-Studio-16_SD.zip` starter card image. Verify the extracted package with
 `sha256sum -c SHA256SUMS.txt` before flashing. The starter image is packaged
 with normalized metadata so identical source trees produce identical ZIPs.
 
