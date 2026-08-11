@@ -49,9 +49,9 @@ bytes per main-loop iteration.
 | `project status` | Current slot and occupied-slot bit mask |
 | `project SLOT save\|load` | Save or load complete GBX v8 project slot 1–8; v1–v7 remain readable |
 | `boot status` | Report compiled/running/configured role, installed-image validity, layout match, pending switch, and platform error |
-| `boot normal\|host` | Validate/select that OTA application and reboot; rejected while any audio recording is active |
+| `boot normal\|host` | Validate/select that OTA application and reboot; rejected while any audio recording is active (`usb_host` is accepted as an alias of `host`) |
 | `synth status` | Per-track engine/voices/volume/control summary plus render-block deadline telemetry |
-| `synth TRACK engine mg\|mgx\|fm4` | Select a track engine without deleting the other engine patches |
+| `synth TRACK engine mg\|mgx\|fm4` | Select a track engine without deleting the other engine patches (aliases accepted: `mg303`/`303` for `mg`, `fm` for `fm4`) |
 | `synth TRACK set PARAM VALUE` | Set a validated named synth parameter using integer wire units |
 | `synth dsp_reset` | Reset block count, last/max render time, and missed-deadline count |
 | `cap status` | Optional cap presence, ADC/A2DP state, monitor level and all bridge counters |

@@ -13,9 +13,21 @@ public:
         if (!packet || length < 3 || (packet[0] & 0xC0u) != 0x80u) return false;
         size_t cursor = 1;
         while (cursor < length) {
-            if ((packet[cursor++] & 0x80u) == 0) return false;  // timestamp low
-            if (cursor >= length) return false;
-            uint8_t byte = packet[cursor++];
+            uint8_t byte = packet[cursor];
+            if (byte & 0x80u) {
+                ++cursor;                       // timestamp low byte
+                if (cursor >= length) return false;
+                byte = packet[cursor++];
+            } else if (_runningStatus != 0) {
+                // P3 (reconciliation report): BLE-MIDI 1.0 allows running-
+                // status data bytes with no interleaved timestamp. Treating
+                // them as malformed discarded the rest of the packet after
+                // the first message — a stuck-note risk when the matching
+                // note-off shared the packet.
+                ++cursor;
+            } else {
+                return false;
+            }
             if (byte >= 0xF8u) { sink(byte); continue; }
 
             uint8_t status = byte;

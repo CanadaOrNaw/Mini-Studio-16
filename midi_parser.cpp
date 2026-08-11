@@ -63,6 +63,12 @@ bool MidiParser::feed(uint8_t byte, MidiEvent& event) {
         case 0xFC: event.type = MIDI_EVENT_STOP; return true;
         default: break;
     }
+    // P2-1 (reconciliation report): ALL 0xF8-0xFF bytes are system realtime
+    // and must be fully transparent per the MIDI spec. 0xFE (Active
+    // Sensing, sent every ~300 ms by common keyboards), 0xFF (Reset), 0xF9
+    // and 0xFD previously fell through to startStatus(), aborting the
+    // in-flight message and cancelling running status — dropping notes.
+    if (byte >= 0xF8) return false;
 
     if (byte & 0x80) {
         if (byte == 0xF0) { _sysex = true; _runningStatus = 0; _count = 0; return false; }

@@ -96,6 +96,28 @@ int main() {
     assert(mapped.kind == MIDI_MAPPED_RESONANCE && mapped.synthTrack == 1);
     assert(midiMapControl(15, 74).kind == MIDI_MAPPED_NONE);
 
+    // P2-1 regression: ALL system-realtime bytes (0xF8-0xFF) are fully
+    // transparent. Active Sensing (0xFE) interleaved inside a note-on used
+    // to abort the message and cancel running status, dropping notes.
+    {
+        MidiParser transparent;
+        transparent.reset();
+        MidiEvent event = {};
+        assert(!transparent.feed(0x90, event));
+        assert(!transparent.feed(0x3C, event));
+        assert(!transparent.feed(0xFE, event));      // interleaved sensing
+        assert(transparent.feed(0x64, event));       // note completes anyway
+        assert(event.type == MIDI_EVENT_NOTE_ON && event.data1 == 0x3C);
+        // Running status survives 0xFE/0xFF/0xF9/0xFD between messages.
+        assert(!transparent.feed(0xFE, event));
+        assert(!transparent.feed(0xFF, event));
+        assert(!transparent.feed(0xF9, event));
+        assert(!transparent.feed(0xFD, event));
+        assert(!transparent.feed(0x40, event));      // running-status data
+        assert(transparent.feed(0x50, event));
+        assert(event.type == MIDI_EVENT_NOTE_ON && event.data1 == 0x40);
+    }
+
     std::cout << "midi: parser, queue, transport, CC map and output clock passed\n";
     return 0;
 }

@@ -6,6 +6,7 @@ constexpr uint8_t kDescriptorEndpoint = 5;
 constexpr uint8_t kClassAudio = 1;
 constexpr uint8_t kSubclassMidiStreaming = 3;
 constexpr uint8_t kTransferBulk = 2;
+constexpr uint8_t kTransferInterrupt = 3;
 }  // namespace
 
 UsbMidiHostInterface usbMidiFindStreamingInterface(const uint8_t* bytes,
@@ -28,7 +29,13 @@ UsbMidiHostInterface usbMidiFindStreamingInterface(const uint8_t* bytes,
                 result.alternateSetting = bytes[offset + 3];
             }
         } else if (midiInterface && descriptorType == kDescriptorEndpoint &&
-                   descriptorLength >= 7 && (bytes[offset + 3] & 0x03u) == kTransferBulk) {
+                   descriptorLength >= 7 &&
+                   // P3 (reconciliation report): class-compliant MIDI
+                   // devices may expose interrupt endpoints instead of bulk
+                   // (the class spec permits both and real controllers do);
+                   // rejecting interrupt IN meant those never mounted.
+                   ((bytes[offset + 3] & 0x03u) == kTransferBulk ||
+                    (bytes[offset + 3] & 0x03u) == kTransferInterrupt)) {
             const uint8_t endpoint = bytes[offset + 2];
             const uint16_t maximum = static_cast<uint16_t>(bytes[offset + 4]) |
                                      static_cast<uint16_t>(bytes[offset + 5] << 8);

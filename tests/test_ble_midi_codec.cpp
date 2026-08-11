@@ -27,6 +27,21 @@ int main() {
     const uint8_t malformed[] = {0x80, 0x01, 0x90};
     assert(!decoder.decode(malformed, sizeof(malformed), [](uint8_t) {}));
 
+    // P3 regression: running-status data bytes with NO interleaved
+    // timestamp are spec-legal (BLE-MIDI 1.0); the note-on and its note-off
+    // sharing the packet must both decode (stuck-note risk otherwise).
+    bytes.clear();
+    BleMidiDecoder bare;
+    const uint8_t runningNoTimestamp[] = {0x80, 0x81, 0x90, 60, 100, 60, 0};
+    assert(bare.decode(runningNoTimestamp, sizeof(runningNoTimestamp),
+                       [&](uint8_t byte) { bytes.push_back(byte); }));
+    const uint8_t bareExpected[] = {0x90, 60, 100, 60, 0};
+    assert(bytes == std::vector<uint8_t>(bareExpected,
+                                         bareExpected + sizeof(bareExpected)));
+    BleMidiDecoder cold;
+    const uint8_t coldData[] = {0x80, 0x33, 0x44};
+    assert(!cold.decode(coldData, sizeof(coldData), [](uint8_t) {}));
+
     const uint8_t message[] = {0xB0, 74, 127};
     uint8_t packet[5] = {};
     assert(bleMidiEncode(0x1234, message, 3, packet, sizeof(packet)) == 5);

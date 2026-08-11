@@ -60,6 +60,16 @@ public:
         if (track >= EVENT_LOOP_TRACKS || bars == 0 || bars > EVENT_LOOP_MAX_BARS)
             return false;
         _tracks[track].bars = static_cast<uint8_t>(bars == 128 ? 0 : bars);
+        // P3 (reconciliation report): shrinking a track used to orphan
+        // events recorded beyond the new length — they never fired again
+        // but still consumed the shared capacity and inflated count().
+        // Re-wrap them into the new loop so they stay audible and honest.
+        const uint16_t length =
+            static_cast<uint16_t>(bars * EVENT_LOOP_STEPS_PER_BAR);
+        for (uint16_t index = 0; index < _count; ++index)
+            if (_events[index].track == track && _events[index].step >= length)
+                _events[index].step =
+                    static_cast<uint16_t>(_events[index].step % length);
         return true;
     }
 

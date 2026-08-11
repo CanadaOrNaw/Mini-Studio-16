@@ -59,6 +59,8 @@ public:
         _fax = _fay = _faz = 0.0f;
         _fgx = _fgy = _fgz = 0.0f;
         _previousMagnitude = 1.0f;
+        _shakeLevel = 0.0f;
+        _slapLevel = 0.0f;
     }
 
     MotionOutput update(const MotionInput& input) {
@@ -90,19 +92,31 @@ public:
         output.values[MOTION_SOURCE_ACCEL] = unipolarToMidi(fabsf(accelMagnitude - 1.0f), 2.0f);
         output.values[MOTION_SOURCE_GYRO] = unipolarToMidi(gyroMagnitude, 500.0f);
 
+        // P3 (reconciliation report): shake/slap values were 127 for a
+        // single 10 ms update and zero otherwise, so mapping them to a
+        // continuous target (cutoff, CC) produced an unusable one-sample
+        // spike. The impulse now decays over roughly 300 ms; the gesture
+        // bits still fire only on the triggering update.
+        _shakeLevel *= 0.93f;
+        _slapLevel *= 0.93f;
+        if (_shakeLevel < 1.0f) _shakeLevel = 0.0f;
+        if (_slapLevel < 1.0f) _slapLevel = 0.0f;
+
         const bool shake = fabsf(accelMagnitude - 1.0f) > 0.45f &&
                            input.timeMs - _lastShakeMs >= 180;
         const bool slap = jerk > 1.20f && input.timeMs - _lastSlapMs >= 250;
         if (shake) {
             output.gestures |= MOTION_GESTURE_SHAKE;
-            output.values[MOTION_SOURCE_SHAKE] = 127;
+            _shakeLevel = 127.0f;
             _lastShakeMs = input.timeMs;
         }
         if (slap) {
             output.gestures |= MOTION_GESTURE_SLAP;
-            output.values[MOTION_SOURCE_SLAP] = 127;
+            _slapLevel = 127.0f;
             _lastSlapMs = input.timeMs;
         }
+        output.values[MOTION_SOURCE_SHAKE] = static_cast<uint8_t>(_shakeLevel);
+        output.values[MOTION_SOURCE_SLAP] = static_cast<uint8_t>(_slapLevel);
         if (gyroMagnitude > 80.0f) output.gestures |= MOTION_GESTURE_MOVE;
         _lastTimeMs = input.timeMs;
         return output;
@@ -112,6 +126,8 @@ private:
     bool _initialized;
     uint32_t _lastTimeMs, _lastShakeMs, _lastSlapMs;
     float _fax, _fay, _faz, _fgx, _fgy, _fgz;
+    float _shakeLevel = 0.0f;
+    float _slapLevel = 0.0f;
     float _previousMagnitude;
 
     static float magnitude(float x, float y, float z) {

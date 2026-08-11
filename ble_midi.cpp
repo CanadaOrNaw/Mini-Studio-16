@@ -74,8 +74,10 @@ void bleMidiInit() {
         NIMBLE_PROPERTY::WRITE_NR | NIMBLE_PROPERTY::NOTIFY);
     if (!s_characteristic) return;
     s_characteristic->setCallbacks(&s_characteristicCallbacks);
-    const uint8_t initial[] = {0x80, 0x80};
-    s_characteristic->setValue(initial, sizeof(initial));
+    // P3 (reconciliation report): the BLE-MIDI spec expects a central's
+    // read of the I/O characteristic to return no payload; the previous
+    // {0x80, 0x80} dummy header was a minor spec deviation some hosts
+    // probe against. Leave the value empty.
     service->start();
     NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
     advertising->addServiceUUID(kServiceUuid);

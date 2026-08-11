@@ -38,7 +38,23 @@ void routeEvent(const MidiEvent& event) {
                                                 : MOTION_TARGET_SYNTH1_RESONANCE) +
             mapped.synthTrack);
         motionApplyRecordedControl(target, event.data2);
-        eventLooperRecordControl(sequencerEventRecordStep(), target, event.data2);
+        // P3 (reconciliation report): match the motion path's per-step/
+        // delta-2 dedupe. Without it, one DAW CC sweep (hundreds of
+        // messages) permanently consumed the shared 2,048-event capacity.
+        static uint16_t lastStep[MOTION_TARGET_COUNT] = {};
+        static uint8_t lastValue[MOTION_TARGET_COUNT] = {};
+        static bool seeded[MOTION_TARGET_COUNT] = {};
+        const uint16_t step = sequencerEventRecordStep();
+        const uint8_t value = event.data2;
+        const int16_t delta = static_cast<int16_t>(value) -
+                              static_cast<int16_t>(lastValue[target]);
+        if (!seeded[target] || lastStep[target] != step ||
+            delta >= 2 || delta <= -2) {
+            eventLooperRecordControl(step, target, value);
+            seeded[target] = true;
+            lastStep[target] = step;
+            lastValue[target] = value;
+        }
         return;
     }
 

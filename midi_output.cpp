@@ -40,3 +40,16 @@ void midiOutputRealtime(uint8_t status) {
     if (status == 0xF8 || status == 0xFA || status == 0xFB || status == 0xFC)
         midiOutputMessage(&status, 1);
 }
+
+void midiOutputSongPosition(uint16_t position) {
+    // P3 (reconciliation report): Song Position was input-only; external
+    // gear receiving our 0xFB continued from its own stale position. Sent
+    // in MIDI beats (16th steps), 14-bit little-endian per the spec.
+    position &= 0x3FFFu;
+    const uint8_t message[] = {
+        0xF2u,
+        static_cast<uint8_t>(position & 0x7Fu),
+        static_cast<uint8_t>((position >> 7) & 0x7Fu),
+    };
+    midiOutputMessage(message, sizeof(message));
+}

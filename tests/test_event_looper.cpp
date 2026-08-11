@@ -45,6 +45,25 @@ int main() {
         assert(capacity.add(i, 0, EVENT_LOOP_DRUM, 0, 127, 0));
     assert(!capacity.add(0, 0, EVENT_LOOP_DRUM, 0, 127, 0));
 
+    // P3 regression: shrinking a track re-wraps its events into the new
+    // length instead of orphaning them beyond it.
+    EventLooperCore shrink;
+    assert(shrink.setArmed(0, true));
+    assert(shrink.setBars(0, 4));   // 64 steps
+    assert(shrink.add(3, 0, EVENT_LOOP_DRUM, 0, 127, 0));
+    assert(shrink.add(50, 0, EVENT_LOOP_DRUM, 1, 127, 0));
+    assert(shrink.setBars(0, 2));   // 32 steps: step 50 must become 18
+    bool sawWrapped = false;
+    shrink.forStep(18, [&](const EventLoopEvent& event) {
+        if (event.target == 1) sawWrapped = true;
+    });
+    assert(sawWrapped);
+    bool sawOriginal = false;
+    shrink.forStep(3, [&](const EventLoopEvent& event) {
+        if (event.target == 0) sawOriginal = true;
+    });
+    assert(sawOriginal);
+
     std::cout << "event_looper: 5 tracks, 128 bars and capacity passed\n";
     return 0;
 }

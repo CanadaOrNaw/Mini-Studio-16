@@ -28,7 +28,12 @@ inline bool songChainNext(const uint8_t* song, size_t length, uint8_t current,
         loopStart >= length)
         return false;
     size_t cursor = current;
-    const size_t searchLength = length - loopStart;
+    // P3 (reconciliation report): bound the walk by the full chain length,
+    // not the loop-region size — when current sits below loopStart (e.g.
+    // after a MIDI Song Position seek), length-loopStart attempts could be
+    // exhausted before the cursor ever reached the loop region, freezing
+    // the transport on a chain that has playable entries.
+    const size_t searchLength = length;
     for (size_t attempt = 0; attempt < searchLength; ++attempt) {
         ++cursor;
         if (cursor >= length) cursor = loopStart;

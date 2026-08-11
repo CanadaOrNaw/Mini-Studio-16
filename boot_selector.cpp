@@ -75,7 +75,8 @@ BootSwitchDecision bootSelectorPrepare(BootRole requested) {
     }
     s_snapshot.switchPending = true;
     refreshSnapshot();
-    s_snapshot.switchPending = true;
+    // (P3: a duplicate `switchPending = true;` used to follow the refresh —
+    // dead but confusing; refreshSnapshot() preserves the flag.)
     return BOOT_SWITCH_READY;
 }
 

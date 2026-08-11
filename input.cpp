@@ -58,28 +58,40 @@ static uint8_t  s_rptKc   = KC_NONE;
 static uint32_t s_rptNext = 0;
 static uint16_t s_rptCount = 0;
 
-struct HeldMidiNote { uint8_t key, channel, note; };
+struct HeldMidiNote { uint8_t key, channel, note; bool audition; };
 static HeldMidiNote s_heldMidiNotes[16];
 static uint8_t s_heldMidiNoteCount = 0;
 
 // ---------- helpers ----------
 static bool accentHeld(const KeySnap& s) { return s.has('m'); }
 
-static void rememberMidiNote(uint8_t key, uint8_t channel, uint8_t note) {
+static void rememberMidiNote(uint8_t key, uint8_t channel, uint8_t note,
+                             bool audition = false) {
     for (uint8_t index = 0; index < s_heldMidiNoteCount; ++index) {
         if (s_heldMidiNotes[index].key != key) continue;
-        s_heldMidiNotes[index] = {key, channel, note};
+        s_heldMidiNotes[index] = {key, channel, note, audition};
         return;
     }
     if (s_heldMidiNoteCount < sizeof(s_heldMidiNotes) / sizeof(s_heldMidiNotes[0]))
-        s_heldMidiNotes[s_heldMidiNoteCount++] = {key, channel, note};
+        s_heldMidiNotes[s_heldMidiNoteCount++] = {key, channel, note, audition};
 }
 
 static void releaseMidiNote(uint8_t key) {
     for (uint8_t index = 0; index < s_heldMidiNoteCount; ++index) {
         if (s_heldMidiNotes[index].key != key) continue;
-        liveSynthRelease(s_heldMidiNotes[index].channel,
-                         s_heldMidiNotes[index].note);
+        if (s_heldMidiNotes[index].audition) {
+            // P3 (reconciliation report): SOUND-page auditions never record
+            // their note-on, so recording the release would write orphan
+            // note-off events into an armed event-looper track. Release the
+            // voice and mirror MIDI out, but skip the event record.
+            g_synths[s_heldMidiNotes[index].channel].noteOff(
+                s_heldMidiNotes[index].note);
+            midiOutputNoteOff(s_heldMidiNotes[index].channel,
+                              s_heldMidiNotes[index].note);
+        } else {
+            liveSynthRelease(s_heldMidiNotes[index].channel,
+                             s_heldMidiNotes[index].note);
+        }
         s_heldMidiNotes[index] = s_heldMidiNotes[--s_heldMidiNoteCount];
         return;
     }
@@ -352,7 +364,11 @@ static void arrow(uint8_t act, const KeySnap& now) {
             if (dx) {
                 const MotionSnapshot motion = motionSnapshot();
                 int source = motion.mappings[g_motionCursor].source;
-                source = (source + (MOTION_SOURCE_COUNT - 1) + dx) %
+                // P2-3 (reconciliation report): sources occupy 1..COUNT-1
+                // (0 = NONE), so cycle in 0-based space and shift back.
+                // The old expression skipped a source going right and made
+                // left a no-op (proven by execution).
+                source = ((source - 1) + dx + (MOTION_SOURCE_COUNT - 1)) %
                          (MOTION_SOURCE_COUNT - 1) + 1;
                 uint8_t target = motion.mappings[g_motionCursor].target;
                 if (target == MOTION_TARGET_NONE) target = MOTION_TARGET_SYNTH1_CUTOFF;
@@ -703,10 +719,11 @@ static void doPiano(uint8_t kc, const KeySnap& now) {
         g_synths[g_curTrack].noteOnLive(noteToFreq(note, oct), accent, false,
                                         midiNote, accent ? 127 : 96);
         midiOutputNoteOn(g_curTrack, midiNote, accent ? 127 : 96);
-    } else {
-        bool legato = heldPianoCount(s_prev) >= 1;
-        liveSynthNote(g_curTrack, note, oct, accent, legato);
+        rememberMidiNote(kc, g_curTrack, midiNote, true);  // audition (P3)
+        return;
     }
+    bool legato = heldPianoCount(s_prev) >= 1;
+    liveSynthNote(g_curTrack, note, oct, accent, legato);
     rememberMidiNote(kc, g_curTrack, midiNote);
 }
 

@@ -173,6 +173,14 @@ void sequencerStart(bool fromTop) {
     s_lastStepUs = now - s_stepPeriod();   // fire step immediately
     s_midiClock.start(now);
     if (!midiInputIsDispatching()) {
+        if (!fromTop) {
+            // P3 (reconciliation report): 0xFB alone made external gear
+            // continue from its own stale position; send Song Position
+            // first (MIDI beats = 16th steps, mirroring the input mapping).
+            midiOutputSongPosition(static_cast<uint16_t>(
+                (g_songMode ? static_cast<uint16_t>(g_songPos) * NUM_STEPS : 0u)
+                + g_playStep));
+        }
         midiOutputRealtime(fromTop ? 0xFA : 0xFB);
         midiOutputRealtime(0xF8);  // first 24-PPQN clock coincides with step zero
     }

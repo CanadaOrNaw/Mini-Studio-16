@@ -37,9 +37,18 @@ alignas(4) uint32_t s_errors = 0;
 bool s_transferInFlight = false;
 bool s_cancelRequested = false;
 bool s_interfaceClaimed = false;
+// P2-2 (reconciliation report): transient IN-transfer errors (STALL/
+// ERROR/TIMEOUT/OVERFLOW) used to end resubmission permanently — one bus
+// glitch silently killed controller input until replug. Errors now clear
+// the endpoint halt and resubmit with a bounded budget; the budget refills
+// on every completed transfer so only a persistently failing endpoint
+// stops (and that stop is visible in the error counter).
+constexpr uint32_t kTransferRetryBudget = 8;
+uint32_t s_transferRetriesLeft = kTransferRetryBudget;
 
 void inputTransferComplete(usb_transfer_t* transfer) {
     s_transferInFlight = false;
+    bool resubmit = false;
     if (transfer->status == USB_TRANSFER_STATUS_COMPLETED) {
         for (int offset = 0; offset + 3 < transfer->actual_num_bytes; offset += 4) {
             const uint8_t length = usbMidiEventPacketLength(
@@ -55,13 +64,23 @@ void inputTransferComplete(usb_transfer_t* transfer) {
                 __atomic_add_fetch(&s_bytesReceived, length, __ATOMIC_RELAXED);
             }
         }
+        s_transferRetriesLeft = kTransferRetryBudget;  // healthy again (P2-2)
+        resubmit = true;
     } else if (transfer->status != USB_TRANSFER_STATUS_CANCELED &&
                transfer->status != USB_TRANSFER_STATUS_NO_DEVICE) {
         __atomic_add_fetch(&s_errors, 1u, __ATOMIC_RELAXED);
+        // P2-2: recover from transient endpoint errors instead of silently
+        // stopping input forever. Clearing the halt is required after a
+        // STALL and harmless otherwise; a bounded budget prevents an
+        // unplugged-mid-transfer endpoint from spinning.
+        if (s_device && s_transferRetriesLeft > 0) {
+            --s_transferRetriesLeft;
+            usb_host_endpoint_clear(s_device, transfer->bEndpointAddress);
+            resubmit = true;
+        }
     }
 
-    if (__atomic_load_n(&s_mounted, __ATOMIC_ACQUIRE) != 0 &&
-        transfer->status == USB_TRANSFER_STATUS_COMPLETED) {
+    if (resubmit && __atomic_load_n(&s_mounted, __ATOMIC_ACQUIRE) != 0) {
         transfer->num_bytes = static_cast<int>(transfer->data_buffer_size);
         if (usb_host_transfer_submit(transfer) == ESP_OK) s_transferInFlight = true;
         else __atomic_add_fetch(&s_errors, 1u, __ATOMIC_RELAXED);
