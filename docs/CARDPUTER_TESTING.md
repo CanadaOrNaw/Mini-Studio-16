@@ -4,6 +4,34 @@ Use this guide when the physical device arrives. Record the firmware commit,
 board revision, SD make/model/capacity/filesystem/cluster size, exact command,
 duration, and complete serial output for every pass or failure.
 
+## Running this guide with a coding agent
+
+This guide is written so a Claude Code/Codex-style agent driving the USB
+serial port can execute most of it unattended (see the repository's
+`CLAUDE.md` for build/flash/tooling commands and safety rules). Steps are
+taggable two ways:
+
+- **[AGENT]** — anything reachable over `MS16/1` serial: flashing, boot
+  logs, `hardware_smoke.py`, SD diagnostics, loop/sampler/recorder/synth
+  CLI passes, protocol soak, boot-role switching, and all evidence
+  collection. Sections 1, 1a (except power cuts), 2a, 3, 4, 5, 7
+  (except power cuts), and 8 (except cable replugs) are agent-drivable.
+- **[HUMAN]** — ears, hands, and instruments: caliper measurements and
+  print fit (0), audible quality judgments, keyboard/display checks (2),
+  physical cable/OTG/power-cut cycles (1a/7/8/10), BLE pairing on a phone
+  (9), motion gestures (6), and every Audio Cap electrical measurement
+  (12). The agent should queue these as a checklist for the operator and
+  record the operator's observations verbatim.
+
+Evidence conventions for agents: write every capture into an `evidence/`
+directory (gitignored or committed per run — operator's choice) as
+`NN-section-name.log` for raw serial, `cardputer-smoke.json` for the smoke
+harness, and one `results.json` accumulating, per step:
+`{"step": "4-looper-timeline", "status": "pass|fail|blocked",
+"command": "...", "key_numbers": {...}, "evidence": "file"}`.
+A step without saved evidence does not count as run. Fix bugs in the order
+sections appear — earlier sections gate later ones.
+
 ## 0. Mechanical intake and first print
 
 Before flashing, photograph the unopened/stock Cardputer-ADV and record its
@@ -34,11 +62,29 @@ commit the measurement and rerun the topology test before printing again.
 2. Build or download a CI artifact only after host, sanitizer, and firmware jobs
    all pass. Run `sha256sum -c SHA256SUMS.txt` from the extracted artifact
    directory and retain `BUILD_INFO.txt` with the test evidence.
-3. Flash the combined dual-role image at offset `0x0`:
+3. Find the port, put the device in download mode if needed, and flash the
+   combined dual-role image at offset `0x0` (P2-16: this section must work
+   from a factory-fresh or bricked device with no prior setup):
 
    ```bash
-   esptool.py --chip esp32s3 write_flash 0x0 mini-studio-16-dual-role.bin
+   # Port discovery (also: python tools/ministudio_cli.py ports)
+   python -m serial.tools.list_ports -v          # or ls /dev/ttyACM* /dev/cu.usbmodem*
+
+   # If the flasher cannot connect: hold G0 (the BtnG0 key), tap reset,
+   # release G0 — the screen stays blank in download mode; that is normal.
+   # Full sequence with screenshots: docs/FLASHING.md.
+
+   # First flash or recovery from any unknown state: erase everything.
+   esptool.py --chip esp32s3 --port /dev/ttyACM0 erase_flash
+
+   esptool.py --chip esp32s3 --port /dev/ttyACM0 write_flash 0x0 \
+     mini-studio-16-dual-role.bin
    ```
+
+   If the device ever fails to boot after experimental flashing, repeat the
+   G0 sequence + `erase_flash` + dual-role write above — that is the
+   complete unbrick path; the standalone `microgroove-v3-alpha*.bin`
+   recovery images in the artifact flash the same way.
 
 4. Confirm the common startup screen reports Normal and both images installed.
    Press any non-Tab key, open a 115200-baud serial monitor, and save the full
@@ -257,8 +303,14 @@ python tools/protocol_soak.py --port /dev/ttyACM0 --count 10000
 
 Require correlated request IDs, no reboot/UI/audio stall, and bounded error
 counters. Then connect a computer/DAW and verify that CDC and MIDI enumerate
-together. Test notes, CC, clock, song position, start/continue/stop, output
-mirroring, unplug/replug 20 times, and a 30-minute external-clock session.
+together. Known pre-hardware risk to check first: the MIDI interface is
+attached after the startup-selector wait, i.e. after the CDC stack is
+already up — if the host shows CDC but no MIDI device, capture the full USB
+descriptor set (`lsusb -v` / USBTreeView) as evidence; the planned fix is
+initializing TinyUSB MIDI before the selector wait or issuing a
+detach/attach cycle after it. Test notes, CC, clock, song position,
+start/continue/stop, output mirroring, unplug/replug 20 times, and a
+30-minute external-clock session.
 
 ## 9. BLE MIDI
 
@@ -277,10 +329,25 @@ Select USB Host from the common startup screen (`Tab`) or from Normal mode:
 python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode host
 ```
 
-Test Yamaha, CYD, disconnect during traffic, twenty reconnects, a non-MIDI
-device, and 30 minutes of clock. This profile is input-only and lacks CDC, so
-use UI/audio behavior plus any available hardware debug path. Return to Normal
-with `Tab` on its startup screen and verify the computer enumerates CDC+MIDI.
+Reference test peripherals (P2-17 — substitute what you own, but record
+exact models):
+
+- **"Yamaha"** = any class-compliant USB-MIDI keyboard; the reference here
+  is a Yamaha PSS-A50 (bus-powered, low current). Any keyboard that needs
+  no vendor driver on a computer qualifies. <!-- OWNER: replace with the
+  exact model you own before hardware day. -->
+- **"CYD"** = the ESP32-2432S028R "Cheap Yellow Display" dev board, used
+  as a *hostile/non-compliant* USB device (it enumerates as a CDC serial
+  gadget, not MIDI) to prove the host stack rejects non-MIDI devices
+  cleanly. Any non-MIDI USB gadget works. <!-- OWNER: confirm or swap. -->
+- The OTG adapter must be a USB-C OTG data adapter; document whether VBUS
+  is supplied by the Cardputer (EXT battery load!) or a powered hub.
+
+Test the keyboard, the non-MIDI device, disconnect during traffic, twenty
+reconnects, and 30 minutes of clock. This profile is input-only and lacks
+CDC, so use UI/audio behavior plus any available hardware debug path.
+Return to Normal with `Tab` on its startup screen and verify the computer
+enumerates CDC+MIDI.
 
 ## 11. Built-in full duplex
 

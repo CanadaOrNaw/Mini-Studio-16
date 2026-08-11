@@ -2,8 +2,13 @@
 
 Expanded synthesis is additive. Every track owns three fixed-size engine
 states and selects one at runtime; the core-0 audio renderer only calls
-`SynthTrack::render()`. No engine allocates, touches files, constructs routing
-graphs, or calls a transcendental sine function in the per-sample path.
+`SynthTrack::render()`. No engine allocates, touches files, or constructs
+routing graphs in the per-sample path. The expanded `MGX`/`FM4` engines use
+the interpolated 256-point sine table for every per-sample sine; the
+inherited `MG/303` path keeps its original per-sample `sinf()` filter
+coefficient exactly as upstream wrote it, because its output is guarded by
+a golden PCM hash (P2-19: an earlier revision of this page overclaimed
+"no engine calls a transcendental per sample").
 
 ## Engines and compatibility
 
@@ -38,11 +43,14 @@ must also cover FM, drums, streaming, loops, recording, MIDI, and motion.
 ## FM algorithms
 
 Operators are numbered 1–4; arrows point from modulator to destination.
+(P2-19: the A2 row now matches the shipped code, where operator 4 also
+modulates 3 before both feed 2 — the pinned offline-render hashes lock this
+behavior, so the diagram was corrected rather than the DSP.)
 
 | UI | Routing | Carriers |
 | --- | --- | --- |
 | A1 | 4 → 3 → 2 → 1 | 1 |
-| A2 | (4 + 3) → 2 → 1 | 1 |
+| A2 | 4 → 3, then (3 + 4) → 2 → 1 | 1 |
 | A3 | 4 → 3 and 2 → 1 | 1, 3 |
 | A4 | 4 → 3 → 2 plus 1 | 1, 2 |
 | A5 | 4 → 3 plus 2 plus 1 | 1, 2, 3 |

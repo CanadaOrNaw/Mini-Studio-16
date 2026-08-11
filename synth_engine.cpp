@@ -238,7 +238,7 @@ float FmVoice::render(const FmPatch& patch) {
             op1 = fmOperator(operators[1], patch.operators[1], modulationCycles(op2, patch));
             output = fmOperator(operators[0], patch.operators[0], modulationCycles(op1, patch));
             break;
-        case 1:  // (4 + 3) -> 2 -> 1
+        case 1:  // A2: 4 -> 3, then (3 + 4) -> 2 -> 1 (P2-19 doc parity)
             op2 = fmOperator(operators[2], patch.operators[2], modulationCycles(op3, patch));
             op1 = fmOperator(operators[1], patch.operators[1], modulationCycles(op3 + op2, patch));
             output = fmOperator(operators[0], patch.operators[0], modulationCycles(op1, patch));

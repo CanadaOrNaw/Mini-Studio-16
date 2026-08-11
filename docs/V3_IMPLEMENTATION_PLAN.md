@@ -167,8 +167,8 @@ Run in this order so a failing lower layer does not invalidate later results.
 
 | Test | Minimum | Pass condition |
 | --- | ---: | --- |
-| 4 KiB sequential read | 2 min | average payload > 1.0 MiB/s |
-| 4 KiB sequential write | 2 min | average payload > 0.5 MiB/s |
+| 4 KiB sequential read | 2 min | average payload > 1,000 KiB/s |
+| 4 KiB sequential write | 2 min | average payload > 500 KiB/s |
 | Six-file round-robin read | 10 min | zero errors; worst stall covered by reservoir |
 | Six loop streams | 30 min | zero phase drift; zero audible underruns |
 | Six loops + recording | 10 min | zero underruns/overruns; valid published WAV |
