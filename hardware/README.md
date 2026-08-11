@@ -12,7 +12,7 @@ The fork now has its own reproducible physical assets:
 | [`audio-cap/stl/audio-cap-lid.stl`](audio-cap/stl/audio-cap-lid.stl) | Two-part enclosure's compliant snap lid | Watertight/dimension checked; physical fit pending |
 | [`audio-cap/stl/audio-cap-14pin-fit-gauge.stl`](audio-cap/stl/audio-cap-14pin-fit-gauge.stl) | Cheap first print for 2x7 header pitch/clearance | Generated and checked |
 | [`audio-cap/design.json`](audio-cap/design.json) | Hard one-plug/no-PCB/no-solder requirements and pin map | Enforced by host tests |
-| [`audio-cap/bom.json`](audio-cap/bom.json) | Canada/US/EU retail sourcing | Region-completeness tested |
+| [`audio-cap/bom.json`](audio-cap/bom.json) | Exact Canada/US/EU retail SKUs | Region/product-page/wire-gauge constraints tested |
 
 The previous `microgroove_labels_v6_preview.png` remains solely as inherited
 historical reference. It predates Mini Studio pages and is not the current

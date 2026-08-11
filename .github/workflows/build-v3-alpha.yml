@@ -48,12 +48,17 @@ jobs:
           .pio/build/m5stack-cardputer-adv-usb-host/firmware.elf
           --max-static 204800
           --report .pio/build/m5stack-cardputer-adv-usb-host/size-report.json
-      - name: Create merged 8 MB flash image
+      - name: Create merged one-file flash images
         run: |
           python tools/merge_firmware.py
           python tools/merge_firmware.py \
             --build-dir .pio/build/m5stack-cardputer-adv-usb-host \
             --output .pio/build/m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin
+          python tools/merge_firmware.py \
+            --build-dir .pio/build/mini-studio-audio-cap-atom-lite \
+            --output .pio/build/mini-studio-audio-cap-atom-lite/mini-studio-audio-cap-atom-lite.bin \
+            --chip esp32 --flash-size 4MB --flash-freq 40m \
+            --bootloader-offset 0x1000
           python tools/merge_dual_firmware.py
       - name: Create artifact manifest
         run: |
@@ -64,6 +69,18 @@ jobs:
           cp partitions_dual.csv .pio/build/partitions_dual.csv
           cp LICENSE .pio/build/LICENSE.txt
           cp docs/AUDIO_CAP_BUILD_GUIDE.md .pio/build/AUDIO_CAP_BUILD_GUIDE.md
+          cp docs/AUDIO_CAP_BOM.md .pio/build/AUDIO_CAP_BOM.md
+          cp docs/START_HERE.md .pio/build/START_HERE.md
+          cp docs/FLASHING.md .pio/build/FLASHING.md
+          cp hardware/mini-studio-16-button-layout.svg .pio/build/mini-studio-16-button-layout.svg
+          cp hardware/button-layout.json .pio/build/button-layout.json
+          cp hardware/stl/mini-studio-16-bench-cradle.stl .pio/build/mini-studio-16-bench-cradle.stl
+          cp hardware/cad/mini-studio-16-bench-cradle.scad .pio/build/mini-studio-16-bench-cradle.scad
+          cp hardware/audio-cap/stl/audio-cap-base.stl .pio/build/audio-cap-base.stl
+          cp hardware/audio-cap/stl/audio-cap-lid.stl .pio/build/audio-cap-lid.stl
+          cp hardware/audio-cap/stl/audio-cap-14pin-fit-gauge.stl .pio/build/audio-cap-14pin-fit-gauge.stl
+          cp hardware/audio-cap/design.json .pio/build/audio-cap-design.json
+          cp hardware/audio-cap/bom.json .pio/build/audio-cap-bom.json
           cp THIRD_PARTY_NOTICES.md .pio/build/THIRD_PARTY_NOTICES.md
           cp third_party/ESP32-A2DP-LICENSE.txt .pio/build/ESP32-A2DP-LICENSE.txt
           cd .pio/build
@@ -78,7 +95,20 @@ jobs:
             m5stack-cardputer-adv-usb-host/size-report.json \
             mini-studio-audio-cap-atom-lite/firmware.bin \
             mini-studio-audio-cap-atom-lite/firmware.elf \
+            mini-studio-audio-cap-atom-lite/mini-studio-audio-cap-atom-lite.bin \
             AUDIO_CAP_BUILD_GUIDE.md \
+            AUDIO_CAP_BOM.md \
+            START_HERE.md \
+            FLASHING.md \
+            mini-studio-16-button-layout.svg \
+            button-layout.json \
+            mini-studio-16-bench-cradle.stl \
+            mini-studio-16-bench-cradle.scad \
+            audio-cap-base.stl \
+            audio-cap-lid.stl \
+            audio-cap-14pin-fit-gauge.stl \
+            audio-cap-design.json \
+            audio-cap-bom.json \
             THIRD_PARTY_NOTICES.md \
             ESP32-A2DP-LICENSE.txt \
             mini-studio-16-dual-role.bin \
@@ -111,6 +141,7 @@ jobs:
             .pio/build/m5stack-cardputer-adv-usb-host/size-report.json
             .pio/build/mini-studio-audio-cap-atom-lite/firmware.bin
             .pio/build/mini-studio-audio-cap-atom-lite/firmware.elf
+            .pio/build/mini-studio-audio-cap-atom-lite/mini-studio-audio-cap-atom-lite.bin
             .pio/build/mini-studio-16-dual-role.bin
             .pio/build/dual-image-layout.json
             .pio/build/partitions_dual.csv
@@ -120,6 +151,18 @@ jobs:
             .pio/build/SD_CARD_README.md
             .pio/build/DUAL_BOOT_README.md
             .pio/build/AUDIO_CAP_BUILD_GUIDE.md
+            .pio/build/AUDIO_CAP_BOM.md
+            .pio/build/START_HERE.md
+            .pio/build/FLASHING.md
+            .pio/build/mini-studio-16-button-layout.svg
+            .pio/build/button-layout.json
+            .pio/build/mini-studio-16-bench-cradle.stl
+            .pio/build/mini-studio-16-bench-cradle.scad
+            .pio/build/audio-cap-base.stl
+            .pio/build/audio-cap-lid.stl
+            .pio/build/audio-cap-14pin-fit-gauge.stl
+            .pio/build/audio-cap-design.json
+            .pio/build/audio-cap-bom.json
             .pio/build/THIRD_PARTY_NOTICES.md
             .pio/build/ESP32-A2DP-LICENSE.txt
             .pio/build/LICENSE.txt

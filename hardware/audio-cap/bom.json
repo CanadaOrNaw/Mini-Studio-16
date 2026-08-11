@@ -1,77 +1,119 @@
 {
-  "schema": 1,
-  "notice": "Buy only factory-assembled modules with installed connectors. Module revisions vary; use the photo checklist before ordering.",
+  "schema": 2,
+  "notice": "Every link identifies one exact orderable SKU, not a search or category page. Stock and price still change. Buy only factory-assembled modules with installed connectors and compare the listing photo with the checks below.",
   "regions": ["Canada", "United States", "European Union"],
   "items": [
     {
-      "id": "atom-lite", "quantity": 1, "description": "M5Stack ATOM Lite C008",
+      "id": "atom-lite",
+      "quantity": 1,
+      "manufacturer": "M5Stack",
+      "mpn": "C008",
+      "description": "ATOM Lite ESP32 controller with factory-installed USB-C and Grove connectors",
       "sources": {
-        "Canada": [{"vendor": "RobotShop", "url": "https://ca.robotshop.com/products/m5stack-atom-lite-esp32-development-kit"}],
-        "United States": [{"vendor": "DigiKey", "url": "https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/C008/12088545"}],
-        "European Union": [{"vendor": "BerryBase", "url": "https://www.berrybase.de/en/m5stack-atom-lite-esp32-iot-dev-kit"}]
+        "Canada": [{"vendor": "DigiKey Canada", "sku": "2221-C008-ND", "url": "https://www.digikey.ca/en/products/detail/m5stack-technology-co-ltd/C008/12088545"}],
+        "United States": [{"vendor": "DigiKey", "sku": "2221-C008-ND", "url": "https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/C008/12088545"}],
+        "European Union": [{"vendor": "DigiKey Germany", "sku": "2221-C008-ND", "url": "https://www.digikey.de/en/products/detail/m5stack-technology-co-ltd/C008/12088545"}]
       }
     },
     {
-      "id": "pcm1808", "quantity": 1, "description": "Preassembled PCM1808 stereo line-input I2S module, 3.5 mm jack and installed header",
+      "id": "pcm1808",
+      "quantity": 1,
+      "manufacturer": "Rakstore",
+      "description": "Preassembled PCM1808 stereo line-input I2S module with 3.5 mm jack, installed I2S header and USB-C 5 V input",
       "sources": {
-        "Canada": [{"vendor": "Amazon Canada", "url": "https://www.amazon.ca/Rakstore-PCM1808-Stereo-Single-Ended-Digital/dp/B09CDCLXQC"}],
-        "United States": [{"vendor": "Amazon US", "url": "https://www.amazon.com/Rakstore-PCM1808-Stereo-Single-Ended-Digital/dp/B09CDCLXQC"}],
-        "European Union": [{"vendor": "Amazon Germany", "url": "https://www.amazon.de/-/en/RAKSTORE-PCM1808-Stereo-Single-Ended-Digital/dp/B0D1NNR21W"}]
+        "Canada": [{"vendor": "Amazon Canada", "sku": "ASIN B09CDCLXQC", "url": "https://www.amazon.ca/Rakstore-PCM1808-Stereo-Single-Ended-Digital/dp/B09CDCLXQC"}],
+        "United States": [{"vendor": "Amazon US", "sku": "ASIN B09CDCLXQC", "url": "https://www.amazon.com/Rakstore-PCM1808-Stereo-Single-Ended-Digital/dp/B09CDCLXQC"}],
+        "European Union": [{"vendor": "Amazon Germany", "sku": "ASIN B0D1NNR21W", "url": "https://www.amazon.de/-/en/RAKSTORE-PCM1808-Stereo-Single-Ended-Digital/dp/B0D1NNR21W"}]
       },
-      "photo_check": ["3.5 mm input jack", "DOUT/BCK/LRCK/GND header already installed", "5 V input connector", "board no larger than 50.5 x 30.5 mm", "48 kHz master-mode listing"]
+      "photo_check": ["3.5 mm input jack", "DOUT/BCK/LRCK/GND header already installed", "USB-C 5 V input", "board no larger than 50.5 x 30.5 mm", "48 kHz master-mode listing"]
     },
     {
-      "id": "cap-header", "quantity": 1, "description": "2x7 2.54 mm extra-long male stacking header, 11 mm minimum exposed pins",
-      "search_terms": "2x7 2.54mm stacking header extra long male",
+      "id": "cap-header",
+      "quantity": 1,
+      "manufacturer": "Samtec",
+      "mpn": "TSW-107-08-G-D",
+      "description": "2x7, 2.54 mm through-hole male terminal strip; 5.84 mm mating posts and 5.08 mm wire-side tails",
       "sources": {
-        "Canada": [{"vendor": "DigiKey Canada", "url": "https://www.digikey.ca/en/products/filter/headers-male-pins/314"}],
-        "United States": [{"vendor": "DigiKey", "url": "https://www.digikey.com/en/products/filter/headers-male-pins/314"}],
-        "European Union": [{"vendor": "Mouser EU", "url": "https://eu.mouser.com/c/connectors/headers-wire-housings/headers-male-pins/"}]
-      }
-    },
-    {
-      "id": "housings-leads", "quantity": 1, "description": "2.54 mm Dupont housings plus precrimped female-to-female and female-to-male leads",
-      "search_terms": "2.54mm Dupont pre crimped wire kit housings",
-      "sources": {
-        "Canada": [{"vendor": "RobotShop", "url": "https://ca.robotshop.com/search?q=dupont+precrimped+wire"}],
-        "United States": [{"vendor": "Pololu", "url": "https://www.pololu.com/category/71/wires-with-pre-crimped-terminals"}],
-        "European Union": [{"vendor": "BerryBase", "url": "https://www.berrybase.de/en/search?sSearch=jumper%20wire"}]
-      }
-    },
-    {
-      "id": "grove-leads", "quantity": 1, "description": "M5Stack A096 Grove-to-Dupont cable set, factory-crimped",
-      "sources": {
-        "Canada": [{"vendor": "RobotShop", "url": "https://www.robotshop.com/products/m5stack-grove2dupont-conversion-cable-20cm-5pairs"}],
-        "United States": [{"vendor": "DigiKey", "url": "https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/A096/16679751"}],
-        "European Union": [{"vendor": "BerryBase", "url": "https://www.berrybase.de/en/seeed-grove-adapter-cable-4-pin-dupont-male-4-pin-grove-male-pack-of-5"}]
-      }
-    },
-    {
-      "id": "power-branch", "quantity": 2, "description": "WAGO 221-413 compact 3-port lever splice; one for +5 V and one for GND, hidden inside the cap",
-      "search_terms": "WAGO 221-413 3 conductor compact lever connector",
-      "sources": {
-        "Canada": [{"vendor": "DigiKey Canada", "url": "https://www.digikey.ca/en/products/detail/wago-corporation/221-413/13545172"}],
-        "United States": [{"vendor": "DigiKey", "url": "https://www.digikey.com/en/products/detail/wago-corporation/221-413/13545172"}],
-        "European Union": [{"vendor": "RS", "url": "https://eu.rs-online.com/web/p/splice-connectors/2203119"}]
-      }
-    },
-    {
-      "id": "internal-adc-power-adapter", "quantity": 1, "description": "Short prewired internal 5 V plug matching the purchased PCM1808 power socket; no data wires required",
-      "search_terms": "USB power pigtail male red black bare prewired",
-      "sources": {
-        "Canada": [{"vendor": "Amazon Canada", "url": "https://www.amazon.ca/s?k=USB+power+pigtail+male+red+black"}],
-        "United States": [{"vendor": "Amazon US", "url": "https://www.amazon.com/s?k=USB+power+pigtail+male+red+black"}],
-        "European Union": [{"vendor": "Amazon Germany", "url": "https://www.amazon.de/s?k=USB+power+pigtail+male+red+black"}]
+        "Canada": [{"vendor": "DigiKey Canada", "sku": "612-TSW-107-08-G-D-ND", "url": "https://www.digikey.ca/en/products/detail/samtec-inc/TSW-107-08-G-D/1101667"}],
+        "United States": [{"vendor": "DigiKey", "sku": "612-TSW-107-08-G-D-ND", "url": "https://www.digikey.com/en/products/detail/samtec-inc/TSW-107-08-G-D/1101667"}],
+        "European Union": [{"vendor": "DigiKey Germany", "sku": "612-TSW-107-08-G-D-ND", "url": "https://www.digikey.de/en/products/detail/samtec-inc/TSW-107-08-G-D/1101667"}]
       },
-      "note": "This is a hidden internal plug between the 5 V branch and the ADC module. It never exits the closed cap. Match USB-C or Micro-USB to the module photo."
+      "note": "The electrical pitch and exact pin lengths are fixed by the MPN. Printed fit and final engagement depth remain physical-hardware checks."
     },
     {
-      "id": "hardware", "quantity": 1, "description": "Two M2 x 6 mm nylon screws and two M2 nuts for module retention; enclosure itself snap-closes",
-      "search_terms": "M2 nylon screw nut assortment",
+      "id": "harness-leads",
+      "quantity": 1,
+      "manufacturer": "Adafruit",
+      "mpn": "4635",
+      "description": "Pack of 40 factory-crimped 200 mm male-to-female silicone jumper leads, 24 AWG",
       "sources": {
-        "Canada": [{"vendor": "Amazon Canada", "url": "https://www.amazon.ca/s?k=M2+nylon+screw+nut"}],
-        "United States": [{"vendor": "McMaster-Carr", "url": "https://www.mcmaster.com/products/nylon-screws/thread-size~m2/"}],
-        "European Union": [{"vendor": "RS", "url": "https://eu.rs-online.com/web/c/fasteners-fixings/screws-bolts/machine-screws/?searchTerm=M2%20nylon"}]
+        "Canada": [{"vendor": "DigiKey Canada", "sku": "1528-4635-ND", "url": "https://www.digikey.ca/en/products/detail/adafruit-industries-llc/4635/13157993"}],
+        "United States": [{"vendor": "DigiKey", "sku": "1528-4635-ND", "url": "https://www.digikey.com/en/products/detail/adafruit-industries-llc/4635/13157993"}],
+        "European Union": [{"vendor": "DigiKey Germany", "sku": "1528-4635-ND", "url": "https://www.digikey.de/en/products/detail/adafruit-industries-llc/4635/13157993"}]
+      },
+      "wire_gauge_awg": 24,
+      "usage": "Use intact leads for signals. For the four power branches, cut off the unused connector and have an adult strip 9-11 mm for the WAGO splice."
+    },
+    {
+      "id": "grove-leads",
+      "quantity": 1,
+      "manufacturer": "M5Stack",
+      "mpn": "A096",
+      "description": "Grove-to-Dupont conversion cable set, 20 cm, five male and five female sets",
+      "sources": {
+        "Canada": [{"vendor": "DigiKey Canada", "sku": "2221-A096-ND", "url": "https://www.digikey.ca/en/products/detail/m5stack-technology-co-ltd/A096/16679751"}],
+        "United States": [{"vendor": "DigiKey", "sku": "2221-A096-ND", "url": "https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/A096/16679751"}],
+        "European Union": [{"vendor": "DigiKey Germany", "sku": "2221-A096-ND", "url": "https://www.digikey.de/en/products/detail/m5stack-technology-co-ltd/A096/16679751"}]
+      }
+    },
+    {
+      "id": "power-branch",
+      "quantity": 2,
+      "manufacturer": "WAGO",
+      "mpn": "221-413",
+      "description": "Three-port compact lever splice; one for +5 V and one for GND, hidden inside the cap",
+      "sources": {
+        "Canada": [{"vendor": "DigiKey Canada", "sku": "2946-221-413-ND", "url": "https://www.digikey.ca/en/products/detail/wago-corporation/221-413/13549610"}],
+        "United States": [{"vendor": "DigiKey", "sku": "2946-221-413-ND", "url": "https://www.digikey.com/en/products/detail/wago-corporation/221-413/13549610"}],
+        "European Union": [{"vendor": "DigiKey Germany", "sku": "2946-221-413-ND", "url": "https://www.digikey.de/en/products/detail/wago-corporation/221-413/13549610"}]
+      },
+      "maximum_wire_gauge_awg_number": 24,
+      "note": "Use only the specified 24 AWG harness leads or thicker wire in these power splices. Do not substitute common 28 AWG signal jumpers."
+    },
+    {
+      "id": "internal-adc-power-adapter",
+      "quantity": 1,
+      "description": "Short USB-C male to red/black bare-wire 5 V pigtail, 22 AWG; hidden inside the cap",
+      "sources": {
+        "Canada": [{"vendor": "Amazon Canada", "manufacturer": "MECCANIXITY", "sku": "ASIN B0DWK3NXG6", "url": "https://www.amazon.ca/MECCANIXITY-Pigtail-Connector-Equipment-Installed/dp/B0DWK3NXG6"}],
+        "United States": [{"vendor": "Amazon US", "manufacturer": "EAHOSUCC", "sku": "ASIN B0DCGJY4MR", "url": "https://www.amazon.com/EAHOSUCC-22AWG-Pigtail-Equipment-Installed/dp/B0DCGJY4MR"}],
+        "European Union": [{"vendor": "Amazon Germany", "manufacturer": "Greluma", "sku": "ASIN B0DNF37FPX", "url": "https://www.amazon.de/-/en/Greluma-22AWG-Pigtail-Cable-Power/dp/B0DNF37FPX"}]
+      },
+      "wire_gauge_awg": 22,
+      "note": "This plug powers the exact USB-C PCM1808 variant above. It never exits the closed cap and carries no USB data."
+    },
+    {
+      "id": "retainer-screw",
+      "quantity": 2,
+      "manufacturer": "Essentra Components",
+      "mpn": "50M020040P006",
+      "description": "M2 x 0.4 x 6 mm nylon pan-head Phillips machine screw",
+      "sources": {
+        "Canada": [{"vendor": "DigiKey Canada", "sku": "145-50M020040P006-ND", "url": "https://www.digikey.ca/en/products/detail/essentra-components/50M020040P006/11639321"}],
+        "United States": [{"vendor": "DigiKey", "sku": "145-50M020040P006-ND", "url": "https://www.digikey.com/en/products/detail/essentra-components/50M020040P006/11639321"}],
+        "European Union": [{"vendor": "DigiKey Germany", "sku": "145-50M020040P006-ND", "url": "https://www.digikey.de/en/products/detail/essentra-components/50M020040P006/11639321"}]
+      }
+    },
+    {
+      "id": "retainer-nut",
+      "quantity": 2,
+      "manufacturer": "Essentra Components",
+      "mpn": "04M020040HN",
+      "description": "M2 x 0.4 nylon hex nut",
+      "sources": {
+        "Canada": [{"vendor": "DigiKey Canada", "sku": "RPC7084-ND", "url": "https://www.digikey.ca/en/products/detail/essentra-components/04M020040HN/9677098"}],
+        "United States": [{"vendor": "DigiKey", "sku": "RPC7084-ND", "url": "https://www.digikey.com/en/products/detail/essentra-components/04M020040HN/9677098"}],
+        "European Union": [{"vendor": "DigiKey Germany", "sku": "RPC7084-ND", "url": "https://www.digikey.de/en/products/detail/essentra-components/04M020040HN/9677098"}]
       }
     }
   ]

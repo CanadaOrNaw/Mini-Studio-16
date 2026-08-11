@@ -95,6 +95,11 @@ two maps from drifting independently.
 
 ## Build and flash
 
+Never flashed an ESP32 before? Start with
+[`docs/START_HERE.md`](docs/START_HERE.md), then use the no-compilation
+[`docs/FLASHING.md`](docs/FLASHING.md) walkthrough. The commands below are the
+developer path.
+
 Build the normal computer-facing image:
 
 ```bash
@@ -130,10 +135,11 @@ On the startup screen, press `Tab` to validate/select the other USB role and
 reboot; press any other key to continue. Normal mode is selected after the
 initial flash. See [`docs/DUAL_BOOT.md`](docs/DUAL_BOOT.md).
 
-Each artifact includes `SHA256SUMS.txt`, `BUILD_INFO.txt`, both application
-ELFs/images, both standalone merged images, the combined image and layout
-report, both resource reports, the license, and a `Mini-Studio-16_SD.zip`
-starter card image. Verify the extracted artifact with
+Each artifact includes `SHA256SUMS.txt`, `BUILD_INFO.txt`, both Cardputer
+application ELFs/images, both standalone Cardputer recovery images, the
+combined dual-role image and layout report, the one-file ATOM Lite Audio Cap
+image, both resource reports, beginner flashing/build guides, the license, and
+a `Mini-Studio-16_SD.zip` starter card image. Verify the extracted artifact with
 `sha256sum -c SHA256SUMS.txt` before flashing. The starter image is packaged
 with normalized metadata so identical source trees produce identical ZIPs.
 

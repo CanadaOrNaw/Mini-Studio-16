@@ -34,7 +34,27 @@ class MergeFirmwareTests(unittest.TestCase):
             self.assertEqual(command[command.index("0xe000") + 1], str(boot_app0))
             self.assertEqual(command[command.index("0x10000") + 1], str(build / "firmware.bin"))
 
+    def test_builds_original_esp32_atom_image_at_0x1000(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            build = root / "build"
+            build.mkdir()
+            for name in ("bootloader.bin", "partitions.bin", "firmware.bin"):
+                (build / name).write_bytes(b"test")
+            boot_app0 = root / "boot_app0.bin"
+            boot_app0.write_bytes(b"test")
+
+            command = build_command(
+                build, root / "atom.bin", boot_app0, chip="esp32",
+                flash_size="4MB", flash_freq="40m",
+                bootloader_offset="0x1000")
+            self.assertIn("esp32", command)
+            self.assertNotIn("esp32s3", command)
+            self.assertEqual(command[command.index("0x1000") + 1],
+                             str(build / "bootloader.bin"))
+            self.assertEqual(command[command.index("--flash_size") + 1], "4MB")
+            self.assertEqual(command[command.index("--flash_freq") + 1], "40m")
+
 
 if __name__ == "__main__":
     unittest.main()
-

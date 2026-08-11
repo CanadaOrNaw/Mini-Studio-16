@@ -38,10 +38,11 @@ ATOM receives stereo 24-bit samples in 32-bit slots, low-pass filters and
 converts them to Mini Studio's 22.05 kHz mono stream. The reverse path converts
 22.05 kHz mono to the 44.1 kHz stereo PCM required by A2DP.
 
-Marketplace PCM1808 boards are not perfectly standardized. The purchase guide
-therefore requires a photo match and the printable fit gauge before the final
-cap is printed. USB-C versus Micro-USB on the module changes only the hidden
-internal power plug.
+Marketplace PCM1808 boards are not perfectly standardized. The BOM therefore
+pins one USB-C Rakstore board per region, requires a photo match, and provides a
+printable fit gauge before the final cap is printed. The internal 22-AWG USB-C
+pigtail and 24-AWG harness leads are exact SKUs; thinner generic signal jumpers
+must not be used in the WAGO power branches.
 
 ## Exact connections
 

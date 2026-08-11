@@ -1,6 +1,9 @@
 import json
 import unittest
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from tools.render_audio_cap_bom import render
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,8 +46,34 @@ class AudioCapRequirementTests(unittest.TestCase):
             self.assertEqual(set(item["sources"]), regions, item["id"])
             for sources in item["sources"].values():
                 self.assertTrue(sources, item["id"])
-                self.assertTrue(all(source["url"].startswith("https://")
-                                    for source in sources), item["id"])
+                for source in sources:
+                    self.assertTrue(source["url"].startswith("https://"), item["id"])
+                    self.assertTrue(source.get("sku", "").strip(), item["id"])
+
+    def test_sources_are_exact_product_pages_not_searches(self):
+        self.assertEqual(self.bom["schema"], 2)
+        banned_fragments = ("/search", "/filter/", "searchterm=", "?q=", "?k=")
+        for item in self.bom["items"]:
+            self.assertNotIn("search_terms", item, item["id"])
+            for sources in item["sources"].values():
+                for source in sources:
+                    parts = urlsplit(source["url"].lower())
+                    path_and_query = parts.path + "?" + parts.query
+                    self.assertFalse(any(fragment in path_and_query
+                                         for fragment in banned_fragments),
+                                     source["url"])
+
+    def test_power_wiring_uses_wago_compatible_gauges(self):
+        items = {item["id"]: item for item in self.bom["items"]}
+        harness = items["harness-leads"]
+        pigtail = items["internal-adc-power-adapter"]
+        splice = items["power-branch"]
+        self.assertEqual(harness["mpn"], "4635")
+        self.assertLessEqual(harness["wire_gauge_awg"],
+                             splice["maximum_wire_gauge_awg_number"])
+        self.assertLessEqual(pigtail["wire_gauge_awg"],
+                             splice["maximum_wire_gauge_awg_number"])
+        self.assertIn("28 AWG", splice["note"])
 
     def test_no_board_fabrication_artifacts(self):
         banned_suffixes = {".kicad_pcb", ".kicad_sch", ".gbr", ".drl", ".pos"}
@@ -52,6 +81,10 @@ class AudioCapRequirementTests(unittest.TestCase):
             self.assertNotIn(path.suffix.lower(), banned_suffixes, str(path))
             self.assertNotIn("gerber", path.name.lower(), str(path))
             self.assertNotIn("pcb", path.name.lower(), str(path))
+
+    def test_human_shopping_sheet_matches_machine_bom(self):
+        shopping = ROOT / "docs" / "AUDIO_CAP_BOM.md"
+        self.assertEqual(shopping.read_text(encoding="utf-8"), render(self.bom))
 
 
 if __name__ == "__main__":

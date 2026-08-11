@@ -28,6 +28,9 @@ ASSETS = [
     (ROOT / "hardware" / "audio-cap" / "design.json", Path("downloads/audio-cap-design.json")),
     (ROOT / "hardware" / "audio-cap" / "bom.json", Path("downloads/audio-cap-bom.json")),
     (ROOT / "docs" / "AUDIO_CAP_BUILD_GUIDE.md", Path("downloads/AUDIO_CAP_BUILD_GUIDE.md")),
+    (ROOT / "docs" / "AUDIO_CAP_BOM.md", Path("downloads/AUDIO_CAP_BOM.md")),
+    (ROOT / "docs" / "START_HERE.md", Path("downloads/START_HERE.md")),
+    (ROOT / "docs" / "FLASHING.md", Path("downloads/FLASHING.md")),
 ]
 
 

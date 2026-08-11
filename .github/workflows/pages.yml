@@ -6,19 +6,33 @@ on:
     paths:
       - "site/**"
       - "hardware/**"
+      - "docs/START_HERE.md"
+      - "docs/FLASHING.md"
+      - "docs/AUDIO_CAP_BUILD_GUIDE.md"
+      - "docs/AUDIO_CAP_BOM.md"
       - "tools/build_site.py"
+      - "tools/check_live_site.py"
       - "tools/generate_hardware_assets.py"
+      - "tools/render_audio_cap_bom.py"
       - "tests/test_hardware_assets.py"
       - "tests/test_site_build.py"
+      - "tests/test_live_site_check.py"
       - ".github/workflows/pages.yml"
   pull_request:
     paths:
       - "site/**"
       - "hardware/**"
+      - "docs/START_HERE.md"
+      - "docs/FLASHING.md"
+      - "docs/AUDIO_CAP_BUILD_GUIDE.md"
+      - "docs/AUDIO_CAP_BOM.md"
       - "tools/build_site.py"
+      - "tools/check_live_site.py"
       - "tools/generate_hardware_assets.py"
+      - "tools/render_audio_cap_bom.py"
       - "tests/test_hardware_assets.py"
       - "tests/test_site_build.py"
+      - "tests/test_live_site_check.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -47,9 +61,11 @@ jobs:
         # this step succeeds and the deploy job becomes eligible.
         continue-on-error: true
       - name: Verify generated hardware assets
-        run: python tools/generate_hardware_assets.py --check
+        run: |
+          python tools/generate_hardware_assets.py --check
+          python tools/render_audio_cap_bom.py --check
       - name: Run CAD and site tests
-        run: python -m unittest tests/test_hardware_assets.py tests/test_site_build.py
+        run: python -m unittest tests/test_hardware_assets.py tests/test_site_build.py tests/test_live_site_check.py
       - name: Build static site
         run: python tools/build_site.py --output build/pages
       - uses: actions/upload-artifact@v6

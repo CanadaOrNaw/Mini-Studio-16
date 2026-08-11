@@ -12,26 +12,29 @@ second power cord: the Cardputer powers it through the 14-pin plug.
 
 ## 1. Buy the parts
 
-The canonical regional list is
-[`hardware/audio-cap/bom.json`](../hardware/audio-cap/bom.json). It is tested to
-contain purchase routes for Canada, the United States and the European Union.
+Open the human-readable
+[`AUDIO_CAP_BOM.md`](AUDIO_CAP_BOM.md) and use the table for your region. It is
+generated from the canonical [`hardware/audio-cap/bom.json`](../hardware/audio-cap/bom.json)
+and tested to contain exact purchase SKUs for Canada, the United States and the
+European Union.
 
 | Qty | Part | The picture must show |
 | ---: | --- | --- |
 | 1 | M5Stack ATOM Lite C008 | white 24 mm square case, USB-C, Grove socket |
-| 1 | PCM1808 stereo I2S module | 3.5 mm jack; installed DOUT/BCK/LRCK/GND pins; 5 V input |
-| 1 | 2x7 extra-long 2.54 mm male header | two rows of seven, at least 11 mm exposed pins |
-| 1 set | 2.54 mm housings and precrimped leads | female ends for rear header; male ends for ATOM sockets |
+| 1 | Rakstore PCM1808 stereo I2S module (exact regional ASIN in BOM) | 3.5 mm jack; installed DOUT/BCK/LRCK/GND pins; USB-C 5 V input |
+| 1 | Samtec `TSW-107-08-G-D` header | two rows of seven at 2.54 mm; exact 5.84/5.08 mm posts |
+| 1 pack | Adafruit `4635` precrimped leads | 40 male-to-female leads; silicone insulation; **24 AWG** |
 | 1 | M5Stack A096 Grove-to-Dupont lead set | factory-made Grove plug and separate Dupont ends |
 | 2 | WAGO 221-413 three-port lever splices | genuine clear body/orange levers, three holes each |
-| 1 | short internal USB power plug | male USB-C or Micro-USB matching the PCM1808 board, red/black leads |
-| 2 | M2 x 6 nylon screws plus nuts | module retainers; not lid fasteners |
+| 1 | exact regional 22-AWG USB-C power pigtail from the BOM | male USB-C; red/black bare-wire ends |
+| 2 | Essentra `50M020040P006` M2 x 6 nylon screws | module retainers; not lid fasteners |
+| 2 | Essentra `04M020040HN` M2 nylon nuts | match the retainer screws |
 
 Do not buy a bare PCM1808 chip, a board with empty header holes, or a module
-larger than 50.5 x 30.5 mm. Do not buy both USB power-plug types before checking
-the module photo. Prices and stock change, so the BOM uses exact manufacturer
-parts where possible and a precise search plus photo checklist for generic
-items.
+larger than 50.5 x 30.5 mm. Do not substitute ordinary thin 28-AWG jumpers in
+the power splices. Every BOM route names one exact SKU; if a link is out of
+stock, search the printed manufacturer part number or ASIN rather than choosing
+a look-alike.
 
 ## 2. Print the fit gauge first
 
@@ -42,7 +45,7 @@ Download and print:
 3. `audio-cap-lid.stl` after the purchased modules sit in the base.
 
 Recommended first pass: PLA, 0.20 mm layers, 0.40 mm nozzle, 3 walls, 20% infill,
-no support. The base and lid print flat. Press the 2x7 header into the small fit
+no support. The base and lid print flat. Press the exact Samtec header into the small fit
 gauge by itself—never use the Cardputer as a hammer. If it needs force, scale
 only X/Y by 101%, reprint the gauge and record the result.
 
@@ -51,8 +54,11 @@ unverified until the Cardputer and the exact retail module revision arrive.
 
 ## 3. Flash before assembly
 
+The step-by-step first-time instructions are in [`FLASHING.md`](FLASHING.md).
 Keep the cap parts away from the Cardputer. Connect only the ATOM Lite to your
-computer with a normal USB-C cable, then run:
+computer with a normal USB-C data cable. The easiest route flashes the merged
+`mini-studio-audio-cap-atom-lite.bin` from the verified Actions artifact at
+offset `0x0`. Developers can instead run:
 
 ```bash
 pio run -e mini-studio-audio-cap-atom-lite -t upload --upload-port PORT
@@ -64,8 +70,8 @@ is a programming cable used before assembly; it is not part of the finished cap.
 
 ## 4. Make the signal harness
 
-Power must be off. Use the table exactly. Slide the female ends of seven
-precrimped wires onto the rear pins of the 2x7 header, then slide the other ends
+Power must be off. Use the table exactly. Slide the female ends of five
+Adafruit 4635 leads onto the rear pins of the 2x7 header, then slide the other ends
 onto the named ATOM sockets. Put each single connector into the printed keyed
 header holder so it cannot rotate.
 
@@ -92,8 +98,14 @@ Connect the ADC using factory-crimped leads:
 
 ## 5. Make the hidden power branch
 
-Lift every orange lever. Put only bare copper under a lever, then close it and
-tug gently. No copper should remain visible.
+This step uses **only the 24-AWG Adafruit 4635 leads and the 22-AWG USB-C
+pigtail**. Common 28-AWG signal jumpers are not an allowed substitute. An adult
+cuts the unused connector off four Adafruit leads—one for header 5 V, one for
+header ground, one for ATOM 5 V and one for ATOM ground—and strips 9–11 mm at
+the cut end.
+
+Lift every orange lever. Put only straight bare copper under a lever, then close
+it and tug gently. No copper should remain visible.
 
 - `+5 V` splice: header pin 6 `5VOUT`, ATOM `5V`, red ADC-power wire.
 - `GND` splice: header pin 4 `GND`, ATOM `GND`, black ADC-power wire.
@@ -102,8 +114,8 @@ Plug the short ADC-power connector into the PCM1808 module and tuck the entire
 branch into its printed channel. Both lever splices and the ADC plug stay inside
 the cap. No wire exits the enclosure.
 
-If a lead is not already bare at the splice end, an adult may strip 7–9 mm or
-use a correctly sized precrimp/bare lead. Never twist 5 V and GND together.
+The USB-C pigtail red/black ends are already bare; trim or restrip them to the
+same 9–11 mm length if necessary. Never twist 5 V and GND together.
 
 ## 6. Check before power
 
