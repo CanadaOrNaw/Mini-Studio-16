@@ -184,6 +184,9 @@ def main(argv: list[str] | None = None) -> int:
 
     rendered = json.dumps(report, indent=2, sort_keys=True)
     if args.output:
+        # P3 (reconciliation report): create missing parent directories so a
+        # successful smoke run can never lose its evidence JSON at the end.
+        args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(rendered + "\n", encoding="utf-8")
     print(rendered)
     return 0

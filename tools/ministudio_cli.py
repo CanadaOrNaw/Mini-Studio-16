@@ -249,7 +249,10 @@ def parser() -> argparse.ArgumentParser:
     synth_set = sub.add_parser("synth-set", help="set a named integer synth parameter")
     synth_set.add_argument("track", type=int, choices=range(1, 4))
     synth_set.add_argument("parameter", help="for example fm.op2.ratio or mgx.amp.attack")
-    synth_set.add_argument("value", type=int, choices=range(0, 5001))
+    # P3: metavar keeps a bad value from printing all 5,001 choices (~48 KB
+    # of usage text) — range checking is unchanged.
+    synth_set.add_argument("value", type=int, choices=range(0, 5001),
+                           metavar="0..5000")
     sub.add_parser("synth-dsp-reset", help="reset audio render timing counters")
     sub.add_parser("cap-status", help="show optional Audio Cap connection and stream counters")
     sub.add_parser("cap-pair", help="discover and pair conventional Bluetooth audio output")
@@ -303,7 +306,15 @@ def main(argv: List[str] | None = None) -> int:
         return 0
 
     request_id = args.request_id or f"cli{int(time.time() * 1000) % 1000000}"
-    payload = build_request(request_id, command_words(args))
+    try:
+        words = command_words(args)
+    except ValueError as error:
+        # P3 (reconciliation report): argument-combination mistakes (for
+        # example `loop 1 volume` with no value) used to surface as raw
+        # Python tracebacks; print the message and the correct usage.
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    payload = build_request(request_id, words)
 
     deadline = time.monotonic() + args.timeout
     with serial.Serial(port, args.baud, timeout=0.1) as device:

@@ -82,7 +82,8 @@ def main() -> int:
     parser.add_argument("--max-static", type=int, default=204_800,
                         help="static DRAM ceiling (62.5%% of the 327680-byte board budget)")
     parser.add_argument("--max-flash", type=int, default=3_000_000,
-                        help="program-image ceiling within the 3342336-byte app partition")
+                        # P3: partitions_dual.csv slots are 0x2F0000 bytes.
+                        help="program-image ceiling within the 3,080,192-byte app slot")
     parser.add_argument("--report", type=pathlib.Path)
     args = parser.parse_args()
 
