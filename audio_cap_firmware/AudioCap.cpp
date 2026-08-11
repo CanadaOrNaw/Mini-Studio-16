@@ -57,8 +57,22 @@ int32_t bluetoothPcm(uint8_t* bytes, int32_t byteCount) {
         const size_t monoNeeded = (remaining + 1u) / 2u;
         const size_t chunk = monoNeeded > 128u ? 128u : monoNeeded;
         s_bridge.popPlayback(mono, chunk);  // zero-fills a short read
-        produced += s_playbackConverter.process(
-            mono, chunk, stereo + produced * 2u, requestedFrames - produced);
+        const size_t emitted = s_playbackConverter.process(
+            mono, chunk, stereo + produced * 2u, remaining);
+        produced += emitted;
+        if (emitted == 0) {
+            // P2-10 (reconciliation report): the converter emits whole
+            // 22.05->44.1 kHz pairs, so an odd trailing frame count from
+            // bluedroid produced nothing and this loop spun forever inside
+            // the Bluetooth task (watchdog reset / audio dropout). Emit the
+            // tail directly from the already-popped mono samples instead.
+            for (size_t index = 0; produced < requestedFrames;
+                 ++produced, ++index) {
+                const int16_t sample = mono[index < chunk ? index : chunk - 1u];
+                stereo[produced * 2u] = sample;
+                stereo[produced * 2u + 1u] = sample;
+            }
+        }
     }
     return static_cast<int32_t>(produced * 4u);
 }
@@ -101,7 +115,11 @@ void spiTask(void*) {
     slave.spics_io_num = CAP_SPI_CS;
     slave.flags = 0;
     slave.queue_size = 1;
-    slave.mode = 0;
+    // P2-11 (reconciliation report): the ESP-IDF SPI-slave documentation
+    // states "DMA requires SPI modes 1 and 3" — in modes 0/2 a DMA slave
+    // launches MISO half a clock early and the host samples garbage.
+    // Mode 1 here must match SPI_MODE1 on the Cardputer host side.
+    slave.mode = 1;
     if (spi_slave_initialize(HSPI_HOST, &bus, &slave, 1) != ESP_OK) {
         s_fault = true;
         showStatus();
@@ -177,7 +195,11 @@ void setup() {
     Serial.begin(115200);
     pinMode(CAP_SPI_IRQ, OUTPUT);
     digitalWrite(CAP_SPI_IRQ, LOW);
-    pinMode(CAP_PAIR_BUTTON, INPUT_PULLUP);
+    // P3 (reconciliation report): GPIO39 is input-only with NO internal
+    // pull resistors on classic ESP32; INPUT_PULLUP silently degraded to a
+    // floating input and only worked because the ATOM's button circuit has
+    // its own external pull-up. Declare plain INPUT to state the truth.
+    pinMode(CAP_PAIR_BUTTON, INPUT);
     s_pixel.begin();
     s_pixel.setBrightness(30);
     showStatus();

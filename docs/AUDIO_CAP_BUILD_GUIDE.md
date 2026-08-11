@@ -173,6 +173,15 @@ python tools/ministudio_cli.py --port PORT cap-monitor 25
 python tools/ministudio_cli.py --port PORT cap-pair
 ```
 
+**First-power acceptance check (do this before anything else):** run
+`cap-status` and look for `adc=1`. That single flag is the proof your
+PCM1808 module is the required self-clocked master variant. If it stays
+`adc=0`, or `cap-monitor` plays audio noticeably at the wrong pitch, the
+purchased module is a slave-only or wrong-oscillator variant (PCM1808 needs
+an external system clock the ATOM cannot supply — the module must carry its
+own oscillator). Stop and exchange the module; no wiring change can fix it.
+Record the result in `CARDPUTER_TESTING.md`.
+
 Put one Bluetooth speaker/headset in pairing mode, then run `cap-pair` (the
 ATOM's physical button also works whenever the lid is open). The first
 discovered audio-rendering device is selected.

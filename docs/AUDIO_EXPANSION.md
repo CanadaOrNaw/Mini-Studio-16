@@ -119,6 +119,8 @@ printing, assembly, flashing and the required first-power tests.
 - [Espressif's A2DP source example](https://github.com/espressif/esp-idf/tree/master/examples/bluetooth/bluedroid/classic_bt/a2dp_source)
   for the original ESP32 A2DP source role.
 - [ESP32-A2DP](https://github.com/pschatzmann/ESP32-A2DP) by Phil Schatzmann,
-  Apache-2.0 licensed, is used by the ATOM firmware and pinned by commit.
+  Apache-2.0 licensed, is used by the ATOM firmware and pinned to its
+  `v1.8.5` release tag in `platformio.ini` (a tag, not an immutable commit
+  hash — if supply-chain immutability matters later, repin by SHA).
 - [bmorcelli/Launcher](https://github.com/bmorcelli/Launcher) informed earlier
   Cardputer SD research only. No Launcher code is included in the Audio Cap.

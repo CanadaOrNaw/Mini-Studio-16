@@ -5,6 +5,13 @@ opens one exact product SKU—not a search or category page. Price and stock
 can change. If a link is unavailable, search the printed manufacturer part
 number or ASIN and do not substitute a visually similar part.
 
+Marketplace listings (Amazon ASINs) rot without notice and cannot be
+checked by automation; they were last hand-verified on 2026-08-11.
+Before paying, confirm the page still shows the exact part named in
+its row — for the PCM1808 module that means the master-mode variant
+with its own onboard oscillator (a small metal can on the board),
+an installed I2S header, and a 3.5 mm jack.
+
 Buy one row of each item unless the quantity column says otherwise. An adult
 should place orders and supervise cutting/stripping the four power leads.
 

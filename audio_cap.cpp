@@ -43,7 +43,9 @@ bool transferOnce() {
     portEXIT_CRITICAL(&s_mux);
     s_core.buildTransfer(tx, commands, monitor);
 
-    s_spi.beginTransaction(SPISettings(CAP_SPI_HZ, MSBFIRST, SPI_MODE0));
+    // P2-11 (reconciliation report): mode 1, matching the cap's DMA slave —
+    // ESP-IDF requires modes 1/3 when the slave uses DMA (MISO timing).
+    s_spi.beginTransaction(SPISettings(CAP_SPI_HZ, MSBFIRST, SPI_MODE1));
     digitalWrite(CAP_CS_PIN, LOW);
     s_spi.transferBytes(reinterpret_cast<uint8_t*>(&tx),
                         reinterpret_cast<uint8_t*>(&rx), sizeof(tx));
