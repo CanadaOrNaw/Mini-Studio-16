@@ -6,14 +6,20 @@
 
 int main() {
     SamplerSlotBank bank;
+    const uint32_t beforeAssign = bank.slotGeneration(0);
     assert(bank.assign(0, "voice.wav", 22050, 22050, SAMPLER_SLOT_MELODIC));
+    assert(bank.slotGeneration(0) == beforeAssign + 2);
     assert(bank.quotaUsedFrames() == 22050);
     SamplerRegion region = {};
     assert(bank.region(0, 12, region));
     assert(region.startFrame == 0 && region.lengthFrames == 22050);
 
+    uint32_t generation = bank.slotGeneration(0);
     assert(bank.setTrim(0, 50, 16003));
+    assert(bank.slotGeneration(0) == generation + 2);
+    generation = bank.slotGeneration(0);
     assert(bank.setMode(0, SAMPLER_SLOT_SLICED));
+    assert(bank.slotGeneration(0) == generation + 2);
     uint32_t total = 0;
     for (uint8_t slice = 0; slice < 16; ++slice) {
         assert(bank.region(0, slice, region));

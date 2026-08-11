@@ -62,6 +62,28 @@ static void testPlaybackConversion() {
     assert(one.size() == input.size() * 4);
     for (size_t frame = 0; frame < input.size() * 2; ++frame)
         assert(one[frame * 2] == one[frame * 2 + 1]);
+
+    // Bluedroid is allowed to request an odd number of stereo frames. The
+    // converter must carry the unpaired second output across callbacks;
+    // no 22.05 kHz source sample may be dropped and chunking stays bit-exact.
+    AudioCapPlaybackUpsampler odd;
+    const size_t callbackFrames[] = {3, 1, 17, 64, 5, 129, 2, 293};
+    std::vector<int16_t> oddOutput(input.size() * 4);
+    size_t sourceOffset = 0;
+    size_t outputFrames = 0;
+    for (size_t capacity : callbackFrames) {
+        const size_t needed = odd.inputFramesNeeded(capacity);
+        assert(sourceOffset + needed <= input.size());
+        const size_t emitted = odd.process(
+            needed ? input.data() + sourceOffset : nullptr, needed,
+            oddOutput.data() + outputFrames * 2, capacity);
+        assert(emitted == capacity);
+        sourceOffset += needed;
+        outputFrames += emitted;
+    }
+    assert(sourceOffset == input.size());
+    oddOutput.resize(outputFrames * 2);
+    assert(oddOutput == one);
 }
 
 static std::vector<int16_t> resample(const std::vector<int32_t>& input,

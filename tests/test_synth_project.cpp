@@ -43,6 +43,16 @@ int main() {
     synthProjectEncode(loaded, reencoded);
     assert(memcmp(&saved, &reencoded, sizeof(saved)) == 0);
 
+    // Saving before the audio task reaches its next block boundary must
+    // still encode the engine the user just selected.
+    loaded.requestEngine(SYNTH_ENGINE_MGX);
+    SaveSynthEngineState pendingSaved = {};
+    synthProjectEncode(loaded, pendingSaved);
+    assert(pendingSaved.engine == SYNTH_ENGINE_MGX);
+    assert(loaded.engine == SYNTH_ENGINE_FM4);
+    loaded.applyPendingEngine();
+    assert(loaded.engine == SYNTH_ENGINE_MGX);
+
     SaveSynthEngineState malformed = saved;
     malformed.engine = SYNTH_ENGINE_COUNT;
     assert(!synthProjectValidate(malformed));
@@ -64,4 +74,3 @@ int main() {
     assert(legacy.engine == SYNTH_ENGINE_MG);
     return 0;
 }
-

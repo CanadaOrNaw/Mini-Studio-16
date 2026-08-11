@@ -103,6 +103,7 @@ private:
     static uint32_t normalizedFrames(uint32_t sourceFrames, uint32_t sourceRate);
     static bool validSlot(uint8_t slot) { return slot < SAMPLER_SLOT_COUNT; }
     static bool validRegion(const SamplerSlot& slot, const SamplerRegion& region);
+    bool autoSliceUnlocked(uint8_t index);
 };
 
 class SamplerSequence {

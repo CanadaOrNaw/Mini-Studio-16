@@ -143,14 +143,27 @@ AudioCapPlaybackUpsampler::AudioCapPlaybackUpsampler() { reset(); }
 
 void AudioCapPlaybackUpsampler::reset() {
     _previous = 0;
+    _pending = 0;
     _havePrevious = false;
+    _havePending = false;
+}
+
+size_t AudioCapPlaybackUpsampler::inputFramesNeeded(size_t capacity) const {
+    if (_havePending && capacity > 0) --capacity;
+    return (capacity + 1u) / 2u;
 }
 
 size_t AudioCapPlaybackUpsampler::process(const int16_t* input, size_t frames,
                                           int16_t* output, size_t capacity) {
-    if (!input || !output) return 0;
+    if (!output || (frames > 0 && !input)) return 0;
     size_t written = 0;
-    for (size_t index = 0; index < frames && written + 2 <= capacity; ++index) {
+    if (_havePending && written < capacity) {
+        output[written * 2] = _pending;
+        output[written * 2 + 1] = _pending;
+        ++written;
+        _havePending = false;
+    }
+    for (size_t index = 0; index < frames && written < capacity; ++index) {
         const int16_t current = input[index];
         if (!_havePrevious) {
             _previous = current;
@@ -161,10 +174,18 @@ size_t AudioCapPlaybackUpsampler::process(const int16_t* input, size_t frames,
         output[written * 2] = midpoint;
         output[written * 2 + 1] = midpoint;
         ++written;
-        output[written * 2] = current;
-        output[written * 2 + 1] = current;
-        ++written;
         _previous = current;
+        if (written < capacity) {
+            output[written * 2] = current;
+            output[written * 2 + 1] = current;
+            ++written;
+        } else {
+            // An odd-sized A2DP request consumed the source frame but had
+            // room for only its interpolated midpoint. Preserve the second
+            // output for the next callback rather than dropping audio.
+            _pending = current;
+            _havePending = true;
+        }
     }
     return written;
 }

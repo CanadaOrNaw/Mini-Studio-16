@@ -24,6 +24,11 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror -pthread \
 "$build_dir/test_pcm_ring"
 
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_capture_gap.cpp" -o "$build_dir/test_capture_gap"
+
+"$build_dir/test_capture_gap"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
   "$test_dir/test_control_protocol.cpp" "$test_dir/../control_protocol.cpp" \
   "${synth_sources[@]}" \
   -o "$build_dir/test_control_protocol"

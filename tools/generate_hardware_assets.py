@@ -63,8 +63,9 @@ CAP_FINGER_Y0 = 16.0
 CAP_FINGER_Y1 = 17.2
 # Stepped catch nubs at the finger tips: protrusion tapers toward the tip so
 # insertion is a lead-in ramp; max engagement past the 17.4 wall face is
-# 0.30 mm (~1.6% strain over the 5.8 mm blade - safe for PLA), and the stepped
-# shoulder keeps the lid deliberately removable for service.
+# 0.30 mm (about 1.6% nominal surface strain over the 5.8 mm blade in a
+# simplified cantilever estimate). Real PLA retention/fatigue remains a
+# hardware validation item; the stepped shoulder keeps the lid removable.
 CAP_NUB_STEPS = ((6.4, 7.0, 17.70), (7.0, 7.6, 17.50), (7.6, 8.2, 17.30))
 # Through-wall catch/release windows in the base side walls. Assembled nub
 # z = 21.2 - lid z, so the 17.70 step (lid 6.4..7.0) lands at 14.2..14.8 and

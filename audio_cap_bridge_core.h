@@ -68,10 +68,13 @@ public:
     AudioCapPlaybackUpsampler();
     size_t process(const int16_t* mono22050, size_t frames,
                    int16_t* stereo44100, size_t stereoFrameCapacity);
+    size_t inputFramesNeeded(size_t stereoFrameCapacity) const;
     void reset();
 private:
     int16_t _previous;
+    int16_t _pending;
     bool _havePrevious;
+    bool _havePending;
 };
 
 class AudioCapCaptureResampler {

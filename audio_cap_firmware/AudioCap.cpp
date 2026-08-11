@@ -54,23 +54,24 @@ int32_t bluetoothPcm(uint8_t* bytes, int32_t byteCount) {
     int16_t mono[128];
     while (produced < requestedFrames) {
         const size_t remaining = requestedFrames - produced;
-        const size_t monoNeeded = (remaining + 1u) / 2u;
+        const size_t monoNeeded =
+            s_playbackConverter.inputFramesNeeded(remaining);
         const size_t chunk = monoNeeded > 128u ? 128u : monoNeeded;
-        s_bridge.popPlayback(mono, chunk);  // zero-fills a short read
+        if (chunk > 0)
+            s_bridge.popPlayback(mono, chunk);  // zero-fills a short read
         const size_t emitted = s_playbackConverter.process(
-            mono, chunk, stereo + produced * 2u, remaining);
+            chunk > 0 ? mono : nullptr, chunk,
+            stereo + produced * 2u, remaining);
         produced += emitted;
         if (emitted == 0) {
-            // P2-10 (reconciliation report): the converter emits whole
-            // 22.05->44.1 kHz pairs, so an odd trailing frame count from
-            // bluedroid produced nothing and this loop spun forever inside
-            // the Bluetooth task (watchdog reset / audio dropout). Emit the
-            // tail directly from the already-popped mono samples instead.
-            for (size_t index = 0; produced < requestedFrames;
-                 ++produced, ++index) {
-                const int16_t sample = mono[index < chunk ? index : chunk - 1u];
-                stereo[produced * 2u] = sample;
-                stereo[produced * 2u + 1u] = sample;
+            // Defensive escape: never spin the Bluetooth callback. This is
+            // unreachable when inputFramesNeeded/process agree, and the host
+            // odd-callback regression test locks that contract down.
+            s_fault = true;
+            while (produced < requestedFrames) {
+                stereo[produced * 2u] = 0;
+                stereo[produced * 2u + 1u] = 0;
+                ++produced;
             }
         }
     }

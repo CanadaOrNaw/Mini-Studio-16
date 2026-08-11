@@ -37,9 +37,10 @@ and four snap fingers rising straight up (flip it fingers-down to assemble).
 Each finger is a 2.0 x 1.2 mm blade, 7.0 mm below the plate, ending in a
 stepped catch nub. The step taper is the insertion lead-in; the widest step
 engages 0.30 mm past the base's inner wall into a through-wall window
-(engagement strain about 1.6%, safe for PLA). The four windows double as
-release slots: press the two nubs on one side inward with a plastic pick and
-lift. A perimeter locating lip (1.2 mm engagement, 0.2 mm clearance) squares
+(about 1.6% nominal surface strain in a simplified cantilever estimate). PLA
+retention and fatigue still require the printed hardware test. The four windows
+double as release slots: press the two nubs on one side inward with a plastic
+pick and lift. A perimeter locating lip (1.2 mm engagement, 0.2 mm clearance) squares
 the lid before the fingers load. Automated tests assert the lip, nub steps,
 window positions, zero seated interference, and that both module bays exceed
 the `design.json` module envelopes.

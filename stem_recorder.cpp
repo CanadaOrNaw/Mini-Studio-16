@@ -1,6 +1,7 @@
 #include "stem_recorder.h"
 
 #include "config.h"
+#include "capture_gap.h"
 #include "master_recorder.h"
 #include "mic_sampler.h"
 #include "pcm_ring.h"
@@ -121,8 +122,7 @@ void stemTask(void*) {
             portEXIT_CRITICAL(&s_mux);
         } else {
             // Ring drained: write any drop deficit as silence first (P3).
-            const uint32_t deficit = __atomic_exchange_n(
-                &s_pendingZeroFrames, 0u, __ATOMIC_ACQ_REL);
+            const uint32_t deficit = captureTakeGap(&s_pendingZeroFrames);
             if (deficit > 0) {
                 memset(frames, 0, sizeof(frames));
                 uint32_t remaining = deficit;
@@ -264,11 +264,8 @@ bool stemRecorderIsBusy() {
 
 void stemRecorderPush(const StemPcmFrame* frames, size_t count) {
     if (!frames || !count || getState() != STEM_REC_RECORDING) return;
-    const size_t pushed = s_ring.push(frames, count);
-    if (pushed < count)
-        __atomic_add_fetch(&s_pendingZeroFrames,
-                           static_cast<uint32_t>(count - pushed),
-                           __ATOMIC_ACQ_REL);  // written as silence (P3)
+    const size_t pushed = capturePushWithGap(
+        s_ring, &s_pendingZeroFrames, frames, count);
     const uint32_t highWater = s_ring.size();
     portENTER_CRITICAL(&s_mux);
     if (pushed < count) s_snapshot.droppedFrames += static_cast<uint32_t>(count - pushed);

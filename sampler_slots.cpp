@@ -85,7 +85,7 @@ bool SamplerSlotBank::assign(uint8_t index, const char* filename, uint32_t sourc
     beginEdit(index);
     _slots[index] = replacement;
     _quotaUsedFrames = static_cast<uint32_t>(nextQuota);
-    const bool sliced = autoSlice(index);
+    const bool sliced = autoSliceUnlocked(index);
     endEdit(index);
     return sliced;
 }
@@ -105,7 +105,8 @@ bool SamplerSlotBank::setMode(uint8_t index, SamplerSlotMode mode) {
         return false;
     beginEdit(index);
     _slots[index].mode = mode;
-    const bool sliced = mode == SAMPLER_SLOT_SLICED ? autoSlice(index) : true;
+    const bool sliced = mode == SAMPLER_SLOT_SLICED
+        ? autoSliceUnlocked(index) : true;
     endEdit(index);
     return sliced;
 }
@@ -119,7 +120,7 @@ bool SamplerSlotBank::setTrim(uint8_t index, uint32_t startFrame, uint32_t lengt
     beginEdit(index);
     _slots[index].trimStart = startFrame;
     _slots[index].trimLength = lengthFrames;
-    const bool sliced = autoSlice(index);
+    const bool sliced = autoSliceUnlocked(index);
     endEdit(index);
     return sliced;
 }
@@ -136,10 +137,17 @@ bool SamplerSlotBank::setSlice(uint8_t index, uint8_t slice, uint32_t startFrame
 }
 
 bool SamplerSlotBank::autoSlice(uint8_t index) {
-    // Nested begin/endEdit from assign/setMode/setTrim keeps the generation
-    // odd across the whole outer write, which is exactly what readers need.
     if (!validSlot(index) || _slots[index].mode == SAMPLER_SLOT_EMPTY) return false;
     beginEdit(index);
+    const bool sliced = autoSliceUnlocked(index);
+    endEdit(index);
+    return sliced;
+}
+
+bool SamplerSlotBank::autoSliceUnlocked(uint8_t index) {
+    // Callers that already hold the slot seqlock use this helper. Incrementing
+    // the seqlock inside an outer edit would make its generation even and
+    // briefly expose a half-written slot to snapshotSlot().
     SamplerSlot& item = _slots[index];
     const uint32_t base = item.trimLength / SAMPLER_SLICE_COUNT;
     const uint32_t remainder = item.trimLength % SAMPLER_SLICE_COUNT;
@@ -150,7 +158,6 @@ bool SamplerSlotBank::autoSlice(uint8_t index) {
         item.slices[slice].lengthFrames = length;
         cursor += length;
     }
-    endEdit(index);
     return true;
 }
 

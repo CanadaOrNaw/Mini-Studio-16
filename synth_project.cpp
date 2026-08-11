@@ -38,7 +38,10 @@ bool validAdsr(const SaveSynthAdsr& envelope) {
 }  // namespace
 
 void synthProjectEncode(const SynthTrack& track, SaveSynthEngineState& output) {
-    output.engine = track.engine;
+    // Engine changes are requested from the UI/storage task and applied by
+    // the audio task at its next block boundary. Saving during that short
+    // window must persist the requested engine, not the outgoing one.
+    output.engine = track.displayEngine();
     const MgPlusPatch& mgx = track.mgxPatch;
     output.mgx.oscMode = mgx.oscMode;
     output.mgx.wavetable = mgx.wavetable;
@@ -139,4 +142,3 @@ bool synthProjectDecode(const SaveSynthEngineState& input, SynthTrack& track) {
 void synthProjectMigrateLegacy(SynthTrack& track) {
     track.requestEngine(SYNTH_ENGINE_MG);
 }
-

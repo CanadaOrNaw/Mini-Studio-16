@@ -2,6 +2,7 @@
 #include "master_recorder_session.h"
 
 #include "config.h"
+#include "capture_gap.h"
 #include "pcm_ring.h"
 #include "sd_diagnostics.h"
 #include "mic_sampler.h"
@@ -150,8 +151,7 @@ void recorderTask(void*) {
             } else {
                 // Ring drained: any drop deficit belongs before whatever the
                 // audio task pushes next; write it as silence now (P3).
-                const uint32_t deficit = __atomic_exchange_n(
-                    &s_pendingZeroFrames, 0u, __ATOMIC_ACQ_REL);
+                const uint32_t deficit = captureTakeGap(&s_pendingZeroFrames);
                 if (deficit > 0) {
                     memset(block, 0, sizeof(block));
                     uint32_t remaining = deficit;
@@ -299,11 +299,8 @@ bool masterRecorderIsBusy() {
 
 void masterRecorderPush(const int16_t* frames, size_t count) {
     if (!frames || count == 0 || getState() != MASTER_REC_RECORDING) return;
-    const size_t pushed = s_ring.push(frames, count);
-    if (pushed < count)
-        __atomic_add_fetch(&s_pendingZeroFrames,
-                           static_cast<uint32_t>(count - pushed),
-                           __ATOMIC_ACQ_REL);  // written as silence (P3)
+    const size_t pushed = capturePushWithGap(
+        s_ring, &s_pendingZeroFrames, frames, count);
     const uint32_t highWater = s_ring.size();
     portENTER_CRITICAL(&s_mux);
     s_session.noteProduced(static_cast<uint32_t>(count), static_cast<uint32_t>(pushed),

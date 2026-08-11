@@ -27,6 +27,7 @@ build_run() {
 }
 
 build_run pcm_ring -pthread "$test_dir/test_pcm_ring.cpp"
+build_run capture_gap "$test_dir/test_capture_gap.cpp"
 build_run protocol "$test_dir/test_control_protocol.cpp" "$test_dir/../control_protocol.cpp" \
     "${synth_sources[@]}"
 build_run protocol_fuzz "$test_dir/test_control_protocol_fuzz.cpp" \
