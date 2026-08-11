@@ -9,38 +9,43 @@ false until a physical Cardputer-ADV produces measurements.
 
 ## Verified pre-hardware code checkpoint
 
-- Firmware source head: `b2787d6ddfe2db0caee27c9eaea6c325818821bd`
-- Pull-request workflow merge SHA: `e3a1d2bf4cbb53df7d359b7c37e8541780bc1dfb`
-- GitHub Actions: [run 31406764225](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31406764225)
+- Firmware source head: `8a7c1238012f0860438223fd0e33ef0fe4e7c01d`
+- Pull-request workflow merge SHA: `442eab0fadfc24129261a93e0b22c5375d609972`
+- GitHub Actions: [run 31447147591](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31447147591)
 - Host tests, AddressSanitizer, UndefinedBehaviorSanitizer, normal firmware,
   USB-host firmware, resource gates, merged-image generation, SD-card package,
   checksum manifest, and artifact upload: **passed**
-- Normal image: 181,440 bytes static DRAM; 939,189-byte flash estimate;
+- Normal image: 189,800 bytes static DRAM; 942,365-byte flash estimate;
   standalone merged-image SHA-256
-  `5c591ddcc03fb2e2b2e21f7690b45b5de164a9f9da781c476920572d0d5e5c24`
-- USB-host image: 169,872 bytes static DRAM; 957,609-byte flash estimate;
+  `f2829148202a1f01ffda985100d1c525d8c412576b0388a84487e37d248d3679`
+- USB-host image: 178,216 bytes static DRAM; 960,821-byte flash estimate;
   standalone merged-image SHA-256
-  `e167d2bef0b2a80e87d6aecfa3357721cd14df7200a69b0efef0b1b323519869`
+  `458f237ce037e2d660d660e43f9051d41b2d9ee4621dadb83d93ce12eac56623`
 - Combined dual-role image SHA-256
-  `9f46dfed1ae2b2447cb5526cd0af9791d764cb6a703fa83c7a77f5978f4e58b2`
-- [Artifact ID 9070055426](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31406764225/artifacts/9070055426);
+  `bbfefce8d9a281d6e71bab5e0cabdc17e52c857db4ac8ed57c42643c82013574`
+- ATOM Lite Audio Cap image: 49,008 bytes PlatformIO RAM; 1,132,117-byte
+  PlatformIO flash use; firmware-bin SHA-256
+  `b0ded7a5617f9fc869dcc17b2df4120fd90c2721546fac3d700a243f418cf383`
+- [Artifact ID 9085034679](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31447147591/artifacts/9085034679);
   ZIP SHA-256
-  `50875ea36bfca0288757022f86c9d0c356b2c532979a17578543b5799cba71f1`
+  `ac24ef611469b827c04f214e39bea62c8b21c5089711e005ebc4d17377cc896f`
 - Starter SD ZIP SHA-256
   `708e868ea108fee26cbdcd150740ba96e665e31712bca774d4ededb40d174256`
 
-The downloaded artifact was independently extracted; all fifteen manifest
+The downloaded artifact was independently extracted; all twenty manifest
 payload entries passed `sha256sum -c SHA256SUMS.txt`. The Normal application at
 `0x10000` and USB-host application at `0x300000` were independently compared
-against the combined image and are byte-identical; the complete inter-slot gap
-contains only `0xFF`. The embedded partition-table SHA-256 is
+against the combined image and are byte-identical. The embedded partition-table SHA-256 is
 `b7c4e29a17187775d3a5579a872259c376c47092a8a8d79803aaa4dc37f7e1e2`,
-matching `dual-image-layout.json`. The artifact contains the combined image,
+matching `dual-image-layout.json`. The 2,137,456-byte inter-slot gap contains
+only `0xFF`. The artifact contains the combined image,
 both standalone recovery images, application binaries and ELFs, both resource
-reports, partition/layout files, starter SD ZIP, license, instructions,
-manifest, and build provenance. A later documentation-only head can produce a
-different outer ZIP digest because `BUILD_INFO.txt` embeds its workflow merge
-SHA; the three image hashes above identify this firmware code checkpoint.
+reports, the independently compiled ATOM Lite cap binary/ELF, Audio Cap guide
+and third-party notice/license, partition/layout files, starter SD ZIP,
+instructions, manifest, and build provenance. A later documentation-only head
+can produce a different outer ZIP digest because `BUILD_INFO.txt` embeds its
+workflow merge SHA; the four firmware image hashes above identify this code
+checkpoint.
 
 ## Implemented
 
@@ -182,15 +187,19 @@ Boot telemetry reports internal free heap and largest block after subsystem
 initialization; only hardware can validate task stacks, library allocations,
 and the adaptive legacy sample pool together.
 
-Compared with the verified synthesis checkpoint, the complete dual-role boot
-selector and shutdown-safety layer add 16 bytes of static DRAM to each profile,
-3,872 bytes estimated flash to Normal, and 3,908 bytes estimated flash to USB
-Host. The resulting resource boundary is:
+Compared with the prior verified dual-role checkpoint, the fixed Audio Cap
+transport/rings and Cardputer bridge add 8,360 bytes of static DRAM and 3,176
+bytes estimated flash to Normal, and 8,344 bytes static DRAM and 3,212 bytes
+estimated flash to USB Host. The resulting resource boundary is:
 
 | Profile | Static DRAM | Gate headroom | Flash estimate | Flash headroom |
 | --- | ---: | ---: | ---: | ---: |
-| USB CDC+MIDI device | 181,440 B | 23,360 B | 939,189 B | 2,060,811 B |
-| USB MIDI host | 169,872 B | 34,928 B | 957,609 B | 2,042,391 B |
+| USB CDC+MIDI device | 189,800 B | 15,000 B | 942,365 B | 2,057,635 B |
+| USB MIDI host | 178,216 B | 26,584 B | 960,821 B | 2,039,179 B |
+| ATOM Lite Audio Cap | 49,008 B* | 278,672 B* | 1,132,117 B* | 178,603 B* |
+
+\* The ATOM row uses PlatformIO's original-ESP32 board totals (327,680-byte RAM
+and 1,310,720-byte application partition), not the Cardputer ELF section gate.
 
 Fixed host-layout measurements are 60 bytes per original voice, 76 bytes per
 MGX voice, 124 bytes per FM voice, and 952 bytes for one `SynthTrack` containing
