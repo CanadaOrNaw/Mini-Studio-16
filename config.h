@@ -17,8 +17,8 @@
 #define MAX_POLY         3     // voices per synth track (VOICES param 1..3)
 #define NUM_DRUM_LANES   8
 #define NUM_STEPS        16
-#define NUM_PATTERNS     8
-#define SONG_LENGTH      64
+#define NUM_PATTERNS     16
+#define SONG_LENGTH      128
 #define SONG_EMPTY       0xFF
 
 // ---------- Display ----------
@@ -35,6 +35,8 @@
 #define DIR_SAMPLES      "/groovebox/samples"
 #define DIR_WAVETABLES   "/groovebox/wavetables"
 #define DIR_PROJECTS     "/groovebox/projects"
+#define DIR_RECORDINGS   "/groovebox/recordings"
+#define DIR_LOOPS        "/groovebox/loops"
 
 // ---------- Sample memory ----------
 #define SAMPLE_POOL_BYTES (192 * 1024)   // ~4.3 s of mono 16-bit @ 22.05 kHz
@@ -57,7 +59,18 @@ enum DrumEngine : uint8_t { ENG_808 = 0, ENG_909, ENG_SMPL, ENG_COUNT };
 enum DrumType : uint8_t { DT_KICK = 0, DT_SNARE, DT_HAT_C, DT_HAT_O_OR_CLAP, DT_COUNT };
 // 808 set: KICK SNARE CHAT CLAP  |  909 set: KICK SNARE CHAT OHAT
 
-enum Page : uint8_t { PAGE_PATTERN = 0, PAGE_SOUND, PAGE_SAMPLE, PAGE_SONG, PAGE_HELP, PAGE_COUNT };
+enum Page : uint8_t {
+    PAGE_PATTERN = 0,
+    PAGE_SOUND,
+    PAGE_SAMPLE,
+    PAGE_LOOPS,
+    PAGE_EVENT,
+    PAGE_MOTION,
+    PAGE_SONG,
+    PAGE_DIAG,
+    PAGE_HELP,
+    PAGE_COUNT
+};
 
 // note values 1..12 = C..B, 0 = empty
 #define NOTE_EMPTY 0

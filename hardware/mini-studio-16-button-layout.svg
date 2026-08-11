@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="610" viewBox="0 0 1280 610" role="img" aria-labelledby="title desc">
+<title id="title">Mini Studio 16 button layout</title>
+<desc id="desc">Four rows of fourteen Cardputer-ADV keys showing tap, hold and musical actions.</desc>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#09121a"/><stop offset="1" stop-color="#101d27"/></linearGradient></defs>
+<style>
+text{font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+.title{fill:#f4f7f8;font-size:35px;font-weight:800;letter-spacing:1px}
+.sub{fill:#91a7b3;font-size:15px;font-weight:500}
+.key{fill:#17252e;stroke:#3b5360;stroke-width:1.5}
+.key.record{stroke:#ff5d63;stroke-width:2.5}
+.face{fill:#f4f7f8;font-size:16px;font-weight:800}
+.tap{fill:#dfe8eb;font-size:10px;font-weight:700}
+.hold{fill:#ffb14e;font-size:9px;font-weight:700}
+.music{fill:#55e5d2;font-size:10px;font-weight:800}
+.legend{fill:#9db0ba;font-size:13px;font-weight:600}
+</style>
+<rect width="1280" height="610" rx="24" fill="url(#bg)"/>
+<text class="title" x="34" y="48">MINI STUDIO 16</text>
+<text class="sub" x="34" y="76">CARDPUTER-ADV • TAP / HOLD / PERFORMANCE REFERENCE • PRE-HARDWARE ALPHA</text>
+<g id="key-grave" data-key="grave"><rect class="key" x="35.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="74.5" y="131.0" text-anchor="middle">`</text>
+<text class="tap" x="74.5" y="158.0" text-anchor="middle">SYNTH 1</text>
+<text class="hold" x="74.5" y="173.0" text-anchor="middle">MUTE 1</text>
+</g>
+<g id="key-1" data-key="1"><rect class="key" x="122.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="161.5" y="131.0" text-anchor="middle">1</text>
+<text class="tap" x="161.5" y="158.0" text-anchor="middle">SYNTH 2</text>
+<text class="hold" x="161.5" y="173.0" text-anchor="middle">MUTE 2</text>
+</g>
+<g id="key-2" data-key="2"><rect class="key" x="209.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="248.5" y="131.0" text-anchor="middle">2</text>
+<text class="tap" x="248.5" y="158.0" text-anchor="middle">SYNTH 3</text>
+<text class="hold" x="248.5" y="173.0" text-anchor="middle">MUTE 3</text>
+</g>
+<g id="key-3" data-key="3"><rect class="key" x="296.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="335.5" y="131.0" text-anchor="middle">3</text>
+<text class="tap" x="335.5" y="158.0" text-anchor="middle">DRUMS</text>
+<text class="hold" x="335.5" y="173.0" text-anchor="middle">MUTE DR</text>
+</g>
+<g id="key-4" data-key="4"><rect class="key" x="383.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="422.5" y="131.0" text-anchor="middle">4</text>
+<text class="tap" x="422.5" y="158.0" text-anchor="middle">PAT 1</text>
+<text class="hold" x="422.5" y="173.0" text-anchor="middle">CLONE 1</text>
+</g>
+<g id="key-5" data-key="5"><rect class="key" x="470.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="509.5" y="131.0" text-anchor="middle">5</text>
+<text class="tap" x="509.5" y="158.0" text-anchor="middle">PAT 2</text>
+<text class="hold" x="509.5" y="173.0" text-anchor="middle">CLONE 2</text>
+</g>
+<g id="key-6" data-key="6"><rect class="key" x="557.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="596.5" y="131.0" text-anchor="middle">6</text>
+<text class="tap" x="596.5" y="158.0" text-anchor="middle">PAT 3</text>
+<text class="hold" x="596.5" y="173.0" text-anchor="middle">CLONE 3</text>
+</g>
+<g id="key-7" data-key="7"><rect class="key" x="644.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="683.5" y="131.0" text-anchor="middle">7</text>
+<text class="tap" x="683.5" y="158.0" text-anchor="middle">PAT 4</text>
+<text class="hold" x="683.5" y="173.0" text-anchor="middle">CLONE 4</text>
+</g>
+<g id="key-8" data-key="8"><rect class="key" x="731.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="770.5" y="131.0" text-anchor="middle">8</text>
+<text class="tap" x="770.5" y="158.0" text-anchor="middle">PAT 5</text>
+<text class="hold" x="770.5" y="173.0" text-anchor="middle">CLONE 5</text>
+</g>
+<g id="key-9" data-key="9"><rect class="key" x="818.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="857.5" y="131.0" text-anchor="middle">9</text>
+<text class="tap" x="857.5" y="158.0" text-anchor="middle">PAT 6</text>
+<text class="hold" x="857.5" y="173.0" text-anchor="middle">CLONE 6</text>
+</g>
+<g id="key-0" data-key="0"><rect class="key" x="905.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="944.5" y="131.0" text-anchor="middle">0</text>
+<text class="tap" x="944.5" y="158.0" text-anchor="middle">PAT 7</text>
+<text class="hold" x="944.5" y="173.0" text-anchor="middle">CLONE 7</text>
+</g>
+<g id="key-minus" data-key="minus"><rect class="key" x="992.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="1031.5" y="131.0" text-anchor="middle">-</text>
+<text class="tap" x="1031.5" y="158.0" text-anchor="middle">PAT 8</text>
+<text class="hold" x="1031.5" y="173.0" text-anchor="middle">CLONE 8</text>
+</g>
+<g id="key-equals" data-key="equals"><rect class="key" x="1079.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="1118.5" y="131.0" text-anchor="middle">=</text>
+<text class="tap" x="1118.5" y="158.0" text-anchor="middle">LOAD INFO</text>
+<text class="hold" x="1118.5" y="173.0" text-anchor="middle">LOAD</text>
+</g>
+<g id="key-delete" data-key="delete"><rect class="key" x="1166.5" y="108.0" width="78" height="91" rx="8"/>
+<text class="face" x="1205.5" y="131.0" text-anchor="middle">DEL</text>
+<text class="tap" x="1205.5" y="158.0" text-anchor="middle">SAVE INFO</text>
+<text class="hold" x="1205.5" y="173.0" text-anchor="middle">SAVE</text>
+</g>
+<g id="key-tab" data-key="tab"><rect class="key" x="35.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="74.5" y="231.0" text-anchor="middle">TAB</text>
+<text class="tap" x="74.5" y="258.0" text-anchor="middle">BANK / MODE</text>
+</g>
+<g id="key-q" data-key="q"><rect class="key" x="122.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="161.5" y="231.0" text-anchor="middle">Q</text>
+<text class="music" x="161.5" y="258.0" text-anchor="middle">C♯</text>
+</g>
+<g id="key-w" data-key="w"><rect class="key" x="209.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="248.5" y="231.0" text-anchor="middle">W</text>
+<text class="music" x="248.5" y="258.0" text-anchor="middle">D♯</text>
+</g>
+<g id="key-e" data-key="e"><rect class="key" x="296.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="335.5" y="231.0" text-anchor="middle">E</text>
+</g>
+<g id="key-r" data-key="r"><rect class="key" x="383.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="422.5" y="231.0" text-anchor="middle">R</text>
+<text class="music" x="422.5" y="258.0" text-anchor="middle">F♯</text>
+</g>
+<g id="key-t" data-key="t"><rect class="key" x="470.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="509.5" y="231.0" text-anchor="middle">T</text>
+<text class="music" x="509.5" y="258.0" text-anchor="middle">G♯</text>
+</g>
+<g id="key-y" data-key="y"><rect class="key" x="557.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="596.5" y="231.0" text-anchor="middle">Y</text>
+<text class="music" x="596.5" y="258.0" text-anchor="middle">A♯</text>
+</g>
+<g id="key-u" data-key="u"><rect class="key" x="644.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="683.5" y="231.0" text-anchor="middle">U</text>
+</g>
+<g id="key-i" data-key="i"><rect class="key" x="731.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="770.5" y="231.0" text-anchor="middle">I</text>
+<text class="music" x="770.5" y="258.0" text-anchor="middle">C♯+</text>
+</g>
+<g id="key-o" data-key="o"><rect class="key" x="818.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="857.5" y="231.0" text-anchor="middle">O</text>
+<text class="music" x="857.5" y="258.0" text-anchor="middle">D♯+</text>
+</g>
+<g id="key-p" data-key="p"><rect class="key" x="905.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="944.5" y="231.0" text-anchor="middle">P</text>
+</g>
+<g id="key-left-bracket" data-key="left-bracket"><rect class="key" x="992.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="1031.5" y="231.0" text-anchor="middle">[</text>
+<text class="music" x="1031.5" y="258.0" text-anchor="middle">F♯+</text>
+</g>
+<g id="key-right-bracket" data-key="right-bracket"><rect class="key" x="1079.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="1118.5" y="231.0" text-anchor="middle">]</text>
+<text class="music" x="1118.5" y="258.0" text-anchor="middle">G♯+</text>
+</g>
+<g id="key-backslash" data-key="backslash"><rect class="key" x="1166.5" y="208.0" width="78" height="91" rx="8"/>
+<text class="face" x="1205.5" y="231.0" text-anchor="middle">\</text>
+<text class="music" x="1205.5" y="258.0" text-anchor="middle">A♯+</text>
+</g>
+<g id="key-fn" data-key="fn"><rect class="key" x="35.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="74.5" y="331.0" text-anchor="middle">FN</text>
+<text class="music" x="74.5" y="358.0" text-anchor="middle">C / PAD 1</text>
+</g>
+<g id="key-shift" data-key="shift"><rect class="key" x="122.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="161.5" y="331.0" text-anchor="middle">SHIFT</text>
+<text class="music" x="161.5" y="358.0" text-anchor="middle">D / PAD 2</text>
+</g>
+<g id="key-a" data-key="a"><rect class="key" x="209.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="248.5" y="331.0" text-anchor="middle">A</text>
+<text class="music" x="248.5" y="358.0" text-anchor="middle">E / PAD 3</text>
+</g>
+<g id="key-s" data-key="s"><rect class="key" x="296.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="335.5" y="331.0" text-anchor="middle">S</text>
+<text class="music" x="335.5" y="358.0" text-anchor="middle">F / PAD 4</text>
+</g>
+<g id="key-d" data-key="d"><rect class="key" x="383.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="422.5" y="331.0" text-anchor="middle">D</text>
+<text class="music" x="422.5" y="358.0" text-anchor="middle">G / PAD 5</text>
+</g>
+<g id="key-f" data-key="f"><rect class="key" x="470.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="509.5" y="331.0" text-anchor="middle">F</text>
+<text class="music" x="509.5" y="358.0" text-anchor="middle">A / PAD 6</text>
+</g>
+<g id="key-g" data-key="g"><rect class="key" x="557.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="596.5" y="331.0" text-anchor="middle">G</text>
+<text class="music" x="596.5" y="358.0" text-anchor="middle">B / PAD 7</text>
+</g>
+<g id="key-h" data-key="h"><rect class="key" x="644.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="683.5" y="331.0" text-anchor="middle">H</text>
+<text class="music" x="683.5" y="358.0" text-anchor="middle">C+ / PAD 8</text>
+</g>
+<g id="key-j" data-key="j"><rect class="key" x="731.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="770.5" y="331.0" text-anchor="middle">J</text>
+<text class="music" x="770.5" y="358.0" text-anchor="middle">D+</text>
+</g>
+<g id="key-k" data-key="k"><rect class="key" x="818.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="857.5" y="331.0" text-anchor="middle">K</text>
+<text class="music" x="857.5" y="358.0" text-anchor="middle">E+</text>
+</g>
+<g id="key-l" data-key="l"><rect class="key" x="905.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="944.5" y="331.0" text-anchor="middle">L</text>
+<text class="music" x="944.5" y="358.0" text-anchor="middle">F+</text>
+</g>
+<g id="key-semicolon" data-key="semicolon"><rect class="key" x="992.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="1031.5" y="331.0" text-anchor="middle">;</text>
+<text class="music" x="1031.5" y="358.0" text-anchor="middle">G+</text>
+</g>
+<g id="key-quote" data-key="quote"><rect class="key" x="1079.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="1118.5" y="331.0" text-anchor="middle">'</text>
+<text class="music" x="1118.5" y="358.0" text-anchor="middle">A+</text>
+</g>
+<g id="key-enter" data-key="enter"><rect class="key" x="1166.5" y="308.0" width="78" height="91" rx="8"/>
+<text class="face" x="1205.5" y="331.0" text-anchor="middle">ENTER</text>
+<text class="music" x="1205.5" y="358.0" text-anchor="middle">B+</text>
+</g>
+<g id="key-control" data-key="control"><rect class="key" x="35.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="74.5" y="431.0" text-anchor="middle">CTRL</text>
+<text class="tap" x="74.5" y="458.0" text-anchor="middle">NEXT PAGE</text>
+<text class="hold" x="74.5" y="473.0" text-anchor="middle">PATTERN</text>
+</g>
+<g id="key-option" data-key="option"><rect class="key" x="122.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="161.5" y="431.0" text-anchor="middle">OPT</text>
+<text class="tap" x="161.5" y="458.0" text-anchor="middle">BPM −</text>
+<text class="hold" x="161.5" y="473.0" text-anchor="middle">OCT / PRJ −</text>
+</g>
+<g id="key-alt" data-key="alt"><rect class="key" x="209.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="248.5" y="431.0" text-anchor="middle">ALT</text>
+<text class="tap" x="248.5" y="458.0" text-anchor="middle">BPM +</text>
+<text class="hold" x="248.5" y="473.0" text-anchor="middle">OCT / PRJ +</text>
+</g>
+<g id="key-z" data-key="z"><rect class="key" x="296.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="335.5" y="431.0" text-anchor="middle">Z</text>
+<text class="tap" x="335.5" y="458.0" text-anchor="middle">CLEAR</text>
+<text class="hold" x="335.5" y="473.0" text-anchor="middle">CLEAR PAT</text>
+</g>
+<g id="key-x" data-key="x"><rect class="key" x="383.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="422.5" y="431.0" text-anchor="middle">X</text>
+<text class="tap" x="422.5" y="458.0" text-anchor="middle">←</text>
+</g>
+<g id="key-c" data-key="c"><rect class="key" x="470.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="509.5" y="431.0" text-anchor="middle">C</text>
+<text class="tap" x="509.5" y="458.0" text-anchor="middle">↓</text>
+</g>
+<g id="key-v" data-key="v"><rect class="key" x="557.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="596.5" y="431.0" text-anchor="middle">V</text>
+<text class="tap" x="596.5" y="458.0" text-anchor="middle">↑</text>
+</g>
+<g id="key-b" data-key="b"><rect class="key" x="644.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="683.5" y="431.0" text-anchor="middle">B</text>
+<text class="tap" x="683.5" y="458.0" text-anchor="middle">→</text>
+</g>
+<g id="key-n" data-key="n"><rect class="key" x="731.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="770.5" y="431.0" text-anchor="middle">N</text>
+<text class="tap" x="770.5" y="458.0" text-anchor="middle">SONG / ACTION</text>
+<text class="hold" x="770.5" y="473.0" text-anchor="middle">BUS / STEM</text>
+</g>
+<g id="key-m" data-key="m"><rect class="key" x="818.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="857.5" y="431.0" text-anchor="middle">M</text>
+<text class="tap" x="857.5" y="458.0" text-anchor="middle">ACC / FINE</text>
+</g>
+<g id="key-comma" data-key="comma"><rect class="key" x="905.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="944.5" y="431.0" text-anchor="middle">,</text>
+<text class="tap" x="944.5" y="458.0" text-anchor="middle">SLIDE / CLEAR</text>
+</g>
+<g id="key-period" data-key="period"><rect class="key record" x="992.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="1031.5" y="431.0" text-anchor="middle">.</text>
+<text class="tap" x="1031.5" y="458.0" text-anchor="middle">AUX / PREVIEW</text>
+<text class="hold" x="1031.5" y="473.0" text-anchor="middle">MIC / MASTER</text>
+</g>
+<g id="key-slash" data-key="slash"><rect class="key record" x="1079.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="1118.5" y="431.0" text-anchor="middle">/</text>
+<text class="tap" x="1118.5" y="458.0" text-anchor="middle">REC / ACTION</text>
+</g>
+<g id="key-space" data-key="space"><rect class="key" x="1166.5" y="408.0" width="78" height="91" rx="8"/>
+<text class="face" x="1205.5" y="431.0" text-anchor="middle">SPACE</text>
+<text class="tap" x="1205.5" y="458.0" text-anchor="middle">PLAY / STOP</text>
+<text class="hold" x="1205.5" y="473.0" text-anchor="middle">FROM TOP</text>
+</g>
+<circle cx="36" cy="548" r="6" fill="#dfe8eb"/><text class="legend" x="51" y="553">TAP</text>
+<circle cx="124" cy="548" r="6" fill="#ffb14e"/><text class="legend" x="139" y="553">HOLD 450 ms</text>
+<circle cx="270" cy="548" r="6" fill="#55e5d2"/><text class="legend" x="285" y="553">NOTE / PAD</text>
+<circle cx="407" cy="548" r="6" fill="none" stroke="#ff5d63" stroke-width="3"/><text class="legend" x="422" y="553">RECORD / CAPTURE</text>
+<text class="sub" x="1244" y="552" text-anchor="end">hardware/button-layout.json • schema 1</text>
+</svg>

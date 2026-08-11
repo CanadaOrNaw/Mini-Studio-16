@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+build_dir="$test_dir/build"
+mkdir -p "$build_dir"
+# Some minimal CI/sandbox images do not provide /tmp. Give the compiler a
+# writable temporary directory so an interrupted syntax-only pass cannot leave
+# cc*.o/cc*.s files in the repository root.
+compiler_tmp="$build_dir/compiler-tmp"
+mkdir -p "$compiler_tmp"
+export TMPDIR="$compiler_tmp"
+
+synth_sources=(
+  "$test_dir/../synth_dsp.cpp"
+  "$test_dir/../synth_engine.cpp"
+  "$test_dir/../synth_parameters.cpp"
+  "$test_dir/synth_test_support.cpp"
+)
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror -pthread \
+  "$test_dir/test_pcm_ring.cpp" -o "$build_dir/test_pcm_ring"
+
+"$build_dir/test_pcm_ring"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_capture_gap.cpp" -o "$build_dir/test_capture_gap"
+
+"$build_dir/test_capture_gap"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_control_protocol.cpp" "$test_dir/../control_protocol.cpp" \
+  "${synth_sources[@]}" \
+  -o "$build_dir/test_control_protocol"
+
+"$build_dir/test_control_protocol"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_control_protocol_fuzz.cpp" "$test_dir/../control_protocol.cpp" \
+  "${synth_sources[@]}" \
+  -o "$build_dir/test_control_protocol_fuzz"
+
+"$build_dir/test_control_protocol_fuzz"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_serial_line_buffer.cpp" -o "$build_dir/test_serial_line_buffer"
+
+"$build_dir/test_serial_line_buffer"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_wav_file.cpp" "$test_dir/../wav_file.cpp" \
+  -o "$build_dir/test_wav_file"
+
+"$build_dir/test_wav_file"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_master_recorder_session.cpp" \
+  -o "$build_dir/test_master_recorder_session"
+
+"$build_dir/test_master_recorder_session"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_midi.cpp" "$test_dir/../midi_parser.cpp" \
+  "$test_dir/../midi_transport.cpp" -o "$build_dir/test_midi"
+
+"$build_dir/test_midi"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_song_chain.cpp" -o "$build_dir/test_song_chain"
+
+"$build_dir/test_song_chain"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_loop_timeline.cpp" -o "$build_dir/test_loop_timeline"
+
+"$build_dir/test_loop_timeline"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror -pthread \
+  "$test_dir/test_loop_stream_core.cpp" -o "$build_dir/test_loop_stream_core"
+
+"$build_dir/test_loop_stream_core"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_stem_file.cpp" "$test_dir/../stem_file.cpp" \
+  -o "$build_dir/test_stem_file"
+
+"$build_dir/test_stem_file"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_sampler_slots.cpp" "$test_dir/../sampler_slots.cpp" \
+  -o "$build_dir/test_sampler_slots"
+
+"$build_dir/test_sampler_slots"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_sample_reference.cpp" -o "$build_dir/test_sample_reference"
+
+"$build_dir/test_sample_reference"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror -pthread \
+  "$test_dir/test_sample_stream_core.cpp" -o "$build_dir/test_sample_stream_core"
+
+"$build_dir/test_sample_stream_core"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_event_looper.cpp" -o "$build_dir/test_event_looper"
+
+"$build_dir/test_event_looper"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_motion_core.cpp" -o "$build_dir/test_motion_core"
+
+"$build_dir/test_motion_core"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_ble_midi_codec.cpp" -o "$build_dir/test_ble_midi_codec"
+
+"$build_dir/test_ble_midi_codec"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_usb_midi_host_descriptor.cpp" \
+  "$test_dir/../usb_midi_host_descriptor.cpp" -o "$build_dir/test_usb_midi_host_descriptor"
+
+"$build_dir/test_usb_midi_host_descriptor"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_boot_selector_core.cpp" "$test_dir/../boot_selector_core.cpp" \
+  -o "$build_dir/test_boot_selector_core"
+
+"$build_dir/test_boot_selector_core"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_synth_engine.cpp" "${synth_sources[@]}" \
+  -o "$build_dir/test_synth_engine"
+
+"$build_dir/test_synth_engine"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_synth_offline_render.cpp" "${synth_sources[@]}" \
+  -o "$build_dir/test_synth_offline_render"
+
+"$build_dir/test_synth_offline_render"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_synth_project.cpp" "$test_dir/../synth_project.cpp" \
+  "${synth_sources[@]}" -o "$build_dir/test_synth_project"
+
+"$build_dir/test_synth_project"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_synth_ui_model.cpp" "$test_dir/../synth_ui_model.cpp" \
+  -o "$build_dir/test_synth_ui_model"
+
+"$build_dir/test_synth_ui_model"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_audio_cap_protocol.cpp" "$test_dir/../audio_cap_protocol.cpp" \
+  -o "$build_dir/test_audio_cap_protocol"
+
+"$build_dir/test_audio_cap_protocol"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_audio_cap_bridge_core.cpp" \
+  "$test_dir/../audio_cap_bridge_core.cpp" "$test_dir/../audio_cap_protocol.cpp" \
+  -o "$build_dir/test_audio_cap_bridge_core"
+
+"$build_dir/test_audio_cap_bridge_core"
+
+g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
+  -I"$test_dir/stubs" -I"$test_dir/.." \
+  "$test_dir/../sd_diagnostics.cpp"
+
+echo "sd_diagnostics: host syntax check passed"
+
+g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
+  -I"$test_dir/stubs" -I"$test_dir/.." \
+  "$test_dir/../storage.cpp"
+
+echo "storage: GBX v1/v2/v3/v4/v5/v6/v7/v8 layout and syntax checks passed"
+
+g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
+  -I"$test_dir/stubs" -I"$test_dir/.." \
+  "$test_dir/../input.cpp" "$test_dir/../ui.cpp"
+
+echo "input/ui: host syntax checks passed"
+
+g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
+  -I"$test_dir/stubs" -I"$test_dir/.." \
+  "$test_dir/../sequencer.cpp" "$test_dir/../sampler.cpp" \
+  "$test_dir/../mic_sampler.cpp" "$test_dir/../audio_engine.cpp" \
+  "$test_dir/../wavetable.cpp" "$test_dir/../master_recorder.cpp" \
+  "$test_dir/../serial_control.cpp" "$test_dir/../control_protocol.cpp" \
+  "$test_dir/../wav_file.cpp" "$test_dir/../midi_parser.cpp" \
+  "$test_dir/../midi_transport.cpp" "$test_dir/../midi_input.cpp" \
+  "$test_dir/../stem_file.cpp" "$test_dir/../stem_recorder.cpp" \
+  "$test_dir/../sampler_slots.cpp" \
+  "$test_dir/../streaming_sampler.cpp" \
+  "$test_dir/../event_looper.cpp" \
+  "$test_dir/../motion.cpp" \
+  "$test_dir/../ble_midi.cpp" \
+  "$test_dir/../usb_midi.cpp" "$test_dir/../midi_output.cpp" \
+  "$test_dir/../loop_engine.cpp" "$test_dir/../sd_io_arbiter.cpp" \
+  "$test_dir/../synth_dsp.cpp" "$test_dir/../synth_engine.cpp" \
+  "$test_dir/../synth_parameters.cpp" "$test_dir/../synth_project.cpp" \
+  "$test_dir/../synth_ui_model.cpp" \
+  "$test_dir/../boot_selector_core.cpp" "$test_dir/../boot_selector.cpp" \
+  "$test_dir/../audio_cap_protocol.cpp" "$test_dir/../audio_cap_bridge_core.cpp" \
+  "$test_dir/../audio_cap.cpp"
+
+echo "audio/sequencer/sampler: host syntax checks passed"
+
+g++ -pipe -x c++ -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
+  -I"$test_dir/stubs" -I"$test_dir/.." \
+  "$test_dir/../Microgroove.ino"
+
+echo "sketch integration: host syntax check passed"
+
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_merge_firmware.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_merge_dual_firmware.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_package_sd.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_ministudio_cli.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_split_stems.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_protocol_soak.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_check_firmware_size.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_factory_project.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_hardware_smoke.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_hardware_assets.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_audio_cap_requirements.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_site_build.py"
+PYTHONPATH="$test_dir/.." python3 -m unittest "$test_dir/test_live_site_check.py"

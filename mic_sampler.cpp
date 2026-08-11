@@ -1,145 +1,185 @@
 // ============================================================
-// Microgroove [BRANCH: live-sampling] - mic_sampler.cpp
+// Mini Studio 16 - microphone sampling and inherited short resampling
 // ============================================================
 #include "mic_sampler.h"
+
+#include "loop_engine.h"
+#include "master_recorder.h"
 #include "sampler.h"
+#include "sd_diagnostics.h"
 #include "sequencer.h"
+#include "stem_recorder.h"
+#include "streaming_sampler.h"
 #include "ui.h"
+
 #include <M5Cardputer.h>
-#include <SD.h>
-#include <esp_heap_caps.h>
 #include <string.h>
 
-int16_t*          g_scratch    = nullptr;
-volatile uint32_t g_rsmpRemain = 0;
-volatile uint32_t g_scratchWr  = 0;
+namespace {
+constexpr uint8_t kNoLane = 0xFF;
 
-static bool     s_recActive   = false;
-static uint8_t  s_recLane     = 0;
-static bool     s_rsmpPending = false;
-static uint32_t s_rsmpFrames  = 0;
-static uint8_t  s_micCount    = 0;      // MIC01.. name counter
-static uint8_t  s_rsmpCount   = 0;
+bool s_recActive = false;
+bool s_assignRecordedLane = false;
+uint8_t s_recLane = kNoLane;
+int8_t s_recReference = -1;
+int16_t s_chunk[2][MIC_CAPTURE_CHUNK];
+int s_curChunk = 0;
+float s_level = 0.0f;
 
-// ping-pong chunks queued into M5Unified's mic driver
-#define CHUNK 256
-static int16_t  s_chunk[2][CHUNK];
-static int      s_curChunk = 0;
-static float    s_level    = 0.0f;
+bool s_lanePublishPending = false;
+uint8_t s_pendingLane = kNoLane;
+int8_t s_pendingLaneReference = -1;
+
+bool s_resampleActive = false;
+bool s_resamplePending = false;
+int8_t s_resampleReference = -1;
+
+bool recorderUnavailable() {
+    return masterRecorderIsBusy() || stemRecorderIsBusy() ||
+           sdDiagnosticsIsRunning() || loopEngineIsRecording();
+}
+
+void assignStreamToLane(uint8_t lane, int8_t reference) {
+    if (lane >= NUM_DRUM_LANES || !samplerReferenceIsStreamed(reference)) return;
+    DrumLane& drum = g_drumLanes[lane];
+    drum.engine = ENG_SMPL;
+    drum.sampleSlot = reference;
+    drum.smp.init();
+}
+
+bool beginMic(uint8_t slot, SamplerSlotMode mode, uint32_t maximumFrames,
+              bool assignLane, uint8_t lane, int8_t reference) {
+    if (s_recActive || recorderUnavailable() ||
+        !streamingSamplerBeginRecord(slot, mode, MIC_RATE,
+                                     STREAM_SAMPLE_INPUT_MIC, maximumFrames,
+                                     assignLane))
+        return false;
+    sequencerStop();
+    M5Cardputer.Speaker.end();
+    M5Cardputer.Mic.begin();
+    s_recActive = true;
+    s_assignRecordedLane = assignLane;
+    s_recLane = lane;
+    s_recReference = reference;
+    s_curChunk = 0;
+    s_level = 0.0f;
+    M5Cardputer.Mic.record(s_chunk[0], MIC_CAPTURE_CHUNK, MIC_RATE);
+    M5Cardputer.Mic.record(s_chunk[1], MIC_CAPTURE_CHUNK, MIC_RATE);
+    uiStatus(assignLane ? "SAMPLING..." : "STREAM MIC...");
+    return true;
+}
+
+void resolvePendingLane() {
+    if (!s_lanePublishPending) return;
+    const StreamingSamplerRecordState state = streamingSamplerSnapshot().recordState;
+    if (state == STREAM_SAMPLE_REC_COMPLETE) {
+        assignStreamToLane(s_pendingLane, s_pendingLaneReference);
+        s_lanePublishPending = false;
+        s_pendingLane = kNoLane;
+        s_pendingLaneReference = -1;
+        uiStatus("SAMPLED!");
+        g_needRedraw = true;
+    } else if (state == STREAM_SAMPLE_REC_ERROR) {
+        samplerReleaseStreamReference(s_pendingLaneReference);
+        s_lanePublishPending = false;
+        s_pendingLane = kNoLane;
+        s_pendingLaneReference = -1;
+        uiStatus("SAMPLE FAILED");
+        g_needRedraw = true;
+    }
+}
+
+void resolveShortResample() {
+    if (!s_resampleActive) return;
+    const StreamingSamplerRecordState state = streamingSamplerSnapshot().recordState;
+    if (state == STREAM_SAMPLE_REC_COMPLETE) {
+        s_resampleActive = false;
+        s_resamplePending = true;
+        uiStatus("RSMP: TAP A PAD");
+        g_needRedraw = true;
+    } else if (state == STREAM_SAMPLE_REC_ERROR) {
+        samplerReleaseStreamReference(s_resampleReference);
+        s_resampleReference = -1;
+        s_resampleActive = false;
+        uiStatus("RESAMPLE FAILED");
+        g_needRedraw = true;
+    }
+}
+}  // namespace
 
 bool micSamplerInit() {
-    g_scratch = (int16_t*)heap_caps_malloc(SCRATCH_FRAMES * sizeof(int16_t),
-                                           MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-    return g_scratch != nullptr;
-}
-
-// ---------- auto trim ----------
-static void trimScratch(uint32_t total, uint32_t rate,
-                        uint32_t& start, uint32_t& len) {
-    uint32_t pre = (rate * TRIM_PREROLL_MS) / 1000;
-    uint32_t a = 0, b = total;
-    while (a < total && (uint16_t)abs(g_scratch[a]) < TRIM_THRESHOLD) a++;
-    while (b > a     && (uint16_t)abs(g_scratch[b - 1]) < TRIM_THRESHOLD) b--;
-    if (a >= b) { start = 0; len = 0; return; }          // silence
-    start = (a > pre) ? a - pre : 0;
-    len   = b - start;
-}
-
-// ---------- WAV write + pool commit ----------
-static bool writeWav(const char* name, uint32_t start, uint32_t frames, uint32_t rate) {
-    char path[80];
-    snprintf(path, sizeof(path), "%s/%s", DIR_SAMPLES, name);
-    SD.remove(path);
-    File f = SD.open(path, FILE_WRITE);
-    if (!f) return false;
-    uint32_t dataBytes = frames * 2;
-    uint8_t h[44] = {'R','I','F','F',0,0,0,0,'W','A','V','E','f','m','t',' ',
-                     16,0,0,0, 1,0, 1,0, 0,0,0,0, 0,0,0,0, 2,0, 16,0,
-                     'd','a','t','a',0,0,0,0};
-    uint32_t riff = 36 + dataBytes, brate = rate * 2;
-    memcpy(h + 4,  &riff,  4);
-    memcpy(h + 24, &rate,  4);
-    memcpy(h + 28, &brate, 4);
-    memcpy(h + 40, &dataBytes, 4);
-    bool ok = f.write(h, 44) == 44 &&
-              f.write((uint8_t*)(g_scratch + start), dataBytes) == dataBytes;
-    f.close();
-    return ok;
-}
-
-// commit scratch[start..start+frames] to a lane; SD-first, RAM fallback
-static bool commitToLane(uint8_t lane, const char* base, uint8_t& counter,
-                         uint32_t start, uint32_t frames, uint32_t rate) {
-    if (frames < 64) { uiStatus("TOO QUIET"); return false; }
-    char name[SAMPLE_NAME_LEN];
-    snprintf(name, sizeof(name), "%s%02u.wav", base, (unsigned)(++counter));
-
-    int slot = -1;
-    if (writeWav(name, start, frames, rate)) {
-        slot = samplerLoad(name);                       // reuses pool logic
-    }
-    if (slot < 0) {                                     // RAM-only fallback
-        if (g_numSamples >= MAX_SAMPLES ||
-            g_poolUsed + frames > g_poolCapacity) { uiStatus("POOL FULL"); return false; }
-        memcpy(g_samplePool + g_poolUsed, g_scratch + start, frames * 2);
-        SampleInfo& s = g_samples[g_numSamples];
-        strncpy(s.name, name, SAMPLE_NAME_LEN - 1);
-        s.name[SAMPLE_NAME_LEN - 1] = 0;
-        s.offset = g_poolUsed; s.length = frames; s.rate = rate; s.used = true;
-        g_poolUsed += frames;
-        slot = g_numSamples++;
-    }
-    DrumLane& d = g_drumLanes[lane];
-    d.engine = ENG_SMPL; d.sampleSlot = (int8_t)slot; d.smp.init();
-    d.smp.trigger(slot, 1.0f, d.volume);                // instant audition
+    // Legacy mic/pad sampling now uses the same bounded SD recorder as the
+    // 16-slot sampler.  This preserves the original workflow without keeping
+    // an 84 KiB whole-take scratch allocation alive on a no-PSRAM board.
     return true;
 }
 
-// ---------- mic recording ----------
 bool micRecStart(uint8_t lane) {
-    if (s_recActive || !g_scratch) return false;
-    sequencerStop();
-    M5Cardputer.Speaker.end();          // ES8311: avoid duplex contention (verify on hw)
-    M5Cardputer.Mic.begin();
-    s_recLane = lane; s_recActive = true;
-    g_scratchWr = 0; s_curChunk = 0; s_level = 0;
-    M5Cardputer.Mic.record(s_chunk[0], CHUNK, MIC_RATE);
-    M5Cardputer.Mic.record(s_chunk[1], CHUNK, MIC_RATE);
-    uiStatus("SAMPLING...");
-    return true;
+    if (lane >= NUM_DRUM_LANES || s_lanePublishPending) return false;
+    const int8_t reference = samplerReserveStreamReference();
+    uint8_t slot = 0;
+    if (!samplerDecodeStreamReference(reference, slot)) return false;
+    if (beginMic(slot, SAMPLER_SLOT_MELODIC, SCRATCH_FRAMES,
+                 true, lane, reference))
+        return true;
+    samplerReleaseStreamReference(reference);
+    return false;
+}
+
+bool micStreamRecStart(uint8_t slot, SamplerSlotMode mode) {
+    if (slot >= SAMPLER_SLOT_COUNT || s_lanePublishPending ||
+        s_resampleActive || s_resamplePending)
+        return false;
+    return beginMic(slot, mode, 0, false, kNoLane,
+                    samplerMakeStreamReference(slot));
 }
 
 void micSamplerUpdate() {
     if (s_recActive) {
-        // a chunk finished when the driver moved to the queued one
+        uint8_t stalledRequeues = 0;
         while (!M5Cardputer.Mic.isRecording() ||
-               M5Cardputer.Mic.isRecording() == 1 /*one buf left*/) {
+               M5Cardputer.Mic.isRecording() == 1) {
             int16_t* done = s_chunk[s_curChunk];
-            uint32_t room = SCRATCH_FRAMES - g_scratchWr;
-            uint32_t n = (room < CHUNK) ? room : CHUNK;
-            if (n) {
-                memcpy(g_scratch + g_scratchWr, done, n * 2);
-                g_scratchWr += n;
-                int16_t pk = 0;
-                for (uint32_t i = 0; i < n; i++) { int16_t a = abs(done[i]); if (a > pk) pk = a; }
-                s_level = s_level * 0.6f + (pk / 32768.0f) * 0.4f;
+            const size_t pushed = streamingSamplerRecordPush(
+                STREAM_SAMPLE_INPUT_MIC, done, MIC_CAPTURE_CHUNK);
+            int32_t peak = 0;
+            for (size_t index = 0; index < pushed; ++index) {
+                const int32_t magnitude = done[index] < 0
+                    ? -static_cast<int32_t>(done[index]) : done[index];
+                if (magnitude > peak) peak = magnitude;
             }
-            if (g_scratchWr >= SCRATCH_FRAMES) { micRecStop(); return; }
-            M5Cardputer.Mic.record(done, CHUNK, MIC_RATE);   // re-queue
+            s_level = s_level * 0.6f + (peak / 32768.0f) * 0.4f;
+
+            const StreamingSamplerRecordState state =
+                streamingSamplerSnapshot().recordState;
+            if (state == STREAM_SAMPLE_REC_STOPPING ||
+                state == STREAM_SAMPLE_REC_ERROR) {
+                micRecStop();
+                break;
+            }
+            M5Cardputer.Mic.record(done, MIC_CAPTURE_CHUNK, MIC_RATE);
             s_curChunk ^= 1;
             if (M5Cardputer.Mic.isRecording() >= 2) break;
+            // P3 (reconciliation report): if the driver refuses to arm the
+            // next chunk, this loop would push the same buffer until the
+            // frame target — a garbage take. Two consecutive failed
+            // re-queues abort the capture instead.
+            if (M5Cardputer.Mic.isRecording() == 0) {
+                if (++stalledRequeues >= 2) { micRecStop(); break; }
+            } else {
+                stalledRequeues = 0;
+            }
         }
-        // level meter via the hold-progress footer bar
         g_holdProg = s_level > 1.0f ? 1.0f : s_level;
         strncpy(g_holdLabel, "SAMPLING", sizeof(g_holdLabel));
-        static uint32_t t = 0;
-        if (millis() - t > 50) { t = millis(); g_needRedraw = true; }
+        static uint32_t lastDraw = 0;
+        if (millis() - lastDraw > 50) {
+            lastDraw = millis();
+            g_needRedraw = true;
+        }
     }
-    if (s_rsmpFrames && g_rsmpRemain == 0) {             // resample finished
-        s_rsmpFrames = 0; s_rsmpPending = true;
-        uiStatus("RSMP: TAP A PAD");
-        g_needRedraw = true;
-    }
+    resolvePendingLane();
+    resolveShortResample();
 }
 
 void micRecStop() {
@@ -147,33 +187,54 @@ void micRecStop() {
     s_recActive = false;
     M5Cardputer.Mic.end();
     M5Cardputer.Speaker.begin();
-    g_holdProg = 0; g_holdLabel[0] = 0;
+    g_holdProg = 0;
+    g_holdLabel[0] = 0;
 
-    uint32_t start, len;
-    trimScratch(g_scratchWr, MIC_RATE, start, len);
-    if (commitToLane(s_recLane, "MIC", s_micCount, start, len, MIC_RATE))
-        uiStatus("SAMPLED!");
+    const StreamingSamplerRecordState state = streamingSamplerSnapshot().recordState;
+    if (state == STREAM_SAMPLE_REC_STARTING || state == STREAM_SAMPLE_REC_RECORDING)
+        streamingSamplerStopRecord();
+    if (s_assignRecordedLane) {
+        s_lanePublishPending = true;
+        s_pendingLane = s_recLane;
+        s_pendingLaneReference = s_recReference;
+    }
+    s_assignRecordedLane = false;
+    s_recLane = kNoLane;
+    s_recReference = -1;
+    uiStatus("SAMPLE SAVING...");
     g_needRedraw = true;
 }
 
 bool micRecActive() { return s_recActive; }
 
-// ---------- resampling (engine mix -> scratch, tap in audio task) ----------
+bool micSamplerHasPendingCommit() {
+    return s_lanePublishPending || s_resampleActive || s_resamplePending;
+}
+
 void resampleArm() {
-    if (s_recActive || !g_scratch || g_rsmpRemain) return;
-    g_scratchWr = 0;
-    s_rsmpFrames = SCRATCH_FRAMES;
-    g_rsmpRemain = SCRATCH_FRAMES;      // audio task decrements
+    if (s_recActive || s_resampleActive || s_resamplePending || recorderUnavailable() ||
+        streamingSamplerIsRecording())
+        return;
+    const int8_t reference = samplerReserveStreamReference();
+    uint8_t slot = 0;
+    if (!samplerDecodeStreamReference(reference, slot)) return;
+    if (!streamingSamplerBeginRecord(slot, SAMPLER_SLOT_MELODIC, SAMPLE_RATE,
+                                     STREAM_SAMPLE_INPUT_BUS, SCRATCH_FRAMES, true)) {
+        samplerReleaseStreamReference(reference);
+        return;
+    }
+    s_resampleReference = reference;
+    s_resampleActive = true;
     uiStatus("RESAMPLING...");
 }
 
-bool resamplePending() { return s_rsmpPending; }
+bool resamplePending() { return s_resamplePending; }
 
 void resampleCommit(uint8_t lane) {
-    s_rsmpPending = false;
-    uint32_t start, len;
-    trimScratch(g_scratchWr, SAMPLE_RATE, start, len);
-    if (commitToLane(lane, "RSM", s_rsmpCount, start, len, SAMPLE_RATE))
-        uiStatus("RESAMPLED!");
+    if (!s_resamplePending || lane >= NUM_DRUM_LANES) return;
+    assignStreamToLane(lane, s_resampleReference);
+    s_resamplePending = false;
+    s_resampleReference = -1;
+    uiStatus("RESAMPLED!");
     g_needRedraw = true;
 }

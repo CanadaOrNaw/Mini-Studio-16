@@ -1,0 +1,6 @@
+# Mini Studio 16 Cardputer-ADV 8 MB dual-role layout
+# Name,    Type, SubType, Offset,   Size,      Flags
+nvs,       data, nvs,     0x9000,   0x5000,
+otadata,   data, ota,     0xe000,   0x2000,
+normal,    app,  ota_0,   0x10000,  0x2f0000,
+usbhost,   app,  ota_1,   0x300000, 0x2f0000,

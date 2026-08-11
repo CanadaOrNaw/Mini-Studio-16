@@ -1,0 +1,253 @@
+name: Build v3 alpha
+
+on:
+  push:
+    branches: ["agent/v3-alpha-sd-streaming"]
+    # P1-6 (reconciliation report): v* tags run the identical validation and
+    # then publish a permanent, login-free GitHub Release; see the release
+    # job at the bottom of this file.
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run host tests
+        # Invoke through bash as well as retaining mode 100755. This keeps CI
+        # robust if an API-based publisher ever drops the executable bit.
+        run: bash ./tests/run_host_tests.sh
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run ASan and UBSan suites
+        env:
+          SANITIZER_SET: address,undefined
+        run: bash ./tests/run_sanitizers.sh
+
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: python -m pip install "platformio==6.1.19" "esptool==4.8.1"
+      - name: Build firmware
+        run: pio run -e m5stack-cardputer-adv -e m5stack-cardputer-adv-usb-host -e mini-studio-audio-cap-atom-lite
+      - name: Enforce firmware resource budget
+        run: >-
+          python tools/check_firmware_size.py
+          .pio/build/m5stack-cardputer-adv/firmware.elf
+          --max-static 204800
+          --report .pio/build/m5stack-cardputer-adv/size-report.json
+      - name: Enforce USB-host profile resource budget
+        run: >-
+          python tools/check_firmware_size.py
+          .pio/build/m5stack-cardputer-adv-usb-host/firmware.elf
+          --max-static 204800
+          --report .pio/build/m5stack-cardputer-adv-usb-host/size-report.json
+      - name: Create merged one-file flash images
+        run: |
+          python tools/merge_firmware.py
+          python tools/merge_firmware.py \
+            --build-dir .pio/build/m5stack-cardputer-adv-usb-host \
+            --output .pio/build/m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin
+          python tools/merge_firmware.py \
+            --build-dir .pio/build/mini-studio-audio-cap-atom-lite \
+            --output .pio/build/mini-studio-audio-cap-atom-lite/mini-studio-audio-cap-atom-lite.bin \
+            --chip esp32 --flash-size 4MB --flash-freq 40m \
+            --bootloader-offset 0x1000
+          python tools/merge_dual_firmware.py
+      - name: Create artifact manifest
+        run: |
+          python tools/package_sd.py \
+            factory-sd/groovebox .pio/build/Mini-Studio-16_SD.zip
+          cp factory-sd/README.md .pio/build/SD_CARD_README.md
+          cp docs/DUAL_BOOT.md .pio/build/DUAL_BOOT_README.md
+          cp partitions_dual.csv .pio/build/partitions_dual.csv
+          cp LICENSE .pio/build/LICENSE.txt
+          cp docs/AUDIO_CAP_BUILD_GUIDE.md .pio/build/AUDIO_CAP_BUILD_GUIDE.md
+          cp docs/AUDIO_CAP_BOM.md .pio/build/AUDIO_CAP_BOM.md
+          cp docs/START_HERE.md .pio/build/START_HERE.md
+          cp docs/FLASHING.md .pio/build/FLASHING.md
+          cp hardware/mini-studio-16-button-layout.svg .pio/build/mini-studio-16-button-layout.svg
+          cp hardware/button-layout.json .pio/build/button-layout.json
+          cp hardware/stl/mini-studio-16-bench-cradle.stl .pio/build/mini-studio-16-bench-cradle.stl
+          cp hardware/cad/mini-studio-16-bench-cradle.scad .pio/build/mini-studio-16-bench-cradle.scad
+          cp hardware/audio-cap/stl/audio-cap-base.stl .pio/build/audio-cap-base.stl
+          cp hardware/audio-cap/stl/audio-cap-lid.stl .pio/build/audio-cap-lid.stl
+          cp hardware/audio-cap/stl/audio-cap-14pin-fit-gauge.stl .pio/build/audio-cap-14pin-fit-gauge.stl
+          cp hardware/audio-cap/design.json .pio/build/audio-cap-design.json
+          cp hardware/audio-cap/bom.json .pio/build/audio-cap-bom.json
+          cp THIRD_PARTY_NOTICES.md .pio/build/THIRD_PARTY_NOTICES.md
+          cp third_party/ESP32-A2DP-LICENSE.txt .pio/build/ESP32-A2DP-LICENSE.txt
+          cd .pio/build
+          sha256sum \
+            m5stack-cardputer-adv/microgroove-v3-alpha.bin \
+            m5stack-cardputer-adv/firmware.bin \
+            m5stack-cardputer-adv/firmware.elf \
+            m5stack-cardputer-adv/size-report.json \
+            m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin \
+            m5stack-cardputer-adv-usb-host/firmware.bin \
+            m5stack-cardputer-adv-usb-host/firmware.elf \
+            m5stack-cardputer-adv-usb-host/size-report.json \
+            mini-studio-audio-cap-atom-lite/firmware.bin \
+            mini-studio-audio-cap-atom-lite/firmware.elf \
+            mini-studio-audio-cap-atom-lite/mini-studio-audio-cap-atom-lite.bin \
+            AUDIO_CAP_BUILD_GUIDE.md \
+            AUDIO_CAP_BOM.md \
+            START_HERE.md \
+            FLASHING.md \
+            mini-studio-16-button-layout.svg \
+            button-layout.json \
+            mini-studio-16-bench-cradle.stl \
+            mini-studio-16-bench-cradle.scad \
+            audio-cap-base.stl \
+            audio-cap-lid.stl \
+            audio-cap-14pin-fit-gauge.stl \
+            audio-cap-design.json \
+            audio-cap-bom.json \
+            THIRD_PARTY_NOTICES.md \
+            ESP32-A2DP-LICENSE.txt \
+            mini-studio-16-dual-role.bin \
+            dual-image-layout.json \
+            partitions_dual.csv \
+            Mini-Studio-16_SD.zip \
+            SD_CARD_README.md \
+            DUAL_BOOT_README.md \
+            LICENSE.txt \
+            > SHA256SUMS.txt
+          {
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "workflow_sha=$GITHUB_SHA"
+            echo "source_ref=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "platformio=6.1.19"
+            echo "espressif32=6.7.0"
+          } > BUILD_INFO.txt
+      - uses: actions/upload-artifact@v6
+        id: artifact-upload
+        with:
+          name: microgroove-v3-alpha-cardputer-adv
+          path: |
+            .pio/build/m5stack-cardputer-adv/microgroove-v3-alpha.bin
+            .pio/build/m5stack-cardputer-adv/firmware.bin
+            .pio/build/m5stack-cardputer-adv/firmware.elf
+            .pio/build/m5stack-cardputer-adv/size-report.json
+            .pio/build/m5stack-cardputer-adv-usb-host/microgroove-v3-alpha-usb-host.bin
+            .pio/build/m5stack-cardputer-adv-usb-host/firmware.bin
+            .pio/build/m5stack-cardputer-adv-usb-host/firmware.elf
+            .pio/build/m5stack-cardputer-adv-usb-host/size-report.json
+            .pio/build/mini-studio-audio-cap-atom-lite/firmware.bin
+            .pio/build/mini-studio-audio-cap-atom-lite/firmware.elf
+            .pio/build/mini-studio-audio-cap-atom-lite/mini-studio-audio-cap-atom-lite.bin
+            .pio/build/mini-studio-16-dual-role.bin
+            .pio/build/dual-image-layout.json
+            .pio/build/partitions_dual.csv
+            .pio/build/SHA256SUMS.txt
+            .pio/build/BUILD_INFO.txt
+            .pio/build/Mini-Studio-16_SD.zip
+            .pio/build/SD_CARD_README.md
+            .pio/build/DUAL_BOOT_README.md
+            .pio/build/AUDIO_CAP_BUILD_GUIDE.md
+            .pio/build/AUDIO_CAP_BOM.md
+            .pio/build/START_HERE.md
+            .pio/build/FLASHING.md
+            .pio/build/mini-studio-16-button-layout.svg
+            .pio/build/button-layout.json
+            .pio/build/mini-studio-16-bench-cradle.stl
+            .pio/build/mini-studio-16-bench-cradle.scad
+            .pio/build/audio-cap-base.stl
+            .pio/build/audio-cap-lid.stl
+            .pio/build/audio-cap-14pin-fit-gauge.stl
+            .pio/build/audio-cap-design.json
+            .pio/build/audio-cap-bom.json
+            .pio/build/THIRD_PARTY_NOTICES.md
+            .pio/build/ESP32-A2DP-LICENSE.txt
+            .pio/build/LICENSE.txt
+          if-no-files-found: error
+
+  # P1-6 (reconciliation report): Actions artifacts require a GitHub sign-in
+  # and are deleted ~90 days after each run, which silently breaks the
+  # beginner download path in START_HERE.md and on the site. A v* tag still
+  # publishes normally. Branch pushes also consult the checked-in
+  # RELEASE_VERSION marker and publish only when that release does not yet
+  # exist. Existing releases are never moved or overwritten; changing the
+  # marker is therefore the explicit next-release action. Every release still
+  # waits for the full validation above (host tests, sanitizers, firmware,
+  # budgets and merges). The per-run artifact remains the newest unreleased
+  # developer path.
+  release:
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'push' &&
+      github.ref == 'refs/heads/agent/v3-alpha-sd-streaming')
+    needs: [host-tests, sanitizers, firmware]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Resolve release version
+        id: release-info
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            release_tag="$GITHUB_REF_NAME"
+          else
+            release_tag="$(tr -d '[:space:]' < RELEASE_VERSION)"
+          fi
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: $release_tag" >&2
+            exit 1
+          fi
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $release_tag already exists; leaving it unchanged."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/download-artifact@v6
+        if: steps.release-info.outputs.exists != 'true'
+        with:
+          name: microgroove-v3-alpha-cardputer-adv
+          path: artifact
+      - name: Assemble one beginner package ZIP
+        if: steps.release-info.outputs.exists != 'true'
+        env:
+          RELEASE_TAG: ${{ steps.release-info.outputs.release_tag }}
+        # One clearly-named ZIP under Assets, so START_HERE.md can say
+        # "download the file ending in -package.zip" without a beginner
+        # confusing it with GitHub's automatic "Source code" archives.
+        # It is the artifact tree verbatim, so `sha256sum -c SHA256SUMS.txt`
+        # works from the extracted root exactly as documented.
+        run: |
+          (cd artifact && zip -qr "../Mini-Studio-16-${RELEASE_TAG}-package.zip" .)
+          sha256sum "Mini-Studio-16-${RELEASE_TAG}-package.zip" > RELEASE_SHA256SUMS.txt
+      - name: Publish GitHub Release
+        if: steps.release-info.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release-info.outputs.release_tag }}
+        run: >-
+          gh release create "$RELEASE_TAG"
+          --repo "$GITHUB_REPOSITORY"
+          --target "$GITHUB_SHA"
+          --title "Mini Studio 16 $RELEASE_TAG"
+          --notes "Verified pre-hardware alpha build of commit $GITHUB_SHA.
+          Start with START_HERE.md inside the package ZIP (or read it in the
+          repository). Flash mini-studio-16-dual-role.bin once at offset 0x0;
+          see FLASHING.md. All binaries here passed the host, sanitizer,
+          firmware-budget and merge checks of this workflow run."
+          "Mini-Studio-16-${RELEASE_TAG}-package.zip"
+          "RELEASE_SHA256SUMS.txt"
+          "artifact/mini-studio-16-dual-role.bin"
+          "artifact/SHA256SUMS.txt"

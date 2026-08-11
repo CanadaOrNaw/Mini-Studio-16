@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071016">
+  <meta name="description" content="Mini Studio 16 is an SD-backed groovebox, multi-engine synth, sampler, looper, recorder and MIDI controller for M5Stack Cardputer-ADV.">
+  <title>Mini Studio 16 — Cardputer-ADV groovebox</title>
+  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Mini Studio 16 home">
+      <img src="assets/mark.svg" alt="" width="34" height="34">
+      <span>MINI STUDIO <b>16</b></span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#instrument">Instrument</a>
+      <a href="#controls">Controls</a>
+      <a href="#audio-cap">Audio Cap</a>
+      <a href="#make">Make it</a>
+      <a href="https://github.com/CanadaOrNaw/Mini-Studio-16/tree/agent/v3-alpha-sd-streaming">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="pulse"></span> PRE-HARDWARE VALIDATION ALPHA</div>
+        <h1>A whole studio.<br><em>84 millimetres wide.</em></h1>
+        <p class="lede">Three synth engines, sixteen samples, six synced audio loops, five event tracks, motion, MIDI, master WAVs and stems—running standalone on the Cardputer-ADV.</p>
+        <div class="actions">
+          <a class="button primary" href="downloads/START_HERE.md" download>Start here</a>
+          <a class="button secondary" href="#make">Build the alpha</a>
+          <a class="button secondary" href="https://github.com/CanadaOrNaw/Mini-Studio-16/pull/1">Follow development</a>
+        </div>
+        <p class="honesty">Software paths compile and pass host tests. Physical audio, timing, fit, radio and SD performance still require the actual device.</p>
+      </div>
+      <div class="device-stage" aria-label="Stylized Mini Studio 16 Cardputer instrument">
+        <div class="device-shadow"></div>
+        <div class="device">
+          <div class="screen">
+            <div class="screen-top"><span>MINI STUDIO 16</span><span>120 BPM</span></div>
+            <div class="wave" aria-hidden="true">
+              <i style="--h:22%"></i><i style="--h:46%"></i><i style="--h:72%"></i><i style="--h:40%"></i><i style="--h:88%"></i><i style="--h:55%"></i><i style="--h:30%"></i><i style="--h:64%"></i><i style="--h:92%"></i><i style="--h:50%"></i><i style="--h:76%"></i><i style="--h:34%"></i><i style="--h:58%"></i><i style="--h:84%"></i><i style="--h:42%"></i><i style="--h:68%"></i>
+            </div>
+            <div class="screen-bottom"><span>FM4</span><span>P03</span><span>● REC</span></div>
+          </div>
+          <div class="mini-keys" aria-hidden="true"></div>
+          <div class="speaker-dots" aria-hidden="true"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="steps" aria-label="Getting started">
+      <article><span>01</span><h2>PRINT</h2><p>Print the original open cradle and the full-resolution key legend.</p></article>
+      <article><span>02</span><h2>FLASH</h2><p>Flash one combined image; choose USB device or USB host at boot.</p></article>
+      <article><span>03</span><h2>PLAY</h2><p>Insert FAT32 microSD, power on, and make music without a DAW.</p></article>
+    </section>
+
+    <section class="section" id="instrument">
+      <div class="section-heading">
+        <p class="kicker">THE INSTRUMENT</p>
+        <h2>Small hardware. Serious architecture.</h2>
+        <p>Long audio streams through bounded RAM rings so the real-time renderer never waits on the SD filesystem.</p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature feature-wide"><span class="feature-no">03</span><h3>Synthesis engines</h3><p>The untouched original MG/303, expanded subtractive MGX, and genuine four-operator FM4 are selectable per track.</p><div class="chips"><b>MG/303</b><b>MGX</b><b>FM4</b></div></article>
+        <article class="feature"><span class="feature-no">16</span><h3>Sample slots</h3><p>Forty shared seconds, melodic or sliced playback, trim, pitch, filter and step locks.</p></article>
+        <article class="feature"><span class="feature-no">06</span><h3>Audio loops</h3><p>Independent 20-second SD tracks locked to the exact Track 1 timeline.</p></article>
+        <article class="feature"><span class="feature-no">128</span><h3>Pattern chain</h3><p>Sixteen 16-step patterns arranged into a repeatable 128-entry performance.</p></article>
+        <article class="feature"><span class="feature-no">05</span><h3>Event tracks</h3><p>Up to 128 bars of drums, bass, chord, lead, sample and control activity.</p></article>
+        <article class="feature"><span class="feature-no">6D</span><h3>Motion</h3><p>Tilt, acceleration, gyro, shake and slap become synth controls, MIDI CC or recorded automation.</p></article>
+        <article class="feature feature-wide"><span class="feature-no">WAV</span><h3>Finish without a DAW</h3><p>Record the master directly to microSD or export five synchronized buses for later mixing.</p><div class="chips"><b>MASTER</b><b>SYNTH 1–3</b><b>DRUMS</b></div></article>
+      </div>
+    </section>
+
+    <section class="section" id="audio-cap">
+      <div class="section-heading">
+        <p class="kicker">ONE PLUG • NO SOLDER • NO CUSTOM PCB</p>
+        <h2>Line in and normal Bluetooth audio, in a finished Cardputer-powered cap.</h2>
+        <p>The optional cap uses a retail ATOM Lite and preassembled PCM1808 module. Power and data share the one 14-pin Cardputer plug; no second cable leaves the two-part snap enclosure.</p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature"><span class="feature-no">01</span><h3>One outside plug</h3><p>EXT 5VOUT/GND powers both modules. Cardputer battery and charging remain the only power system.</p></article>
+        <article class="feature"><span class="feature-no">00</span><h3>No board fabrication</h3><p>Factory modules, precrimped/Grove leads and two hidden lever splices; no soldering or assembler order.</p></article>
+        <article class="feature"><span class="feature-no">02</span><h3>Two printed pieces</h3><p>A module-retaining base and compliant snap lid expose only line input, pair button, status light and the 14-pin nose.</p></article>
+        <article class="feature feature-wide"><span class="feature-no">3×</span><h3>Sourced for Canada, US and EU</h3><p>The machine-checked BOM names exact orderable SKUs instead of search pages. Print the tiny header gauge before the full case.</p><div class="download-row"><a class="button primary" href="downloads/audio-cap-14pin-fit-gauge.stl" download>Fit gauge</a><a class="button secondary" href="downloads/audio-cap-base.stl" download>Base STL</a><a class="button secondary" href="downloads/audio-cap-lid.stl" download>Lid STL</a></div><p><a class="text-link" href="downloads/AUDIO_CAP_BUILD_GUIDE.md" download>Beginner build guide →</a> <a class="text-link" href="downloads/AUDIO_CAP_BOM.md" download>Exact regional shopping list →</a> <a class="text-link" href="downloads/audio-cap-bom.json" download>Machine BOM →</a></p></article>
+      </div>
+      <p class="honesty">The firmware, harness map and printable meshes are verified without hardware. Current draw, fit, analog quality, SPI timing, Bluetooth compatibility and snap tolerances still require the purchased parts.</p>
+    </section>
+
+    <section class="section controls" id="controls">
+      <div class="section-heading">
+        <p class="kicker">56 KEYS • ONE WORKFLOW</p>
+        <h2>The layout changes with the page—not your muscle memory.</h2>
+        <p>Choose a page to highlight its controls. The printable legend below is generated from the same checked-in data.</p>
+      </div>
+      <div class="context-tabs" role="tablist" aria-label="Control context">
+        <button role="tab" aria-selected="true" data-context="global">Global</button>
+        <button role="tab" aria-selected="false" data-context="pattern">Pattern</button>
+        <button role="tab" aria-selected="false" data-context="sound">Sound</button>
+        <button role="tab" aria-selected="false" data-context="sample">Sample</button>
+        <button role="tab" aria-selected="false" data-context="loops">Loops</button>
+        <button role="tab" aria-selected="false" data-context="event">Event</button>
+        <button role="tab" aria-selected="false" data-context="motion">Motion</button>
+        <button role="tab" aria-selected="false" data-context="song">Song</button>
+        <button role="tab" aria-selected="false" data-context="diag">SD test</button>
+      </div>
+      <div class="context-copy" aria-live="polite"><h3 id="context-title">Global</h3><p id="context-summary">Loading the verified control map…</p></div>
+      <div id="keyboard" class="keyboard" aria-label="Interactive Cardputer-ADV keyboard"></div>
+      <noscript><img class="static-layout" src="assets/mini-studio-16-button-layout.svg" alt="Mini Studio 16 full button layout"></noscript>
+      <div class="legend-row"><span><i class="tap-dot"></i>tap</span><span><i class="hold-dot"></i>hold</span><span><i class="music-dot"></i>note / pad</span><span><i class="record-dot"></i>record</span></div>
+      <a class="text-link" href="downloads/mini-studio-16-button-layout.svg" download>Download printable SVG key legend →</a>
+    </section>
+
+    <section class="section make" id="make">
+      <div class="section-heading">
+        <p class="kicker">PRINT • FLASH • TEST</p>
+        <h2>Everything possible before hardware is checked in.</h2>
+      </div>
+      <div class="make-grid">
+        <article class="cad-card">
+          <div class="cad-preview" aria-hidden="true"><div class="cad-base"></div><div class="cad-device"></div><span>88 × 58 × 6 mm</span></div>
+          <div><p class="step-label">01 / PRINT</p><h3>Mini Studio bench cradle</h3><p>An original, regeneratable open cradle with port clearances and a ventilated base. The 0.30 mm/side fit remains intentionally marked for physical validation.</p><div class="download-row"><a class="button primary" href="downloads/mini-studio-16-bench-cradle.stl" download>Download STL</a><a class="button secondary" href="downloads/mini-studio-16-bench-cradle.scad" download>OpenSCAD source</a></div></div>
+        </article>
+        <article class="flash-card">
+          <p class="step-label">02 / FLASH</p><h3>One image, two USB roles</h3>
+          <pre><code>esptool.py --chip esp32s3 write_flash 0x0 \
+  mini-studio-16-dual-role.bin</code></pre>
+          <p>Press <kbd>Tab</kbd> at startup to validate and switch USB Device ↔ USB Host; rebooting changes roles without reflashing.</p>
+          <p><a class="text-link" href="downloads/START_HERE.md" download>Download Start Here →</a> <a class="text-link" href="downloads/FLASHING.md" download>First-time flashing guide →</a></p>
+          <p><a class="text-link" href="https://github.com/CanadaOrNaw/Mini-Studio-16/releases/latest">Download the latest release (no sign-in needed) →</a></p>
+          <a class="text-link" href="https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml">Newest unreleased Actions build (GitHub sign-in required; expires ~90 days) →</a>
+        </article>
+        <article class="test-card">
+          <p class="step-label">03 / TEST</p><h3>Run the hardware evidence pass</h3><p>The checked-in guide covers flash integrity, heap/stack telemetry, audio, mic, headphones, SD stalls, six streams, recording, MIDI, IMU, dual-role rebooting and power-cut recovery.</p>
+          <a class="text-link" href="https://github.com/CanadaOrNaw/Mini-Studio-16/blob/agent/v3-alpha-sd-streaming/docs/CARDPUTER_TESTING.md">Open the Cardputer test guide →</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="section status" id="status">
+      <div><p class="kicker">HONEST STATUS</p><h2>Software-complete does not mean hardware-proven.</h2></div>
+      <div class="status-grid">
+        <article><span class="ok">✓</span><h3>Verified now</h3><p>Host and sanitizer suites, pinned ESP32-S3 compile/link, firmware budgets, deterministic artifacts, CAD topology and static site integrity.</p></article>
+        <article><span class="wait">◇</span><h3>Waiting on device</h3><p>Physical fit, audio quality, maximum DSP load, SD worst-case stalls, BLE/USB behavior, IMU thresholds and onboard full duplex.</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="brand"><img src="assets/mark.svg" alt="" width="30" height="30"><span>MINI STUDIO <b>16</b></span></div>
+    <p>Independent MIT-licensed fork of <a href="https://github.com/matoslav/MicroGroove">Microgroove</a> by <a href="https://lebiro.studio">lebiro.studio</a>. Cardputer-ADV is made by M5Stack. Launcher informed SD research; no Launcher code is included.</p>
+    <p><a href="https://github.com/CanadaOrNaw/Mini-Studio-16/tree/agent/v3-alpha-sd-streaming">Source</a> · <a href="https://github.com/CanadaOrNaw/Mini-Studio-16/blob/agent/v3-alpha-sd-streaming/LICENSE">MIT license and full attribution</a> · Build <span id="build-sha">development</span></p>
+  </footer>
+</body>
+</html>

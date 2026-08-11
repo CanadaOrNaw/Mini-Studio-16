@@ -8,13 +8,30 @@
 #include "sampler.h"
 #include <M5Cardputer.h>
 #include "mic_sampler.h"
+#include "master_recorder.h"
+#include "stem_recorder.h"
+#include "loop_engine.h"
+#include "streaming_sampler.h"
+#include "audio_cap.h"
 
 float g_scopeBuf[SCREEN_W];
 volatile int g_scopeIdx = 0;
 
 static int16_t s_bufA[AUDIO_BUF_LEN];
 static int16_t s_bufB[AUDIO_BUF_LEN];
+static StemPcmFrame s_stemBuf[AUDIO_BUF_LEN];
 static TaskHandle_t s_task = nullptr;
+static portMUX_TYPE s_dspMux = portMUX_INITIALIZER_UNLOCKED;
+static AudioDspSnapshot s_dsp = {
+    0, 0, 0, 0,
+    static_cast<uint32_t>(AUDIO_BUF_LEN) * 1000000u / SAMPLE_RATE,
+};
+
+static int16_t toPcm(float sample) {
+    if (sample > 1.0f) sample = 1.0f;
+    else if (sample < -1.0f) sample = -1.0f;
+    return static_cast<int16_t>(sample * 12000.0f);
+}
 
 static void audioTask(void*) {
     int16_t* buffers[2] = { s_bufA, s_bufB };
@@ -22,31 +39,62 @@ static void audioTask(void*) {
 
     while (true) {
         int16_t* buf = buffers[cur];
+        const uint32_t renderStartedUs = micros();
+
+        // P2-8: engine switches requested by the UI/serial/storage tasks are
+        // applied here, at the block boundary, so setEngine's voice re-init
+        // can never interleave with the per-sample render() calls below.
+        for (int s = 0; s < NUM_SYNTHS; s++) g_synths[s].applyPendingEngine();
 
         for (int i = 0; i < AUDIO_BUF_LEN; i++) {
-            float mix = 0.0f;
+            float synthBus[NUM_SYNTHS] = {0.0f, 0.0f, 0.0f};
+            float drumBus = 0.0f;
 
             for (int s = 0; s < NUM_SYNTHS; s++)
-                if (!g_synthMute[s]) mix += g_synths[s].render();   // SynthTrack: sums 1..3 voices
+                if (!g_synthMute[s]) synthBus[s] = g_synths[s].render();
 
             if (!g_drumMute)
                 for (int d = 0; d < NUM_DRUM_LANES; d++)
-                    mix += g_drumLanes[d].render() * 0.6f;
+                    drumBus += g_drumLanes[d].render() * 0.6f;
 
-            mix += g_previewVoice.render();
+            const int32_t streamedSamplePcm = streamingSamplerRender();
+            const float sampleBus = g_previewVoice.render() +
+                static_cast<float>(streamedSamplePcm) / 32768.0f;
+            const float dryMix = synthBus[0] + synthBus[1] + synthBus[2] + drumBus +
+                                 sampleBus;
+            const int16_t dryPcm = toPcm(dryMix);
+            const int32_t loopPcm = loopEngineProcessFrame(dryPcm);
+            float mix = dryMix + static_cast<float>(loopPcm) / 12000.0f;
 
             // soft clip
             if (mix > 1.0f) mix = 1.0f; else if (mix < -1.0f) mix = -1.0f;
-            buf[i] = (int16_t)(mix * 12000.0f);
-
-            if (g_rsmpRemain) {                       // resample tap
-                g_scratch[g_scratchWr++] = buf[i];
-                g_rsmpRemain--;
-            }
+            buf[i] = toPcm(mix);
+            s_stemBuf[i].master = buf[i];
+            s_stemBuf[i].synth1 = toPcm(synthBus[0]);
+            s_stemBuf[i].synth2 = toPcm(synthBus[1]);
+            s_stemBuf[i].synth3 = toPcm(synthBus[2]);
+            s_stemBuf[i].drums = toPcm(drumBus);
 
             if ((i & 7) == 0 && g_scopeIdx < SCREEN_W)
                 g_scopeBuf[g_scopeIdx++] = mix;
         }
+
+        // The cap receives the dry master before its line input is mixed back,
+        // preventing a Bluetooth feedback loop. Master/stem recording below
+        // receives the monitored signal exactly as heard at the output.
+        audioCapProcessAudioBlock(buf, AUDIO_BUF_LEN);
+        streamingSamplerRecordPush(STREAM_SAMPLE_INPUT_BUS, buf, AUDIO_BUF_LEN);
+        for (int i = 0; i < AUDIO_BUF_LEN; ++i) s_stemBuf[i].master = buf[i];
+        masterRecorderPush(buf, AUDIO_BUF_LEN);
+        stemRecorderPush(s_stemBuf, AUDIO_BUF_LEN);
+
+        const uint32_t renderUs = micros() - renderStartedUs;
+        portENTER_CRITICAL(&s_dspMux);
+        ++s_dsp.blocks;
+        s_dsp.lastRenderUs = renderUs;
+        if (renderUs > s_dsp.maxRenderUs) s_dsp.maxRenderUs = renderUs;
+        if (renderUs >= s_dsp.deadlineUs) ++s_dsp.deadlineMisses;
+        portEXIT_CRITICAL(&s_dspMux);
 
         while (!M5Cardputer.Speaker.playRaw(buf, AUDIO_BUF_LEN, SAMPLE_RATE, false, 1, 0))
             vTaskDelay(1);
@@ -57,4 +105,20 @@ static void audioTask(void*) {
 
 void audioEngineStart() {
     xTaskCreatePinnedToCore(audioTask, "audio", 8192, nullptr, 1, &s_task, 0);
+}
+
+AudioDspSnapshot audioEngineDspSnapshot() {
+    portENTER_CRITICAL(&s_dspMux);
+    const AudioDspSnapshot result = s_dsp;
+    portEXIT_CRITICAL(&s_dspMux);
+    return result;
+}
+
+void audioEngineResetDspStats() {
+    portENTER_CRITICAL(&s_dspMux);
+    s_dsp.blocks = 0;
+    s_dsp.lastRenderUs = 0;
+    s_dsp.maxRenderUs = 0;
+    s_dsp.deadlineMisses = 0;
+    portEXIT_CRITICAL(&s_dspMux);
 }
