@@ -12,9 +12,10 @@
 #pragma once
 #include "config.h"
 #include "sampler_slots.h"
+#include "pitch_detector.h"
 
 #define MIC_RATE          16000        // capture rate (stored native, voice retunes)
-#define SCRATCH_FRAMES    42000        // ~2.6s mic / ~1.9s resample @22.05k
+#define SCRATCH_FRAMES    (MIC_RATE * 3) // HiChord-style three-second mic sample
 #define MIC_CAPTURE_CHUNK 256
 
 bool micSamplerInit();                 // initialize the streamed legacy bridge
@@ -22,6 +23,9 @@ void micSamplerUpdate();               // pump capture; call every loop()
 
 bool micRecStart(uint8_t lane);        // pauses transport+speaker, starts capture
 bool micStreamRecStart(uint8_t slot, SamplerSlotMode mode);
+bool micHiChordRecStart(uint8_t slot);
+bool micTunerStart();
+PitchEstimate micTunerEstimate();
 void micRecStop();                     // finalize, assign lane, resume audio
 bool micRecActive();
 bool micSamplerHasPendingCommit();

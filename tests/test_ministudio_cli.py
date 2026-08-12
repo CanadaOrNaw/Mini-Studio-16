@@ -130,6 +130,18 @@ class MiniStudioCliTests(unittest.TestCase):
         args = cli.parser().parse_args(["boot-mode", "normal"])
         self.assertEqual(cli.command_words(args), ["boot", "normal"])
 
+    def test_three_in_one_commands(self):
+        args = cli.parser().parse_args(["chord-play", "7", "8"])
+        self.assertEqual(cli.command_words(args), ["chord", "play", 7, 8])
+        args = cli.parser().parse_args(["chord-lock", "2", "27"])
+        self.assertEqual(cli.command_words(args), ["chord", "lock", 2, 27])
+        args = cli.parser().parse_args(["po-lock", "16", "1", "14"])
+        self.assertEqual(cli.command_words(args), ["po", "lock", 16, 1, 14])
+        args = cli.parser().parse_args(["medo-quantize", "3", "2"])
+        self.assertEqual(cli.command_words(args), ["medo", "quantize", 3, 2])
+        args = cli.parser().parse_args(["medo-set", "bars", "128"])
+        self.assertEqual(cli.command_words(args), ["medo", "set", "bars", 128])
+
     def test_audio_cap_commands(self):
         args = cli.parser().parse_args(["cap-status"])
         self.assertEqual(cli.command_words(args), ["cap", "status"])

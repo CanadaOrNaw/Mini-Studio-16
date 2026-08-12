@@ -10,10 +10,13 @@
 #include "sd_io_arbiter.h"
 #include "stem_recorder.h"
 #include "wav_file.h"
+#include "pitch_detector.h"
 
 #include <Arduino.h>
 #include <SD.h>
 #include <math.h>
+#include <memory>
+#include <new>
 #include <string.h>
 
 namespace {
@@ -259,6 +262,32 @@ bool pumpRecording() {
         ok = length >= SAMPLER_SLICE_COUNT &&
              g_samplerSlotBank.setTrim(slot, start, length);
     }
+    const StreamingSamplerInput capturedInput = static_cast<StreamingSamplerInput>(
+        __atomic_load_n(&s_recordInput, __ATOMIC_ACQUIRE));
+    if (ok && capturedInput == STREAM_SAMPLE_INPUT_MIC) {
+        std::unique_ptr<int16_t[]> pitchFrames(new (std::nothrow) int16_t[2048]);
+        File pitchFile;
+        size_t got = 0;
+        const uint32_t pitchStart = g_samplerSlotBank.slot(slot).trimStart;
+        {
+            SdIoGuard guard;
+            pitchFile = SD.open(s_recordFinalPath, FILE_READ);
+            if (pitchFrames && pitchFile &&
+                pitchFile.seek(WAV_PCM_HEADER_BYTES + pitchStart * sizeof(int16_t))) {
+                const int bytes = pitchFile.read(reinterpret_cast<uint8_t*>(pitchFrames.get()),
+                                                 2048 * sizeof(int16_t));
+                if (bytes > 0) got = static_cast<size_t>(bytes);
+            }
+            if (pitchFile) pitchFile.close();
+        }
+        const PitchEstimate pitch = PitchDetector::detect(
+            pitchFrames.get(), got / sizeof(int16_t), s_recordSourceRate);
+        if (pitch.midiNote >= 0 && pitch.midiNote <= 127) {
+            g_samplerSlotBank.beginEdit(slot);
+            g_samplerSlotBank.slot(slot).rootMidi = static_cast<uint8_t>(pitch.midiNote);
+            g_samplerSlotBank.endEdit(slot);
+        }
+    }
     if (!ok) {
         { SdIoGuard guard; if (SD.exists(s_recordFinalPath)) SD.remove(s_recordFinalPath); }
         failRecording(false);
@@ -449,7 +478,7 @@ bool startVoice(const SamplerCommand& command) {
 
     int32_t pitch = slot.pitchQ8;
     if (slot.mode == SAMPLER_SLOT_MELODIC)
-        pitch += static_cast<int32_t>(command.key) * 256;
+        pitch += static_cast<int32_t>(60 + command.key - slot.rootMidi) * 256;
     uint16_t gain = slot.gainQ15;
     uint16_t cutoff = slot.cutoffQ15;
     uint16_t resonance = slot.resonanceQ15;

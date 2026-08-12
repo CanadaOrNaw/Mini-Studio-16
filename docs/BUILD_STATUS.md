@@ -1,13 +1,16 @@
 # Mini Studio 16 pre-hardware build status
 
-Published branch: `agent/v3-alpha-sd-streaming`
+Completion branch: `agent/complete-three-in-one`
 
 This is the precise verification boundary for the current alpha. “Implemented”
 means the production firmware path exists, its hardware-independent behavior is
 host-tested, and both target profiles compile/link. “Hardware-verified” remains
 false until a physical Cardputer-ADV produces measurements.
 
-## Verified final pre-hardware checkpoint
+## Preserved v3.0.0-alpha.1 checkpoint
+
+The following is the immutable prior release evidence. The completion branch
+is additive and does not move or overwrite that release.
 
 - Verified firmware/package source head:
   `f978bd991cc578ff080d63ebac5fec743c92f52c`
@@ -74,6 +77,15 @@ downloads (272,341 bytes total), including the regenerated snap-fit cap lid.
 - Original Microgroove synth, drums, keyboard, UI, short mic sampler, short
   master resampler, project slots, speaker, mic, headphone, and SD workflows
   are retained.
+- The missing three-in-one product layer is now explicit: a seven-button
+  HiChord harmony engine and all 15 performance modes; PO sound/slice copy,
+  swing and 15 momentary/recordable punch effects; and MEDO five-role
+  performance with shared 1–128 bars, three quantizers, scales and all eight
+  gesture-to-MIDI mappings.
+- HiChord state includes 10 scales, 28 chord types, three maps, locks,
+  inversion/octave, root/slash bass, voice leading, strum/arp/repeat/drone,
+  seven kits/56 grooves, chord sequence bounce, pitch-detected mic sample,
+  tuner, practice/ear modes, loop mixer, effects, vocoder and four presets.
 - Each of the three synth tracks now selects one of three fixed-size engines:
   exact original `MG/303`, expanded subtractive `MGX`, or true four-operator
   `FM4`. Engine dispatch performs no heap allocation, file I/O, or per-sample
@@ -120,12 +132,13 @@ downloads (272,341 bytes total), including the regenerated snap-fit cap lid.
   rings. The desktop splitter emits master, synth 1/2/3, and drums WAVs.
 - The bounded `MS16/1` control protocol and CLI expose status, transport,
   tempo, notes/drums, SD test, recorders, loops, sampler, event looper, motion,
-  MIDI telemetry, and project status/save/load.
+  MIDI telemetry, complete chord/PO/MEDO controls, and project status/save/load.
 - One recursive SD arbiter serializes all FatFS traffic and measures calls,
   contention, failures, and maximum hold time.
-- GBX v8 saves the expanded sequencer, sampler, locks, event data, motion
-  mappings, loop mixer, and all three synth engine patches. GBX v1–v7 remain
-  readable and explicitly migrate to the original `MG/303` engine.
+- GBX v9 saves the expanded sequencer, sampler, PO effect locks/swing, HiChord
+  modes/harmony/presets, MEDO settings, effects/vocoder, event data, motion,
+  loop mixer, and all synth patches. GBX v1–v8 remain readable and explicitly
+  migrate to the original `MG/303` engine where required.
 - CI produces both standalone merged recovery images plus one combined
   dual-role image with a validated OTA partition layout.
 - A canonical 56-key JSON map generates the print-ready Mini Studio SVG and
@@ -146,7 +159,11 @@ downloads (272,341 bytes total), including the regenerated snap-fit cap lid.
   injected storage stalls, underrun silence, re-prime, record overrun, and
   recovery state.
 - Sampler tests cover quota normalization, trim/slicing, locks, pitch, EOF,
-  underrun, and four-voice stealing.
+  underrun, sound/slice copy, and four-voice stealing.
+- Three-in-one tests cover every chord type/scale/map, arp schedules, 56
+  grooves, pitch detection, PO effect determinism and locks, MEDO roles/scales/
+  quantizers/gestures, master effects, vocoder modulation, swing, presets, GBX
+  v9 round trips, malformed state, protocol fuzzing and CLI generation.
 - Event tests cover five tracks, 128 bars, ordering, bounds, and capacity.
   Live and replayed note releases are recorded explicitly so ADSR engines do
   not leave sustained voices stuck.
@@ -168,7 +185,7 @@ downloads (272,341 bytes total), including the regenerated snap-fit cap lid.
 - Synthesis tests cover the original `MG/303` golden render, phase/ratio math,
   ADSR state, all eight FM algorithms, operator modulation, feedback bounds,
   deterministic voice reset/allocation, engine switching, validated parameter
-  ranges, SOUND bank behavior, and GBX v8 round-trip/migration/malformed input.
+  ranges, SOUND bank behavior, and GBX v9 round-trip/migration/malformed input.
 - Offline render tests require finite, bounded, non-silent deterministic PCM.
   They also verify that obvious FM modulation changes both waveform hashes and
   sideband energy rather than merely detuning an oscillator.

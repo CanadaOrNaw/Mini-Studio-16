@@ -28,6 +28,7 @@
 #include "synth_parameters.h"
 #include "synth_ui_model.h"
 #include "boot_selector.h"
+#include "performance_state.h"
 
 Page    g_curPage    = PAGE_PATTERN;
 bool    g_needRedraw = true;
@@ -108,7 +109,8 @@ static void drawHeader() {
     canvas.setTextColor(COL_TEXT);
     canvas.setCursor(2, 2);
     static const char* pageNames[] = {
-        "PATTERN","SOUND","SAMPLE","LOOPS","EVENT","MOTION","SONG","SD TEST","HELP"
+        "PATTERN","SOUND","FX","VOCODER","CHORD","SAMPLE","KO","LOOPS","EVENT","MEDO",
+        "MOTION","SONG","SD TEST","HELP"
     };
     canvas.print(pageNames[g_curPage]);
 
@@ -377,6 +379,169 @@ static void drawSoundPage() {
     }
 }
 
+static void drawChordPage() {
+    static const char* modeNames[HICHORD_MODE_COUNT] = {
+        "PLAY","STRUM","LEAD","DRONE","ARP","REPEAT","MIC SAMPLE","DRUM",
+        "DRUM LOOPS","AUTO DRUM","SEQUENCER","CHORD HIRO","EAR TRAIN","TUNER","MIXER"
+    };
+    static const char* mapNames[] = {"DEFAULT","EXTENDED","CHROMATIC"};
+    static const char* bassNames[] = {"OFF","ROOT","SLASH"};
+    static const char* keyNames[] = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
+    const char* labels[] = {"MODE","KEY","SCALE","CHORD MAP","OCTAVE","BASS","VOICE LEAD","INVERSION"};
+    canvas.setTextColor(COL_TEXT); canvas.setCursor(2, 15);
+    canvas.printf("7-CHORD INSTRUMENT  DEGREE %u", g_chordDegree + 1);
+    for (uint8_t row = 0; row < 8; ++row) {
+        const int y = 29 + row * 11;
+        canvas.setTextColor(row == g_chordParameter ? COL_TEXT : COL_DIM);
+        const char* label = labels[row];
+        if (row == 7 && g_hiChordPerformance.mode() == HICHORD_DRUM) label = "DRUM KIT";
+        else if (row == 7 && (g_hiChordPerformance.mode() == HICHORD_DRUM_LOOPS ||
+                 g_hiChordPerformance.mode() == HICHORD_AUTO_DRUM)) label = "VARIATION";
+        else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_CHORD_HIRO) label = "SONG";
+        else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_EAR_TRAINER) label = "LEVEL";
+        else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_ARPEGGIO) label = "ARP PATT";
+        else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_REPEAT) label = "RATE";
+        canvas.setCursor(2, y); canvas.printf("%c %-10s", row == g_chordParameter ? '>' : ' ', label);
+        switch (row) {
+            case 0: canvas.print(modeNames[g_hiChordPerformance.mode()]); break;
+            case 1: canvas.print(keyNames[g_chordSettings.key]); break;
+            case 2: canvas.print(ChordEngine::scaleName(g_chordSettings.scale)); break;
+            case 3: canvas.print(mapNames[g_chordSettings.map]); break;
+            case 4: canvas.printf("%d", g_chordSettings.octave); break;
+            case 5: canvas.print(bassNames[g_chordSettings.bassMode]); break;
+            case 6: canvas.print(g_chordSettings.voiceLeading ? "ON" : "OFF"); break;
+            case 7:
+                if (g_hiChordPerformance.mode() == HICHORD_DRUM) canvas.printf("%u/7", g_hiChordDrumKit + 1);
+                else if (g_hiChordPerformance.mode() == HICHORD_DRUM_LOOPS ||
+                         g_hiChordPerformance.mode() == HICHORD_AUTO_DRUM)
+                    canvas.printf("%u/8", g_hiChordGrooveVariation + 1);
+                else if (g_hiChordPerformance.mode() == HICHORD_CHORD_HIRO)
+                    canvas.print(hiChordPracticeSong(g_hiChordPracticeSong).name);
+                else if (g_hiChordPerformance.mode() == HICHORD_EAR_TRAINER)
+                    canvas.printf("%u score:%u", g_hiChordEarLevel + 1, g_hiChordEarScore);
+                else if (g_hiChordPerformance.mode() == HICHORD_ARPEGGIO) {
+                    static const char* arpNames[] = {"UP","DOWN","UP/DN","DN/UP","RANDOM","CHORD"};
+                    canvas.printf("%s x%u L%u", arpNames[g_hiChordArpPattern],
+                                  g_hiChordArpRate, g_hiChordArpLayer + 1);
+                } else if (g_hiChordPerformance.mode() == HICHORD_REPEAT)
+                    canvas.printf("x%u", g_hiChordRepeatRate);
+                else canvas.printf("%+d", g_chordSettings.inversion[g_chordDegree]);
+                break;
+        }
+    }
+    canvas.setTextColor(COL_SYNTH2); canvas.setCursor(146, 32); canvas.print("fn sh a s d f g");
+    canvas.setTextColor(COL_DIM); canvas.setCursor(146, 44); canvas.print("I II III IV V VI VII");
+    canvas.setCursor(146, 61); canvas.print("hold x/c/v/b");
+    canvas.setCursor(146, 72); canvas.print("for chord map");
+    if (g_hiChordPerformance.mode() == HICHORD_TUNER) {
+        const PitchEstimate pitch = micTunerEstimate();
+        canvas.setTextColor(pitch.midiNote >= 0 ? COL_SYNTH2 : COL_DIM);
+        canvas.setCursor(146, 88);
+        if (pitch.midiNote >= 0) canvas.printf("%.1fHz N%d %+dc", pitch.hz,
+                                               pitch.midiNote, pitch.cents);
+        else canvas.print("hold AUX + play");
+    }
+}
+
+static void drawFxPage() {
+    static const char* names[MASTER_EFFECT_COUNT] = {
+        "REVERB","DELAY","CHORUS","FLANGER","TREMOLO","VIBRATO","FILTER"
+    };
+    const MasterEffectType effect = static_cast<MasterEffectType>(g_masterEffectSelection);
+    const MasterEffectsSettings fx = g_masterEffects.settings();
+    const char* labels[] = {"EFFECT","ENABLED","MIX","FEEDBACK","RATE","FILTER"};
+    canvas.setTextColor(COL_TEXT); canvas.setCursor(2, 15); canvas.print("HICHORD MASTER EFFECTS");
+    for (uint8_t row = 0; row < 6; ++row) {
+        const int y = 32 + row * 15;
+        canvas.setTextColor(row == g_masterEffectParameter ? COL_TEXT : COL_DIM);
+        canvas.setCursor(2, y); canvas.printf("%c %-10s", row == g_masterEffectParameter ? '>' : ' ', labels[row]);
+        if (row == 0) canvas.print(names[effect]);
+        else if (row == 1) canvas.print(g_masterEffects.enabled(effect) ? "ON" : "OFF");
+        else if (row == 2) canvas.printf("%u", fx.mix[effect]);
+        else if (row == 3) canvas.printf("%u", fx.feedback);
+        else if (row == 4) canvas.printf("%u", fx.rate);
+        else canvas.printf("%u", fx.filter);
+    }
+}
+
+static void drawVocoderPage() {
+    static const char* sourceNames[] = {"LOOP 1","ONBOARD MIC","AUDIO CAP LINE"};
+    const VocoderSettings v = g_vocoder.settings();
+    const char* labels[] = {"ENABLED","SOURCE","FORMANT","Q","ATTACK","RELEASE","NOISE","GATE"};
+    canvas.setTextColor(COL_TEXT); canvas.setCursor(2, 15); canvas.print("8-BAND VOCODER");
+    for (uint8_t row = 0; row < 8; ++row) {
+        const int y = 29 + row * 12;
+        canvas.setTextColor(row == g_vocoderParameter ? COL_TEXT : COL_DIM);
+        canvas.setCursor(2, y); canvas.printf("%c %-9s", row == g_vocoderParameter ? '>' : ' ', labels[row]);
+        if (row == 0) canvas.print(v.enabled ? "ON" : "OFF");
+        else if (row == 1) canvas.print(sourceNames[v.source]);
+        else if (row == 2) canvas.printf("%+d st", v.formantShift);
+        else if (row == 3) canvas.printf("%u", v.resonance);
+        else if (row == 4) canvas.printf("%u", v.attack);
+        else if (row == 5) canvas.printf("%u", v.release);
+        else if (row == 6) canvas.printf("%u", v.noise);
+        else canvas.printf("%u", v.gate);
+    }
+    if (v.source != VOCODER_LOOP1) {
+        canvas.setTextColor(COL_ACCENT); canvas.setCursor(144, 102);
+        canvas.print("source needs hardware");
+    }
+}
+
+static const char *poEffectName(PoEffect effect) {
+    static const char* names[PO_FX_COUNT] = {
+        "LOOP 16","LOOP 12","LOOP SHORT","LOOP TINY","UNISON","UNISON LOW",
+        "OCTAVE UP","OCTAVE DOWN","STUTTER 4","STUTTER 3","SCRATCH","SCRATCH FAST",
+        "6/8 QUANT","RETRIGGER","REVERSE","NO EFFECT"
+    };
+    return names[effect < PO_FX_COUNT ? effect : PO_FX_NONE];
+}
+
+static void drawKoPage() {
+    canvas.setTextColor(COL_TEXT); canvas.setCursor(2, 15);
+    canvas.printf("PO-STYLE PUNCH FX PT%u ST%u SW%u", g_curPattern + 1, g_curStep + 1, g_swing);
+    canvas.setTextColor(COL_ACCENT); canvas.setCursor(2, 31);
+    canvas.printf("> %02u %s", g_poEffectSelection + 1,
+                  poEffectName(static_cast<PoEffect>(g_poEffectSelection)));
+    canvas.setTextColor(COL_DIM); canvas.setCursor(2, 47);
+    canvas.printf("PLAYING: %s", poEffectName(g_poEffectProcessor.effect()));
+    canvas.setCursor(2, 62);
+    canvas.printf("STEP LOCK: %s", poEffectName(g_poPatternEffects.get(g_curPattern, g_curStep)));
+    for (uint8_t i = 0; i < 8; ++i) {
+        const uint8_t effect = static_cast<uint8_t>(g_patternBank * 8 + i);
+        const int x = 4 + (i % 4) * 58, y = 82 + (i / 4) * 15;
+        canvas.setTextColor(effect == g_poEffectSelection ? COL_TEXT : COL_GRID);
+        canvas.setCursor(x, y); canvas.printf("%u:%.7s", i + 1, poEffectName(static_cast<PoEffect>(effect)));
+    }
+}
+
+static void drawMedoPage() {
+    static const char* roles[] = {"DRUM","BASS","CHORD","LEAD","SAMPLE"};
+    static const char* quantize[] = {"AS PLAYED","SNAP 16","MEDO GROOVE"};
+    static const char* scales[] = {"NATURAL","PENTA MAJOR","PENTA MINOR"};
+    static const char* arp[] = {"UP","DOWN","UP/DOWN","RANDOM"};
+    const MedoRole role = g_medoPerformance.role();
+    const MedoTrackSettings &settings = g_medoPerformance.settings(role);
+    canvas.setTextColor(COL_TEXT); canvas.setCursor(2, 15);
+    canvas.print("MEDO FIVE-ROLE PERFORMANCE");
+    const char* labels[] = {"ROLE","QUANTIZE","VOLUME","OCTAVE","LOOP BARS","SCALE","ARP"};
+    for (uint8_t row = 0; row < 7; ++row) {
+        const int y = 28 + row * 13;
+        canvas.setTextColor(row == g_medoParameter ? COL_TEXT : COL_DIM);
+        canvas.setCursor(2, y); canvas.printf("%c %-10s", row == g_medoParameter ? '>' : ' ', labels[row]);
+        if (row == 0) canvas.print(roles[role]);
+        else if (row == 1) canvas.print(quantize[settings.quantize]);
+        else if (row == 2) canvas.printf("%u", settings.volume);
+        else if (row == 3) canvas.printf("%+d", settings.octave);
+        else if (row == 4) canvas.printf("%u all roles", g_medoPerformance.sharedBars());
+        else if (row == 5) canvas.print(scales[g_medoPerformance.scale()]);
+        else canvas.printf("%s x%u", arp[g_medoPerformance.arpDirection()], g_medoPerformance.arpRate());
+    }
+    canvas.setTextColor(COL_DIM); canvas.setCursor(2, 121);
+    canvas.printf("%u bars  %u events  click/press/slide + IMU",
+                  g_eventLooper.bars(role), g_eventLooper.count(role));
+}
+
 // ---------- SAMPLE page ----------
 static void drawSamplePage() {
     const StreamingSamplerSnapshot sampler = streamingSamplerSnapshot();
@@ -487,7 +652,8 @@ static void drawLoopsPage() {
     const LoopEngineSnapshot loops = loopEngineSnapshot();
     canvas.setTextColor(COL_TEXT);
     canvas.setCursor(2, 15);
-    canvas.printf("6 AUDIO LOOPS  %.1fs", loops.timelineFrames /
+    canvas.printf("6 AUDIO LOOPS%s%s %.1fs", loops.paused ? " PAUSE" : "",
+                  loops.metronome ? " MET" : "", loops.timelineFrames /
                   static_cast<float>(SAMPLE_RATE));
     canvas.setTextColor(COL_DIM);
     canvas.setCursor(145, 15);
@@ -498,8 +664,9 @@ static void drawLoopsPage() {
         const int y = 30 + track * 15;
         canvas.setTextColor(track == g_loopCursor ? COL_TEXT : COL_DIM);
         canvas.setCursor(2, y);
-        canvas.printf("%c L%u %-9s %3u%% %4.1fs U%lu D%lu",
+        canvas.printf("%c L%u%s %-9s %3u%% %4.1fs U%lu D%lu",
                       track == g_loopCursor ? '>' : ' ', track + 1,
+                      loops.soloTrack == track ? "S" : " ",
                       loopEngineStateName(item.state),
                       static_cast<unsigned>(item.volumeQ15) * 100u / 32767u,
                       item.lengthFrames / static_cast<float>(SAMPLE_RATE),
@@ -654,16 +821,26 @@ void uiDraw() {
             drawFooter("ctl:page /:rec spc:play"); break;
         case PAGE_SOUND:   drawSoundPage();
             drawFooter("v c row  x b adjust  m=fine"); break;
+        case PAGE_FX:      drawFxPage();
+            drawFooter("v/c:row x/b:value /=toggle"); break;
+        case PAGE_VOCODER: drawVocoderPage();
+            drawFooter("v/c:row x/b:value /=toggle | L1 works now"); break;
+        case PAGE_CHORD:   drawChordPage();
+            drawFooter("fn..g chords | hold x/c/v/b + chord"); break;
         case PAGE_SAMPLE:  drawSamplePage();
             drawFooter(g_sampleEditMode == 0
-                       ? "tab:edit /=assign hold .=mic hold n=bus"
+                       ? "tab:edit /=assign =copy del=paste hold .=mic"
                        : g_sampleEditMode == 1
                        ? "tab:lock arrows:edit m+x/b:step"
                        : "tab:browse arrows:lock /=clear ,=step clr"); break;
+        case PAGE_KO:      drawKoPage();
+            drawFooter("4..-:FX tab:bank /=engage n=swing .=off"); break;
         case PAGE_LOOPS:   drawLoopsPage();
-            drawFooter("v/c:track x/b:volume /=record .:mute"); break;
+            drawFooter("/=rec .=mute tab=solo n=pause ,=metro"); break;
         case PAGE_EVENT:   drawEventPage();
             drawFooter("v/c:track x/b:bars /=arm .:mute"); break;
+        case PAGE_MEDO:    drawMedoPage();
+            drawFooter("v/c:row x/b:value z:clear role"); break;
         case PAGE_MOTION:  drawMotionPage();
             drawFooter("v/c:map x/b:source .:target z:clear"); break;
         case PAGE_SONG:    drawSongPage();

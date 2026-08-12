@@ -49,7 +49,8 @@ class SiteBuildTests(unittest.TestCase):
             self.assertEqual(len(parser.ids), len(set(parser.ids)))
             self.assertEqual(
                 set(parser.contexts),
-                {"global", "pattern", "sound", "sample", "loops", "event", "motion", "song", "diag"},
+                {"global", "pattern", "sound", "fx", "vocoder", "chord", "sample", "ko",
+                 "loops", "event", "medo", "motion", "song", "diag"},
             )
             ids = set(parser.ids)
             for link in parser.links:

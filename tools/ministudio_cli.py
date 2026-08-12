@@ -152,6 +152,30 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["synth", args.track, "set", args.parameter, args.value]
     if args.command == "synth-dsp-reset":
         return ["synth", "dsp_reset"]
+    if args.command == "chord-status":
+        return ["chord", "status"]
+    if args.command == "chord-play":
+        return ["chord", "play", args.degree, args.direction]
+    if args.command == "chord-off":
+        return ["chord", "off"]
+    if args.command == "chord-set":
+        return ["chord", "set", args.parameter, args.value]
+    if args.command == "chord-lock":
+        return ["chord", "lock", args.degree, args.chord_type]
+    if args.command == "chord-unlock":
+        return ["chord", "unlock", args.degree]
+    if args.command == "po-effect":
+        return ["po", "effect", args.effect]
+    if args.command == "po-lock":
+        return ["po", "lock", args.pattern, args.step, args.effect]
+    if args.command == "medo-status":
+        return ["medo", "status"]
+    if args.command == "medo-role":
+        return ["medo", "role", args.role]
+    if args.command == "medo-quantize":
+        return ["medo", "quantize", args.role, args.mode]
+    if args.command == "medo-set":
+        return ["medo", "set", args.parameter, args.value]
     if args.command == "cap-status":
         return ["cap", "status"]
     if args.command == "cap-pair":
@@ -254,6 +278,34 @@ def parser() -> argparse.ArgumentParser:
     synth_set.add_argument("value", type=int, choices=range(0, 5001),
                            metavar="0..5000")
     sub.add_parser("synth-dsp-reset", help="reset audio render timing counters")
+    sub.add_parser("chord-status", help="show HiChord performance state")
+    chord_play = sub.add_parser("chord-play", help="play degree 1..7 with direction 0..8")
+    chord_play.add_argument("degree", type=int, choices=range(1, 8))
+    chord_play.add_argument("direction", type=int, choices=range(0, 9))
+    sub.add_parser("chord-off", help="release a remotely held chord")
+    chord_set = sub.add_parser("chord-set", help="set a HiChord performance parameter")
+    chord_set.add_argument("parameter")
+    chord_set.add_argument("value", type=int, choices=range(0, 256))
+    chord_lock = sub.add_parser("chord-lock", help="lock one degree to chord type 0..27")
+    chord_lock.add_argument("degree", type=int, choices=range(1, 8))
+    chord_lock.add_argument("chord_type", type=int, choices=range(0, 28))
+    chord_unlock = sub.add_parser("chord-unlock")
+    chord_unlock.add_argument("degree", type=int, choices=range(1, 8))
+    po_effect = sub.add_parser("po-effect", help="engage PO punch effect 0..15")
+    po_effect.add_argument("effect", type=int, choices=range(0, 16))
+    po_lock = sub.add_parser("po-lock", help="write a PO effect to a pattern step")
+    po_lock.add_argument("pattern", type=int, choices=range(1, 17))
+    po_lock.add_argument("step", type=int, choices=range(1, 17))
+    po_lock.add_argument("effect", type=int, choices=range(0, 16))
+    sub.add_parser("medo-status", help="show MEDO role and looper state")
+    medo_role = sub.add_parser("medo-role")
+    medo_role.add_argument("role", type=int, choices=range(1, 6))
+    medo_quantize = sub.add_parser("medo-quantize")
+    medo_quantize.add_argument("role", type=int, choices=range(1, 6))
+    medo_quantize.add_argument("mode", type=int, choices=range(0, 3))
+    medo_set = sub.add_parser("medo-set", help="set scale, arp_direction, arp_rate, or bars")
+    medo_set.add_argument("parameter", choices=("scale", "arp_direction", "arp_rate", "bars"))
+    medo_set.add_argument("value", type=int, choices=range(0, 256))
     sub.add_parser("cap-status", help="show optional Audio Cap connection and stream counters")
     sub.add_parser("cap-pair", help="discover and pair conventional Bluetooth audio output")
     sub.add_parser("cap-disconnect", help="disconnect the current Bluetooth audio output")

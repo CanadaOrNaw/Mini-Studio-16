@@ -33,16 +33,22 @@ int main() {
     assert(total == 16003);
     assert(bank.setSlice(0, 3, 100, 200));
     assert(!bank.setSlice(0, 3, 0, 200));
+    assert(bank.copySlot(0, 2));
+    assert(bank.slot(2).mode == SAMPLER_SLOT_SLICED);
+    assert(bank.quotaUsedFrames() == 44100);
+    assert(bank.copySlice(0, 3, 2, 4));
+    assert(bank.slot(2).slices[4].startFrame == 100);
+    assert(!bank.copySlot(0, 0));
     assert(bank.validate());
 
     // Quota is duration-normalized, so 48 kHz source material consumes the
     // same project time as 22.05 kHz material.
     assert(bank.assign(1, "two.wav", 48000, 48000, SAMPLER_SLOT_MELODIC));
-    assert(bank.quotaUsedFrames() == 44100);
+    assert(bank.quotaUsedFrames() == 66150);
     assert(!bank.assign(2, "too-long.wav", 40 * 48000, 48000,
                         SAMPLER_SLOT_MELODIC));
     assert(bank.remove(1));
-    assert(bank.quotaUsedFrames() == 22050);
+    assert(bank.quotaUsedFrames() == 44100);
 
     SamplerSequence sequence;
     assert(sequence.setTrigger(15, 15, 15, true));

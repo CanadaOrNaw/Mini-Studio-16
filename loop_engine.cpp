@@ -13,6 +13,8 @@
 #include <SD.h>
 #include <string.h>
 
+extern uint16_t g_bpm;
+
 namespace {
 constexpr uint32_t kPlaybackRingFrames = 1024;
 constexpr uint32_t kRecordRingFrames = 4096;
@@ -48,6 +50,10 @@ bool s_sdMounted = false;
 uint32_t s_maxReadUs = 0;
 uint32_t s_maxWriteUs = 0;
 uint32_t s_errors = 0;
+alignas(4) uint32_t s_paused = 0;
+alignas(4) uint32_t s_metronome = 0;
+alignas(4) uint32_t s_soloTrack = LOOP_NO_TRACK;
+uint8_t s_preSoloMutedMask = 0;
 
 void trackPath(uint8_t track, char* output, size_t capacity) {
     snprintf(output, capacity, "%s/L%u.wav", DIR_LOOPS,
@@ -451,6 +457,10 @@ void loopEngineInit(bool sdMounted) {
     __atomic_store_n(&s_recordRequests, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_clearRequests, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_clearOutstanding, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_paused, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_metronome, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_soloTrack, LOOP_NO_TRACK, __ATOMIC_RELEASE);
+    s_preSoloMutedMask = 0;
     portENTER_CRITICAL(&s_metricsMux);
     s_maxReadUs = s_maxWriteUs = s_errors = 0;
     portEXIT_CRITICAL(&s_metricsMux);
@@ -462,8 +472,17 @@ void loopEngineInit(bool sdMounted) {
 }
 
 int32_t loopEngineProcessFrame(int16_t dryInput) {
-    return s_sdMounted ? s_core.processFrame(dryInput) : 0;
+    if (!s_sdMounted || __atomic_load_n(&s_paused, __ATOMIC_ACQUIRE)) return 0;
+    int32_t output = s_core.processFrame(dryInput);
+    if (__atomic_load_n(&s_metronome, __ATOMIC_ACQUIRE)) {
+        const uint32_t beatFrames = static_cast<uint32_t>(SAMPLE_RATE) * 60u /
+                                    (g_bpm ? g_bpm : 120u);
+        const uint32_t phase = beatFrames ? s_core.absoluteFrame() % beatFrames : 0;
+        if (phase < 96) output += static_cast<int32_t>(5000 * (96 - phase) / 96);
+    }
+    return output;
 }
+int32_t loopEngineLastTrackPcm(uint8_t track) { return s_core.lastTrackOutput(track); }
 
 bool loopEngineRequestRecord(uint8_t track) {
     if (!s_sdMounted || track >= LOOP_STREAM_TRACKS || loopEngineIsRecording() ||
@@ -489,6 +508,35 @@ bool loopEngineSetMuted(uint8_t track, bool muted) {
 bool loopEngineSetVolume(uint8_t track, uint8_t percent) {
     if (percent > 100) return false;
     return s_core.setVolumeQ15(track, static_cast<int16_t>(percent * 32767u / 100u));
+}
+
+bool loopEngineSetSolo(uint8_t track, bool solo) {
+    if (track >= LOOP_STREAM_TRACKS) return false;
+    const uint8_t current = static_cast<uint8_t>(
+        __atomic_load_n(&s_soloTrack, __ATOMIC_ACQUIRE));
+    if (solo) {
+        if (current != LOOP_NO_TRACK && current != track) loopEngineSetSolo(current, false);
+        s_preSoloMutedMask = 0;
+        for (uint8_t index = 0; index < LOOP_STREAM_TRACKS; ++index) {
+            if (s_core.muted(index)) s_preSoloMutedMask |= static_cast<uint8_t>(1u << index);
+            s_core.setMuted(index, index != track);
+        }
+        __atomic_store_n(&s_soloTrack, track, __ATOMIC_RELEASE);
+    } else {
+        if (current != track) return false;
+        for (uint8_t index = 0; index < LOOP_STREAM_TRACKS; ++index)
+            s_core.setMuted(index, (s_preSoloMutedMask & (1u << index)) != 0);
+        __atomic_store_n(&s_soloTrack, LOOP_NO_TRACK, __ATOMIC_RELEASE);
+    }
+    return true;
+}
+
+void loopEngineSetPaused(bool paused) {
+    if (!loopEngineIsRecording())
+        __atomic_store_n(&s_paused, paused ? 1u : 0u, __ATOMIC_RELEASE);
+}
+void loopEngineSetMetronome(bool enabled) {
+    __atomic_store_n(&s_metronome, enabled ? 1u : 0u, __ATOMIC_RELEASE);
 }
 
 bool loopEngineClear(uint8_t track) {
@@ -524,6 +572,10 @@ bool loopEngineHasActiveIo() {
 LoopEngineSnapshot loopEngineSnapshot() {
     LoopEngineSnapshot snapshot = {};
     snapshot.available = s_sdMounted && s_task != nullptr;
+    snapshot.paused = __atomic_load_n(&s_paused, __ATOMIC_ACQUIRE) != 0;
+    snapshot.metronome = __atomic_load_n(&s_metronome, __ATOMIC_ACQUIRE) != 0;
+    snapshot.soloTrack = static_cast<uint8_t>(
+        __atomic_load_n(&s_soloTrack, __ATOMIC_ACQUIRE));
     snapshot.recordTrack = s_core.recordTrack();
     if (snapshot.recordTrack == LOOP_NO_TRACK)
         snapshot.recordTrack = static_cast<uint8_t>(

@@ -58,6 +58,7 @@ extern uint8_t    g_playStep;
 extern uint8_t    g_playPattern;    // pattern currently sounding
 extern uint8_t    g_songPos;
 extern uint16_t   g_bpm;
+extern uint8_t    g_swing;
 
 // edit state
 extern uint8_t    g_curPattern;     // pattern being edited/viewed
@@ -73,8 +74,10 @@ void sequencerTick();               // call every loop(); handles step timing
 void sequencerExternalStart(bool fromTop);
 void sequencerExternalStop();
 void sequencerExternalStep();
+void sequencerExternalEventTick();
 void sequencerExternalSongPosition(uint16_t position);
 uint16_t sequencerEventRecordStep();
+uint8_t sequencerPatternRecordStep();
 uint32_t sequencerMidiClockDropped();
 
 // Live input -> sound + optional record

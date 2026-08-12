@@ -113,6 +113,64 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 "$build_dir/test_motion_core"
 
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_chord_engine.cpp" "$test_dir/../chord_engine.cpp" \
+  -o "$build_dir/test_chord_engine"
+
+"$build_dir/test_chord_engine"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_medo_performance.cpp" "$test_dir/../medo_performance.cpp" \
+  -o "$build_dir/test_medo_performance"
+
+"$build_dir/test_medo_performance"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_po_effects.cpp" "$test_dir/../po_effects.cpp" \
+  -o "$build_dir/test_po_effects"
+
+"$build_dir/test_po_effects"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_hichord_performance.cpp" "$test_dir/../hichord_performance.cpp" \
+  "$test_dir/../chord_engine.cpp" -o "$build_dir/test_hichord_performance"
+
+"$build_dir/test_hichord_performance"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_pitch_detector.cpp" "$test_dir/../pitch_detector.cpp" \
+  -o "$build_dir/test_pitch_detector"
+
+"$build_dir/test_pitch_detector"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_performance_project.cpp" "$test_dir/../performance_project.cpp" \
+  "$test_dir/../performance_state.cpp" "$test_dir/../chord_engine.cpp" \
+  "$test_dir/../hichord_performance.cpp" "$test_dir/../medo_performance.cpp" \
+  "$test_dir/../po_effects.cpp" "$test_dir/../synth_project.cpp" \
+  "$test_dir/../master_effects.cpp" \
+  "$test_dir/../vocoder.cpp" \
+  "${synth_sources[@]}" -o "$build_dir/test_performance_project"
+
+"$build_dir/test_performance_project"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_master_effects.cpp" "$test_dir/../master_effects.cpp" \
+  -o "$build_dir/test_master_effects"
+
+"$build_dir/test_master_effects"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_vocoder.cpp" "$test_dir/../vocoder.cpp" \
+  -o "$build_dir/test_vocoder"
+
+"$build_dir/test_vocoder"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_swing_timing.cpp" -o "$build_dir/test_swing_timing"
+
+"$build_dir/test_swing_timing"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
   "$test_dir/test_ble_midi_codec.cpp" -o "$build_dir/test_ble_midi_codec"
 
 "$build_dir/test_ble_midi_codec"
@@ -176,7 +234,7 @@ g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
   "$test_dir/../storage.cpp"
 
-echo "storage: GBX v1/v2/v3/v4/v5/v6/v7/v8 layout and syntax checks passed"
+echo "storage: GBX v1/v2/v3/v4/v5/v6/v7/v8/v9 layout and syntax checks passed"
 
 g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
@@ -197,6 +255,15 @@ g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   "$test_dir/../streaming_sampler.cpp" \
   "$test_dir/../event_looper.cpp" \
   "$test_dir/../motion.cpp" \
+  "$test_dir/../chord_engine.cpp" \
+  "$test_dir/../medo_performance.cpp" \
+  "$test_dir/../po_effects.cpp" \
+  "$test_dir/../hichord_performance.cpp" \
+  "$test_dir/../pitch_detector.cpp" \
+  "$test_dir/../performance_state.cpp" \
+  "$test_dir/../performance_project.cpp" \
+  "$test_dir/../master_effects.cpp" \
+  "$test_dir/../vocoder.cpp" \
   "$test_dir/../ble_midi.cpp" \
   "$test_dir/../usb_midi.cpp" "$test_dir/../midi_output.cpp" \
   "$test_dir/../loop_engine.cpp" "$test_dir/../sd_io_arbiter.cpp" \

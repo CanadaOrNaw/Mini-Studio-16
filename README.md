@@ -44,12 +44,13 @@ first physical print/fit remains a hardware gate; see
 
 | System | Implemented software | Remaining proof |
 | --- | --- | --- |
-| Synthesis | Per-track selectable original `MG/303`, expanded subtractive `MGX`, or genuine four-operator `FM4`; fixed-size DSP, banked SOUND UI, velocity/note-off, automation, CLI, and GBX v8 persistence | Real render time and safe simultaneous FM polyphony under full device load |
+| HiChord instrument | Seven diatonic chord keys; 10 scales, 28 chord types, three directional maps, inversions, locks, root/slash bass, voice leading; all 15 performance modes; strum/arp/repeat/drone; seven kits/56 grooves; chord sequencer bounce; pitch-detected mic sample, tuner, practice, ear training, mixer, presets, effects, and vocoder | Playing feel, pitch-detection calibration, and full-duplex mic vocoder on the physical codec |
+| Synthesis | Per-track selectable original `MG/303`, expanded subtractive `MGX`, or genuine four-operator `FM4`; fixed-size DSP, banked SOUND UI, velocity/note-off, automation, CLI, and GBX v9 persistence | Real render time and safe simultaneous FM polyphony under full device load |
 | Six-track audio looper | Six independent 22.05 kHz mono SD streams, up to 20 seconds; Track 1 fixes the frame length; tracks 2–6 align to its boundary; mute, volume, recovery, and resync | Zero-underrun playback and simultaneous recording on the actual card |
-| PO-style sampler | 16 SD-streamed slots sharing a normalized 40-second quota; melodic/sliced modes, 16 slices, trim, pitch, gain, filter, four voices, pattern triggers, and sparse parameter locks | Performance and latency on the actual SD card |
+| PO-33 workflow | 16 SD-streamed slots sharing a normalized 40-second quota; melodic/sliced modes, per-slice trim/copy, sound copy, pitch/gain/filter, four voices, quantized live recording, swing, parameter locks, and all 15 momentary/recordable punch effects | Performance and latency on the actual SD card |
 | Sequencer | 16 patterns × 16 steps and a 128-entry chain | Keyboard/UI usability pass |
-| Event looper | Five role-mapped drum/bass/chord/lead/sample-control tracks, 1–128 bars, 2,048 events, arm/mute/clear | Long-run timing and live workflow |
-| Motion | BMI270 filtering, tilt/accel/gyro/shake/slap sources, four mappings, synth cutoff/resonance targets, MIDI CC, and recordable automation | IMU calibration and gesture thresholds |
+| MEDO workflow | Five role-mapped drum/bass/chord/lead/sample tracks, shared 1–128-bar length, overdub, three quantize modes, per-role level/octave, natural/pentatonic scales, arp state, and 2,048 events | Long-run timing and live workflow |
+| Motion | BMI270 filtering plus Click/Press/Slide/Slap/Tilt/Shake/Wiggle/Move control messages, four internal mappings, MIDI output, and recordable automation | IMU calibration and gesture thresholds |
 | MIDI/boot | BLE MIDI input/output; composite USB CDC+MIDI device app; direct USB-MIDI host app; combined dual-slot image with validated on-device role selector and reboot; notes, CC, clock, song position, start/continue/stop | Bidirectional role switching, enumeration, reconnect, clock jitter, OTG/VBUS behavior |
 | Recording | Long master WAVs and optional five-bus master/synth1/synth2/synth3/drums stem containers on SD | Zero-drop 30-minute captures and power-cut cycles |
 | Control | Bounded `MS16/1` USB serial protocol, desktop CLI, JSON, monitor, discovery, fuzzing, and soak client | Device-side 10,000-command soak |
@@ -69,16 +70,17 @@ stems without removing any inherited standalone workflow.
   motion filtering/cooldowns, MIDI parsing/transport, BLE framing, USB-MIDI host
   descriptor parsing, WAV/stem recovery, project layouts, protocol fuzzing,
   CLI behavior, concurrent ring ordering, the exact legacy synth PCM vector,
-  ADSR/operator/algorithm/ratio/feedback/engine switching, GBX v8 synthesis
+  ADSR/operator/algorithm/ratio/feedback/engine switching, GBX v9 synthesis
   migration, deterministic offline FM waveform/spectrum statistics, dual-role
   selection/recovery decisions, partition bounds, and exact image placement.
 - GitHub runs the host suite plus AddressSanitizer and UndefinedBehaviorSanitizer.
 - Firmware size is checked from the ESP32 linker sections using the same DRAM
   accounting rules as PlatformIO, with a 200 KiB static-DRAM ceiling so runtime
   workers, wireless stacks, and the 8-bit UI canvas retain heap.
-- GBX v8 persists the expanded sequencer, sampler, locks, event tracks, motion
-  mappings, six-loop mixer, and all per-track engine patches while retaining
-  v1–v7 loading as the original `MG/303` engine.
+- GBX v9 persists the expanded sequencer, sampler, PO effect locks, HiChord
+  performance/presets, MEDO settings, event tracks, motion mappings, effects,
+  vocoder, six-loop mixer, and all engine patches while retaining v1–v8 load
+  migration to the original `MG/303` behavior.
 - Every long-audio subsystem uses bounded RAM rings; SD files are owned by
   storage workers, not opened or touched by the real-time renderer.
 - The inherited mic-to-drum and short-resample gestures use the streamed
@@ -170,11 +172,16 @@ Tap `ctrl` to cycle through the original and new pages.
 | --- | --- |
 | Startup selector | `Tab` validates/selects the other installed USB role and reboots; any other key starts the displayed role |
 | SOUND synth | `tab` cycles the selected engine's small parameter banks; `v/c` selects a row; `x/b` edits; hold `m` for fine edits; COMMON selects `MG/303`, `MGX`, or `FM4` |
+| FX | `v/c` selects effect/parameter; `x/b` edits; `/` toggles the selected reverb, delay, chorus, flanger, tremolo, vibrato, or filter |
+| VOCODER | Select Loop 1, onboard mic, or Audio Cap line as modulator and edit eight-band vocoder controls; Loop 1 is software-complete, live mic/line validation needs hardware |
+| CHORD | `fn shift a s d f g` play I–VII; hold `x/c/v/b` for directional chord variants; select all 15 HiChord modes and chord settings with arrows; `tab` changes arp/map context; presets use `4`–`7` |
 | SAMPLE browser | `x/b` chooses slot, `v/c` chooses WAV, `/` assigns; hold `.` records mic; hold `n` records master bus |
 | SAMPLE performance | 16 white/performance keys trigger pitches or slices; REC writes quantized events |
 | SAMPLE edit | `tab` cycles browser/sound/step-lock; `v/c` selects parameter; `x/b` edits; hold `m` + `x/b` selects step; `/` clears a lock; `,` clears the sample event |
-| LOOPS | `v/c` selects L1–L6, `x/b` changes volume, `/` records/stops, `.` mutes, `z` clears |
+| KO | Pattern keys `4`–`-` are momentary PO punch effects (A/B selects effects 1–8/9–16); WRITE/PLAY records them; `n` changes swing; `z` clears the step lock |
+| LOOPS | `v/c` selects L1–L6, `x/b` changes volume, `/` records/stops, `.` mutes, `tab` solos, `n` pauses, `,` toggles metronome, `z` clears |
 | EVENT | `v/c` selects one of five tracks, `x/b` changes bar length, `/` arms, `.` mutes, `z` clears |
+| MEDO | Select Drum/Bass/Chord/Lead/Sample role; edit quantize, volume, octave, shared 1–128 bars, scale and arp settings; `/` overdub-arms and `z` clears the role |
 | MOTION | `v/c` selects mapping, `x/b` selects source, `.` advances target, `z` clears |
 | SONG | Existing 128-chain controls remain; hold `.` toggles master recording and hold `n` toggles stem recording |
 | SD TEST | `/` starts the diagnostic pass |
@@ -202,6 +209,9 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 --json midi-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-engine 1 fm4
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 1 fm.op2.ratio 200
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 chord-play 1 0
+python tools/ministudio_cli.py --port /dev/ttyACM0 po-lock 1 4 14
+python tools/ministudio_cli.py --port /dev/ttyACM0 medo-set bars 128
 python tools/ministudio_cli.py --port /dev/ttyACM0 boot-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 boot-mode host
 python tools/ministudio_cli.py --port /dev/ttyACM0 cap-status
@@ -220,7 +230,7 @@ Use a FAT32 microSD card for the first hardware pass:
 
 ```text
 /groovebox/
-├── projects/       P1.gbx–P8.gbx, current write version GBX v8
+├── projects/       P1.gbx–P8.gbx plus atomic .bak, current write version GBX v9
 ├── samples/        adaptive RAM/streamed drum samples and 16-slot WAV assets
 ├── wavetables/     optional single-cycle WAVs
 ├── loops/          L1.wav–L6.wav and recovery files

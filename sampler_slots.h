@@ -68,6 +68,9 @@ public:
     bool assign(uint8_t slot, const char* filename, uint32_t sourceFrames,
                 uint32_t sourceRate, SamplerSlotMode mode);
     bool remove(uint8_t slot);
+    bool copySlot(uint8_t source, uint8_t destination);
+    bool copySlice(uint8_t sourceSlot, uint8_t sourceSlice,
+                   uint8_t destinationSlot, uint8_t destinationSlice);
     bool setMode(uint8_t slot, SamplerSlotMode mode);
     bool setTrim(uint8_t slot, uint32_t startFrame, uint32_t lengthFrames);
     bool setSlice(uint8_t slot, uint8_t slice, uint32_t startFrame,

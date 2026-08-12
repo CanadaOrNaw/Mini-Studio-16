@@ -13,6 +13,7 @@
 #include "loop_engine.h"
 #include "streaming_sampler.h"
 #include "audio_cap.h"
+#include "performance_state.h"
 
 float g_scopeBuf[SCREEN_W];
 volatile int g_scopeIdx = 0;
@@ -45,6 +46,7 @@ static void audioTask(void*) {
         // applied here, at the block boundary, so setEngine's voice re-init
         // can never interleave with the per-sample render() calls below.
         for (int s = 0; s < NUM_SYNTHS; s++) g_synths[s].applyPendingEngine();
+        const VocoderSettings vocoder = g_vocoder.settings();
 
         for (int i = 0; i < AUDIO_BUF_LEN; i++) {
             float synthBus[NUM_SYNTHS] = {0.0f, 0.0f, 0.0f};
@@ -64,11 +66,16 @@ static void audioTask(void*) {
                                  sampleBus;
             const int16_t dryPcm = toPcm(dryMix);
             const int32_t loopPcm = loopEngineProcessFrame(dryPcm);
-            float mix = dryMix + static_cast<float>(loopPcm) / 12000.0f;
+            const int16_t modulator = vocoder.source == VOCODER_LOOP1
+                ? static_cast<int16_t>(loopEngineLastTrackPcm(0)) : 0;
+            const int16_t carrier = g_vocoder.process(toPcm(dryMix), modulator);
+            const float carrierMix = vocoder.enabled
+                ? static_cast<float>(carrier) / 12000.0f : dryMix;
+            float mix = carrierMix + static_cast<float>(loopPcm) / 12000.0f;
 
             // soft clip
             if (mix > 1.0f) mix = 1.0f; else if (mix < -1.0f) mix = -1.0f;
-            buf[i] = toPcm(mix);
+            buf[i] = g_poEffectProcessor.process(g_masterEffects.process(toPcm(mix)));
             s_stemBuf[i].master = buf[i];
             s_stemBuf[i].synth1 = toPcm(synthBus[0]);
             s_stemBuf[i].synth2 = toPcm(synthBus[1]);

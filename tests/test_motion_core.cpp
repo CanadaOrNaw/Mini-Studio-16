@@ -43,6 +43,10 @@ int main() {
         output = filter.update({1.0f, 0, 0, 0, 0, 0, 1310 + step * 10});
     assert(output.values[MOTION_SOURCE_SLAP] == 0);  // fully decayed
 
+    MotionFilter wiggle;
+    output = wiggle.update({0, 0, 1, 0, 0, 500, 5000});
+    assert(output.gestures & MOTION_GESTURE_WIGGLE);
+
     std::cout << "motion_core: filtering, tilt and gesture cooldown passed\n";
     return 0;
 }

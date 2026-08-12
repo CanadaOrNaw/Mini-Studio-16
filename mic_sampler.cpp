@@ -13,12 +13,18 @@
 #include "ui.h"
 
 #include <M5Cardputer.h>
+#include <memory>
+#include <new>
 #include <string.h>
 
 namespace {
 constexpr uint8_t kNoLane = 0xFF;
 
 bool s_recActive = false;
+bool s_tunerActive = false;
+std::unique_ptr<int16_t[]> s_tunerFrames;
+uint16_t s_tunerCount = 0;
+PitchEstimate s_tunerEstimate = {0.0f, 0.0f, -1, 0};
 bool s_assignRecordedLane = false;
 uint8_t s_recLane = kNoLane;
 int8_t s_recReference = -1;
@@ -134,12 +140,49 @@ bool micStreamRecStart(uint8_t slot, SamplerSlotMode mode) {
                     samplerMakeStreamReference(slot));
 }
 
+bool micHiChordRecStart(uint8_t slot) {
+    if (slot >= SAMPLER_SLOT_COUNT || s_lanePublishPending ||
+        s_resampleActive || s_resamplePending) return false;
+    return beginMic(slot, SAMPLER_SLOT_MELODIC, MIC_RATE * 3u, false,
+                    kNoLane, samplerMakeStreamReference(slot));
+}
+
+bool micTunerStart() {
+    if (s_recActive || recorderUnavailable()) return false;
+    s_tunerFrames.reset(new (std::nothrow) int16_t[2048]);
+    if (!s_tunerFrames) { uiStatus("TUNER: NO MEMORY"); return false; }
+    sequencerStop(); M5Cardputer.Speaker.end(); M5Cardputer.Mic.begin();
+    s_recActive = true; s_tunerActive = true; s_tunerCount = 0;
+    s_tunerEstimate = {0.0f, 0.0f, -1, 0}; s_curChunk = 0;
+    M5Cardputer.Mic.record(s_chunk[0], MIC_CAPTURE_CHUNK, MIC_RATE);
+    M5Cardputer.Mic.record(s_chunk[1], MIC_CAPTURE_CHUNK, MIC_RATE);
+    uiStatus("TUNER LISTENING"); return true;
+}
+
+PitchEstimate micTunerEstimate() { return s_tunerEstimate; }
+
 void micSamplerUpdate() {
     if (s_recActive) {
         uint8_t stalledRequeues = 0;
         while (!M5Cardputer.Mic.isRecording() ||
                M5Cardputer.Mic.isRecording() == 1) {
             int16_t* done = s_chunk[s_curChunk];
+            if (s_tunerActive) {
+                const uint16_t available = static_cast<uint16_t>(2048 - s_tunerCount);
+                const uint16_t copy = available < MIC_CAPTURE_CHUNK ? available : MIC_CAPTURE_CHUNK;
+                memcpy(s_tunerFrames.get() + s_tunerCount, done, copy * sizeof(int16_t));
+                s_tunerCount = static_cast<uint16_t>(s_tunerCount + copy);
+                if (s_tunerCount == 2048) {
+                    s_tunerEstimate = PitchDetector::detect(s_tunerFrames.get(), 2048, MIC_RATE);
+                    memmove(s_tunerFrames.get(), s_tunerFrames.get() + 1024, 1024 * sizeof(int16_t));
+                    s_tunerCount = 1024; g_needRedraw = true;
+                }
+                M5Cardputer.Mic.record(done, MIC_CAPTURE_CHUNK, MIC_RATE);
+                s_curChunk ^= 1;
+                if (M5Cardputer.Mic.isRecording() >= 2) break;
+                if (++stalledRequeues >= 2) { micRecStop(); break; }
+                continue;
+            }
             const size_t pushed = streamingSamplerRecordPush(
                 STREAM_SAMPLE_INPUT_MIC, done, MIC_CAPTURE_CHUNK);
             int32_t peak = 0;
@@ -190,6 +233,10 @@ void micRecStop() {
     g_holdProg = 0;
     g_holdLabel[0] = 0;
 
+    if (s_tunerActive) {
+        s_tunerActive = false; s_tunerFrames.reset();
+        uiStatus("TUNER STOPPED"); g_needRedraw = true; return;
+    }
     const StreamingSamplerRecordState state = streamingSamplerSnapshot().recordState;
     if (state == STREAM_SAMPLE_REC_STARTING || state == STREAM_SAMPLE_REC_RECORDING)
         streamingSamplerStopRecord();

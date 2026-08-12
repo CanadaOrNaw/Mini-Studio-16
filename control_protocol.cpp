@@ -165,6 +165,13 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
         if (sameWord(trackOrStatus, "status")) {
             if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
             request.command = CONTROL_LOOP_STATUS;
+        } else if (sameWord(trackOrStatus, "pause") || sameWord(trackOrStatus, "resume") ||
+                   sameWord(trackOrStatus, "metronome_on") || sameWord(trackOrStatus, "metronome_off")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = sameWord(trackOrStatus, "pause") ? CONTROL_LOOP_PAUSE :
+                sameWord(trackOrStatus, "resume") ? CONTROL_LOOP_RESUME :
+                sameWord(trackOrStatus, "metronome_on") ? CONTROL_LOOP_METRONOME_ON :
+                                                          CONTROL_LOOP_METRONOME_OFF;
         } else {
             if (!parseNumber(trackOrStatus, 1, 6, request.arg1))
                 return CONTROL_PARSE_BAD_ARGUMENTS;
@@ -180,6 +187,8 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
             else if (sameWord(action, "mute")) request.command = CONTROL_LOOP_MUTE;
             else if (sameWord(action, "unmute")) request.command = CONTROL_LOOP_UNMUTE;
             else if (sameWord(action, "clear")) request.command = CONTROL_LOOP_CLEAR;
+            else if (sameWord(action, "solo")) request.command = CONTROL_LOOP_SOLO;
+            else if (sameWord(action, "unsolo")) request.command = CONTROL_LOOP_UNSOLO;
             else return CONTROL_PARSE_BAD_ARGUMENTS;
         }
     } else if (sameWord(verb, "sample")) {
@@ -302,6 +311,77 @@ ControlParseStatus controlParseLine(const char* line, ControlRequest& request) {
         else if (sameWord(action, "host") || sameWord(action, "usb_host"))
             request.command = CONTROL_BOOT_USB_HOST;
         else return CONTROL_PARSE_BAD_ARGUMENTS;
+    } else if (sameWord(verb, "chord")) {
+        char* action = nextToken(cursor);
+        if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(action, "status")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CHORD_STATUS;
+        } else if (sameWord(action, "play")) {
+            if (!parseNumber(nextToken(cursor), 1, 7, request.arg1) ||
+                !parseNumber(nextToken(cursor), 0, 8, request.arg2) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CHORD_PLAY;
+        } else if (sameWord(action, "off")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CHORD_OFF;
+        } else if (sameWord(action, "set")) {
+            char* parameter = nextToken(cursor);
+            if (!parameter || strlen(parameter) >= sizeof(request.text) ||
+                !parseNumber(nextToken(cursor), 0, 255, request.arg1) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            strcpy(request.text, parameter); request.command = CONTROL_CHORD_SET;
+        } else if (sameWord(action, "lock")) {
+            if (!parseNumber(nextToken(cursor), 1, 7, request.arg1) ||
+                !parseNumber(nextToken(cursor), 0, CHORD_TYPE_COUNT - 1, request.arg2) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CHORD_LOCK;
+        } else if (sameWord(action, "unlock")) {
+            if (!parseNumber(nextToken(cursor), 1, 7, request.arg1) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_CHORD_UNLOCK;
+        } else if (sameWord(action, "inversion") || sameWord(action, "octave_shift")) {
+            if (!parseNumber(nextToken(cursor), 1, 7, request.arg1) ||
+                !parseNumber(nextToken(cursor), 0, sameWord(action, "inversion") ? 5 : 4, request.arg2) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = sameWord(action, "inversion") ? CONTROL_CHORD_INVERSION : CONTROL_CHORD_OCTAVE_SHIFT;
+        } else return CONTROL_PARSE_BAD_ARGUMENTS;
+    } else if (sameWord(verb, "po")) {
+        char* action = nextToken(cursor);
+        if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(action, "effect")) {
+            if (!parseNumber(nextToken(cursor), 0, 15, request.arg1) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_PO_EFFECT;
+        } else if (sameWord(action, "lock")) {
+            if (!parseNumber(nextToken(cursor), 1, 16, request.arg1) ||
+                !parseNumber(nextToken(cursor), 1, 16, request.arg2) ||
+                !parseNumber(nextToken(cursor), 0, 15, request.arg3) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_PO_LOCK;
+        } else return CONTROL_PARSE_BAD_ARGUMENTS;
+    } else if (sameWord(verb, "medo")) {
+        char* action = nextToken(cursor);
+        if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
+        if (sameWord(action, "status")) {
+            if (!noMore(cursor)) return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_MEDO_STATUS;
+        } else if (sameWord(action, "role")) {
+            if (!parseNumber(nextToken(cursor), 1, 5, request.arg1) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_MEDO_ROLE;
+        } else if (sameWord(action, "quantize")) {
+            if (!parseNumber(nextToken(cursor), 1, 5, request.arg1) ||
+                !parseNumber(nextToken(cursor), 0, 2, request.arg2) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            request.command = CONTROL_MEDO_QUANTIZE;
+        } else if (sameWord(action, "set")) {
+            char* parameter = nextToken(cursor);
+            if (!parameter || strlen(parameter) >= sizeof(request.text) ||
+                !parseNumber(nextToken(cursor), 0, 255, request.arg1) || !noMore(cursor))
+                return CONTROL_PARSE_BAD_ARGUMENTS;
+            strcpy(request.text, parameter); request.command = CONTROL_MEDO_SET;
+        } else return CONTROL_PARSE_BAD_ARGUMENTS;
     } else if (sameWord(verb, "cap")) {
         char* action = nextToken(cursor);
         if (!action) return CONTROL_PARSE_BAD_ARGUMENTS;
