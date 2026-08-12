@@ -72,5 +72,6 @@ build_run audio_cap "$test_dir/test_audio_cap_protocol.cpp" \
     "$test_dir/../audio_cap_protocol.cpp"
 build_run audio_cap_bridge "$test_dir/test_audio_cap_bridge_core.cpp" \
     "$test_dir/../audio_cap_bridge_core.cpp" "$test_dir/../audio_cap_protocol.cpp"
+build_run performance_scheduler "$test_dir/test_performance_scheduler_core.cpp"
 
 echo "Sanitizers (${SANITIZER_SET:-undefined}): core, protocol, three-in-one performance, synth, streaming, event, motion, MIDI and Audio Cap tests passed"

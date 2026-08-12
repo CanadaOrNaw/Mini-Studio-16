@@ -26,6 +26,7 @@
 #include "synth_parameters.h"
 #include "synth_ui_model.h"
 #include "performance_state.h"
+#include "performance_scheduler_core.h"
 #include "input.h"
 
 #define LONG_PRESS_MS 450
@@ -71,14 +72,7 @@ struct HeldChord {
 };
 static HeldChord s_heldChords[7];
 static uint8_t s_heldChordCount = 0;
-struct PendingChordRelease {
-    // Gates are at most 350 ms. A wrapping millisecond deadline is safe over
-    // that interval; the other fields fit in otherwise-unused high bits.
-    uint16_t dueMs;
-    uint8_t noteAndAudition;
-    uint8_t trackRole;
-};
-static PendingChordRelease s_chordReleases[21];
+static PerformanceGateRelease s_chordReleases[21];
 static uint8_t s_chordReleaseCount = 0;
 struct HeldAutoDrum {
     uint32_t nextUs;
@@ -86,7 +80,6 @@ struct HeldAutoDrum {
 };
 static_assert(sizeof(Hold) == 8, "key-hold SRAM layout changed");
 static_assert(sizeof(HeldChord) == 24, "held chord SRAM layout changed");
-static_assert(sizeof(PendingChordRelease) == 4, "release SRAM layout changed");
 static_assert(sizeof(HeldAutoDrum) == 8, "auto-drum SRAM layout changed");
 static HeldAutoDrum s_autoDrums[7];
 static uint8_t s_autoDrumCount = 0;
@@ -123,29 +116,6 @@ static uint8_t heldRole(const HeldChord &held, uint8_t index) {
 }
 static uint8_t heldTrack(const HeldChord &held, uint8_t index) {
     return index < held.chordToneCount ? static_cast<uint8_t>(index / 3u) : 2u;
-}
-static uint8_t pendingTrack(const PendingChordRelease &pending) {
-    return static_cast<uint8_t>(pending.trackRole & 0x03u);
-}
-static uint8_t pendingRole(const PendingChordRelease &pending) {
-    return static_cast<uint8_t>(pending.trackRole >> 2);
-}
-static uint8_t pendingNote(const PendingChordRelease &pending) {
-    return static_cast<uint8_t>(pending.noteAndAudition & 0x7Fu);
-}
-static bool pendingAudition(const PendingChordRelease &pending) {
-    return (pending.noteAndAudition & 0x80u) != 0;
-}
-static PendingChordRelease makePendingRelease(uint8_t track, uint8_t note,
-                                               uint8_t role, bool audition,
-                                               uint32_t dueUs) {
-    PendingChordRelease pending = {};
-    pending.dueMs = static_cast<uint16_t>(dueUs / 1000u);
-    pending.noteAndAudition = static_cast<uint8_t>((note & 0x7Fu) |
-        (audition ? 0x80u : 0u));
-    pending.trackRole = static_cast<uint8_t>((track & 0x03u) |
-        ((role & 0x1Fu) << 2));
-    return pending;
 }
 
 static int8_t chordKeyDegree(uint8_t key) {
@@ -184,31 +154,30 @@ static void scheduleChordRelease(const HeldChord &held, uint8_t index,
                                  uint32_t dueUs) {
     if (index >= held.count) return;
     for (uint8_t i = 0; i < s_chordReleaseCount; ++i) {
-        PendingChordRelease &pending = s_chordReleases[i];
-        if (pendingTrack(pending) == heldTrack(held, index) &&
-            pendingNote(pending) == held.note[index]) {
-            pending = makePendingRelease(heldTrack(held, index), held.note[index],
+        PerformanceGateRelease &pending = s_chordReleases[i];
+        if (performanceGateTrack(pending) == heldTrack(held, index) &&
+            performanceGateNote(pending) == held.note[index]) {
+            pending = performanceGateMake(heldTrack(held, index), held.note[index],
                                          heldRole(held, index), false, dueUs);
             return;
         }
     }
     if (s_chordReleaseCount < sizeof(s_chordReleases) / sizeof(s_chordReleases[0]))
-        s_chordReleases[s_chordReleaseCount++] = makePendingRelease(
+        s_chordReleases[s_chordReleaseCount++] = performanceGateMake(
             heldTrack(held, index), held.note[index], heldRole(held, index), false, dueUs);
 }
 
 static void processChordReleases(uint32_t nowUs) {
-    const uint16_t nowMs = static_cast<uint16_t>(nowUs / 1000u);
     for (uint8_t i = 0; i < s_chordReleaseCount;) {
-        const PendingChordRelease pending = s_chordReleases[i];
-        if (static_cast<int16_t>(nowMs - pending.dueMs) < 0) { ++i; continue; }
-        const uint8_t track = pendingTrack(pending);
-        const uint8_t note = pendingNote(pending);
-        if (pendingAudition(pending)) {
+        const PerformanceGateRelease pending = s_chordReleases[i];
+        if (!performanceGateDue(pending, nowUs)) { ++i; continue; }
+        const uint8_t track = performanceGateTrack(pending);
+        const uint8_t note = performanceGateNote(pending);
+        if (performanceGateAudition(pending)) {
             g_synths[track].noteOff(note);
             midiOutputNoteOff(track, note);
         } else {
-            eventLooperSetRecordRoleOverride(pendingRole(pending));
+            eventLooperSetRecordRoleOverride(performanceGateRole(pending));
             liveSynthRelease(track, note);
             eventLooperSetRecordRoleOverride(-1);
         }
@@ -317,10 +286,10 @@ static uint32_t nextEarRandom() {
 static void stopEarAudition() {
     s_earAuditionStartUs = 0;
     for (uint8_t index = 0; index < s_chordReleaseCount;) {
-        const PendingChordRelease pending = s_chordReleases[index];
-        if (!pendingAudition(pending)) { ++index; continue; }
-        const uint8_t track = pendingTrack(pending);
-        const uint8_t note = pendingNote(pending);
+        const PerformanceGateRelease pending = s_chordReleases[index];
+        if (!performanceGateAudition(pending)) { ++index; continue; }
+        const uint8_t track = performanceGateTrack(pending);
+        const uint8_t note = performanceGateNote(pending);
         g_synths[track].noteOff(note);
         midiOutputNoteOff(track, note);
         s_chordReleases[index] = s_chordReleases[--s_chordReleaseCount];
@@ -375,7 +344,7 @@ static void updateEarAudition(uint32_t nowUs) {
         midiOutputNoteOn(track, midi, 96);
         if (s_chordReleaseCount < sizeof(s_chordReleases) /
                                       sizeof(s_chordReleases[0]))
-            s_chordReleases[s_chordReleaseCount++] = makePendingRelease(
+            s_chordReleases[s_chordReleaseCount++] = performanceGateMake(
                 track, midi, EVENT_ROLE_CHORD, true, nowUs + 350000u);
     }
     if (s_earAuditionNext >= s_earAuditionEnd) s_earAuditionStartUs = 0;

@@ -224,6 +224,12 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 
 "$build_dir/test_audio_cap_bridge_core"
 
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_performance_scheduler_core.cpp" \
+  -o "$build_dir/test_performance_scheduler_core"
+
+"$build_dir/test_performance_scheduler_core"
+
 g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
   "$test_dir/../sd_diagnostics.cpp"
