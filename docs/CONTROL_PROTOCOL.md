@@ -57,7 +57,7 @@ bytes per main-loop iteration.
 | `synth dsp_reset` | Reset block count, last/max render time, and missed-deadline count |
 | `chord status` | HiChord mode/harmony/arp/repeat/swing state |
 | `chord play DEGREE DIRECTION` / `chord off` | Play I–VII using direction 0–8, then release it |
-| `chord set PARAM VALUE` | Set `key`, `scale`, `map`, `mode`, `octave`, `bass`, `voice_lead`, `swing`, `arp_pattern`, `arp_layer`, `arp_rate`, or `repeat_rate` |
+| `chord set PARAM VALUE` | Set `key`, `scale`, `map`, `mode`, `octave`, `bass`, `voice_lead`, `swing`, `arp_pattern`, `arp_layer`, `arp_rate`, `repeat_rate`, `strum_speed`, Track-1 `loop_bars` (`0` free, `1..8` fixed), or `sequence_length` (`4/8/12/16`) |
 | `chord lock DEGREE TYPE` / `chord unlock DEGREE` | Lock I–VII to one of chord types 0–27 or restore scale-derived type |
 | `chord inversion DEGREE ENCODED` | Set inversion −2..+3 using wire values 0..5 |
 | `chord octave_shift DEGREE ENCODED` | Set per-degree octave −2..+2 using wire values 0..4 |
@@ -65,7 +65,7 @@ bytes per main-loop iteration.
 | `po lock PATTERN STEP EFFECT` | Persist an effect in one of 16×16 pattern steps |
 | `medo status` / `medo role ROLE` | Inspect/select Drum, Bass, Chord, Lead, or Sample role 1–5 |
 | `medo quantize ROLE MODE` | Set As Played/Snap 16/Groove (0–2) per role |
-| `medo set PARAM VALUE` | Set `scale`, `arp_direction`, `arp_rate`, or shared `bars` |
+| `medo set PARAM VALUE` | Set `scale`, `arp_enabled`, `arp_direction`, `arp_rate`, or shared `bars` |
 | `cap status` | Optional cap presence, ADC/A2DP state, monitor level and all bridge counters |
 | `cap pair` | Arm selection of the first discovered Bluetooth audio-rendering device |
 | `cap disconnect` | Disconnect the current Bluetooth audio sink |
@@ -124,6 +124,8 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 transport start
 python tools/ministudio_cli.py --port /dev/ttyACM0 loop-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 record
 python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 volume 75
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 solo
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop-transport metronome_on
 python tools/ministudio_cli.py --port /dev/ttyACM0 sample-assign 1 KICK.wav sliced
 python tools/ministudio_cli.py --port /dev/ttyACM0 sample-trigger 1 4
 python tools/ministudio_cli.py --port /dev/ttyACM0 sample-record 2 bus melodic

@@ -11,6 +11,7 @@
 #include "stem_recorder.h"
 #include "streaming_sampler.h"
 #include "ui.h"
+#include "performance_state.h"
 
 #include <M5Cardputer.h>
 #include <memory>
@@ -39,6 +40,7 @@ int8_t s_pendingLaneReference = -1;
 bool s_resampleActive = false;
 bool s_resamplePending = false;
 int8_t s_resampleReference = -1;
+bool s_hiChordPublishPending = false;
 
 bool recorderUnavailable() {
     return masterRecorderIsBusy() || stemRecorderIsBusy() ||
@@ -111,6 +113,21 @@ void resolveShortResample() {
         g_needRedraw = true;
     }
 }
+
+void resolveHiChordSample() {
+    if (!s_hiChordPublishPending) return;
+    const StreamingSamplerRecordState state = streamingSamplerSnapshot().recordState;
+    if (state == STREAM_SAMPLE_REC_COMPLETE) {
+        s_hiChordPublishPending = false;
+        g_hiChordPerformance.setMode(HICHORD_LEAD);
+        uiStatus("TUNED TO C - LEAD MODE");
+        g_needRedraw = true;
+    } else if (state == STREAM_SAMPLE_REC_ERROR) {
+        s_hiChordPublishPending = false;
+        uiStatus("MIC SAMPLE FAILED");
+        g_needRedraw = true;
+    }
+}
 }  // namespace
 
 bool micSamplerInit() {
@@ -143,8 +160,10 @@ bool micStreamRecStart(uint8_t slot, SamplerSlotMode mode) {
 bool micHiChordRecStart(uint8_t slot) {
     if (slot >= SAMPLER_SLOT_COUNT || s_lanePublishPending ||
         s_resampleActive || s_resamplePending) return false;
-    return beginMic(slot, SAMPLER_SLOT_MELODIC, MIC_RATE * 3u, false,
-                    kNoLane, samplerMakeStreamReference(slot));
+    if (!beginMic(slot, SAMPLER_SLOT_MELODIC, MIC_RATE * 3u, false,
+                  kNoLane, samplerMakeStreamReference(slot))) return false;
+    s_hiChordPublishPending = true;
+    return true;
 }
 
 bool micTunerStart() {
@@ -223,6 +242,7 @@ void micSamplerUpdate() {
     }
     resolvePendingLane();
     resolveShortResample();
+    resolveHiChordSample();
 }
 
 void micRecStop() {
@@ -255,7 +275,8 @@ void micRecStop() {
 bool micRecActive() { return s_recActive; }
 
 bool micSamplerHasPendingCommit() {
-    return s_lanePublishPending || s_resampleActive || s_resamplePending;
+    return s_lanePublishPending || s_resampleActive || s_resamplePending ||
+           s_hiChordPublishPending;
 }
 
 void resampleArm() {

@@ -265,9 +265,10 @@ void dispatch(const ControlRequest& request) {
         }
         case CONTROL_LOOP_PAUSE:
         case CONTROL_LOOP_RESUME:
-            loopEngineSetPaused(request.command == CONTROL_LOOP_PAUSE);
-            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK loops=%s\n", request.id,
-                          request.command == CONTROL_LOOP_PAUSE ? "paused" : "playing");
+            if (loopEngineSetPaused(request.command == CONTROL_LOOP_PAUSE))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK loops=%s\n", request.id,
+                              request.command == CONTROL_LOOP_PAUSE ? "paused" : "playing");
+            else replyError(request.id, "loop_recording_busy");
             break;
         case CONTROL_LOOP_METRONOME_ON:
         case CONTROL_LOOP_METRONOME_OFF:
@@ -644,7 +645,7 @@ void dispatch(const ControlRequest& request) {
             Serial.printf(CONTROL_PROTOCOL_PREFIX
                           " %s OK mode=%u key=%u scale=%u map=%u octave=%d bass=%u "
                           "voiceLead=%u degree=%u swing=%u arpPattern=%u arpLayer=%u "
-                          "arpRate=%u repeatRate=%u\n", request.id,
+                          "arpRate=%u repeatRate=%u strumSpeed=%u loopBars=%u sequenceLength=%u\n", request.id,
                           static_cast<unsigned>(g_hiChordPerformance.mode()),
                           static_cast<unsigned>(g_chordSettings.key),
                           static_cast<unsigned>(g_chordSettings.scale),
@@ -657,7 +658,10 @@ void dispatch(const ControlRequest& request) {
                           static_cast<unsigned>(g_hiChordArpPattern),
                           static_cast<unsigned>(g_hiChordArpLayer),
                           static_cast<unsigned>(g_hiChordArpRate),
-                          static_cast<unsigned>(g_hiChordRepeatRate));
+                          static_cast<unsigned>(g_hiChordRepeatRate),
+                          static_cast<unsigned>(g_hiChordStrumSpeed),
+                          static_cast<unsigned>(g_hiChordLoopBars),
+                          static_cast<unsigned>(g_hiChordSequenceLength));
             break;
 
         case CONTROL_CHORD_PLAY: {
@@ -706,14 +710,20 @@ void dispatch(const ControlRequest& request) {
                 g_swing = static_cast<uint8_t>(value);
             else if (!strcmp(request.text, "arp_pattern") && value < ARP_PATTERN_COUNT)
                 g_hiChordArpPattern = static_cast<uint8_t>(value);
-            else if (!strcmp(request.text, "arp_layer") && value <= ARP_CHORD_AND_BASS)
+            else if (!strcmp(request.text, "arp_layer") && value < ARP_LAYER_COUNT)
                 g_hiChordArpLayer = static_cast<uint8_t>(value);
-            else if (!strcmp(request.text, "arp_rate") &&
-                     (value == 1 || value == 2 || value == 4 || value == 8))
+            else if (!strcmp(request.text, "arp_rate") && value < HICHORD_RATE_COUNT)
                 g_hiChordArpRate = static_cast<uint8_t>(value);
-            else if (!strcmp(request.text, "repeat_rate") &&
-                     (value == 1 || value == 2 || value == 4 || value == 8))
+            else if (!strcmp(request.text, "repeat_rate") && value < HICHORD_RATE_COUNT)
                 g_hiChordRepeatRate = static_cast<uint8_t>(value);
+            else if (!strcmp(request.text, "strum_speed") &&
+                     value < HICHORD_STRUM_SPEED_COUNT)
+                g_hiChordStrumSpeed = static_cast<uint8_t>(value);
+            else if (!strcmp(request.text, "loop_bars") && value <= 8)
+                g_hiChordLoopBars = static_cast<uint8_t>(value);
+            else if (!strcmp(request.text, "sequence_length") && value >= 4 &&
+                     value <= 16 && (value % 4u) == 0)
+                g_hiChordSequenceLength = static_cast<uint8_t>(value);
             else ok = false;
             if (ok) Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK chordSet=%s value=%u\n",
                                   request.id, request.text, static_cast<unsigned>(value));
@@ -765,13 +775,14 @@ void dispatch(const ControlRequest& request) {
             const MedoTrackSettings &settings = g_medoPerformance.settings(role);
             Serial.printf(CONTROL_PROTOCOL_PREFIX
                           " %s OK role=%u quantize=%u volume=%u octave=%d bars=%u events=%u "
-                          "scale=%u arpDirection=%u arpRate=%u sharedBars=%u\n",
+                          "scale=%u arpEnabled=%u arpDirection=%u arpRate=%u sharedBars=%u\n",
                           request.id, static_cast<unsigned>(role + 1u),
                           static_cast<unsigned>(settings.quantize),
                           static_cast<unsigned>(settings.volume), static_cast<int>(settings.octave),
                           static_cast<unsigned>(g_eventLooper.bars(role)),
                           static_cast<unsigned>(g_eventLooper.count(role)),
                           static_cast<unsigned>(g_medoPerformance.scale()),
+                          g_medoPerformance.arpEnabled() ? 1u : 0u,
                           static_cast<unsigned>(g_medoPerformance.arpDirection()),
                           static_cast<unsigned>(g_medoPerformance.arpRate()),
                           static_cast<unsigned>(g_medoPerformance.sharedBars()));
@@ -796,6 +807,9 @@ void dispatch(const ControlRequest& request) {
             else if (!strcmp(request.text, "arp_direction") && value < MEDO_ARP_COUNT)
                 ok = g_medoPerformance.setArpDirection(static_cast<MedoArpDirection>(value));
             else if (!strcmp(request.text, "arp_rate")) ok = g_medoPerformance.setArpRate(value);
+            else if (!strcmp(request.text, "arp_enabled") && value <= 1) {
+                g_medoPerformance.setArpEnabled(value != 0); ok = true;
+            }
             else if (!strcmp(request.text, "bars")) {
                 ok = g_medoPerformance.setSharedBars(value);
                 if (ok) ok = g_eventLooper.setAllBars(value);

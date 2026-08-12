@@ -7,6 +7,7 @@ void MedoPerformance::reset() {
     scale_ = MEDO_NATURAL;
     arpDirection_ = MEDO_ARP_UP;
     arpRate_ = 1;
+    arpEnabled_ = false;
     sharedBars_ = 1;
     for (uint8_t i = 0; i < MEDO_ROLE_COUNT; ++i) {
         tracks_[i].volume = 100;
@@ -26,6 +27,30 @@ bool MedoPerformance::setArpDirection(MedoArpDirection direction) {
 bool MedoPerformance::setArpRate(uint8_t rate) {
     if (rate != 1 && rate != 2 && rate != 4 && rate != 8) return false;
     arpRate_ = rate; return true;
+}
+
+uint8_t MedoPerformance::arpNoteIndex(uint8_t noteCount, uint32_t tick) const {
+    if (noteCount == 0) return 0;
+    switch (arpDirection_) {
+        case MEDO_ARP_DOWN:
+            return static_cast<uint8_t>(noteCount - 1u - tick % noteCount);
+        case MEDO_ARP_UP_DOWN: {
+            if (noteCount == 1) return 0;
+            const uint8_t span = static_cast<uint8_t>(noteCount * 2u - 2u);
+            const uint8_t index = static_cast<uint8_t>(tick % span);
+            return index < noteCount ? index : static_cast<uint8_t>(span - index);
+        }
+        case MEDO_ARP_RANDOM:
+            return static_cast<uint8_t>((tick * 1103515245u + 12345u) % noteCount);
+        case MEDO_ARP_UP:
+        default:
+            return static_cast<uint8_t>(tick % noteCount);
+    }
+}
+
+uint32_t MedoPerformance::arpIntervalUs(uint16_t bpm) const {
+    if (bpm == 0 || arpRate_ == 0) return 0;
+    return 60000000UL / bpm / arpRate_;
 }
 bool MedoPerformance::setSharedBars(uint16_t bars) {
     if (bars == 0 || bars > 128) return false;

@@ -12,9 +12,24 @@ enum HiChordMode : uint8_t {
 };
 
 enum HiChordArpPattern : uint8_t {
-    ARP_UP = 0, ARP_DOWN, ARP_UP_DOWN, ARP_DOWN_UP, ARP_RANDOM, ARP_CHORD, ARP_PATTERN_COUNT
+    ARP_UP = 0, ARP_DOWN, ARP_UP_DOWN, ARP_DOWN_UP, ARP_RANDOM,
+    ARP_FINGERPICK, ARP_PATTERN_COUNT
 };
-enum HiChordArpLayer : uint8_t { ARP_CHORD_ONLY = 0, ARP_BASS_ONLY, ARP_CHORD_AND_BASS };
+enum HiChordArpLayer : uint8_t {
+    ARP_ONLY = 0, ARP_CHORD_PLUS, ARP_RHYTHM_PLUS, ARP_LAYER_COUNT
+};
+
+enum HiChordRate : uint8_t {
+    HICHORD_RATE_1_1 = 0, HICHORD_RATE_1_2, HICHORD_RATE_1_4,
+    HICHORD_RATE_1_8, HICHORD_RATE_1_16, HICHORD_RATE_1_16T,
+    HICHORD_RATE_1_32, HICHORD_RATE_SWING_8, HICHORD_RATE_SWING_16,
+    HICHORD_RATE_COUNT
+};
+
+enum HiChordStrumSpeed : uint8_t {
+    HICHORD_STRUM_SLOW = 0, HICHORD_STRUM_MEDIUM, HICHORD_STRUM_FAST,
+    HICHORD_STRUM_SPEED_COUNT
+};
 
 struct HiChordScheduledNote {
     uint8_t note;
@@ -37,14 +52,32 @@ public:
     HiChordMode mode() const { return mode_; }
     uint8_t scheduleStrum(const ChordVoicing &chord, bool downward,
                           uint16_t spacingFrames, HiChordScheduledNote out[7]) const;
-    uint8_t arpNote(const ChordVoicing &chord, HiChordArpPattern pattern,
-                    HiChordArpLayer layer, uint32_t tick) const;
+    uint8_t arpNotes(const ChordVoicing &chord, HiChordArpPattern pattern,
+                     uint32_t tick, uint8_t out[2]) const;
     bool setSequenceStep(uint8_t step, const HiChordSequenceStep &value);
     const HiChordSequenceStep &sequenceStep(uint8_t step) const;
 private:
     HiChordMode mode_;
     HiChordSequenceStep sequence_[16];
 };
+
+uint16_t hiChordStrumSpacingFrames(HiChordStrumSpeed speed,
+                                   uint32_t sampleRate);
+uint32_t hiChordRateIntervalUs(HiChordRate rate, uint16_t bpm,
+                               uint32_t tick);
+const char *hiChordRateName(HiChordRate rate);
+HiChordRate hiChordAutoDrumRate(ChordDirection direction);
+uint32_t hiChordLoopFrames(uint8_t bars, uint16_t bpm, uint32_t sampleRate);
+uint32_t hiChordCountInFrames(uint16_t bpm, uint32_t sampleRate);
+
+enum HiChordHiroGrade : uint8_t {
+    HICHORD_HIRO_MISS = 0, HICHORD_HIRO_OK, HICHORD_HIRO_GREAT,
+    HICHORD_HIRO_PERFECT
+};
+uint16_t hiChordHiroWindowMs(uint8_t difficulty);
+HiChordHiroGrade hiChordHiroGrade(uint8_t expectedDegree, uint8_t playedDegree,
+                                  int32_t timingErrorMs, uint8_t difficulty);
+const char* hiChordHiroGradeName(HiChordHiroGrade grade);
 
 class HiChordDrumGrooves {
 public:
@@ -70,4 +103,3 @@ public:
 private:
     uint32_t state_;
 };
-

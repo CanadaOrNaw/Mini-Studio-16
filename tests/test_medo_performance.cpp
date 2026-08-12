@@ -18,6 +18,13 @@ int main() {
     assert(m.quantizeNote(62) == 60);
     assert(m.setArpDirection(MEDO_ARP_RANDOM));
     assert(m.setArpRate(8));
+    assert(!m.arpEnabled()); m.setArpEnabled(true); assert(m.arpEnabled());
+    assert(m.arpIntervalUs(120) == 62500);
+    assert(m.arpNoteIndex(4, 0) == m.arpNoteIndex(4, 0));
+    assert(m.setArpDirection(MEDO_ARP_UP_DOWN));
+    const uint8_t expected[] = {0,1,2,3,2,1,0};
+    for (uint8_t tick = 0; tick < 7; ++tick)
+        assert(m.arpNoteIndex(4, tick) == expected[tick]);
     assert(m.setSharedBars(128));
     assert(m.sharedBars() == 128);
     assert(!m.setArpRate(3));

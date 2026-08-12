@@ -29,6 +29,7 @@
 #include "synth_ui_model.h"
 #include "boot_selector.h"
 #include "performance_state.h"
+#include "input.h"
 
 Page    g_curPage    = PAGE_PATTERN;
 bool    g_needRedraw = true;
@@ -399,8 +400,10 @@ static void drawChordPage() {
                  g_hiChordPerformance.mode() == HICHORD_AUTO_DRUM)) label = "VARIATION";
         else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_CHORD_HIRO) label = "SONG";
         else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_EAR_TRAINER) label = "LEVEL";
-        else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_ARPEGGIO) label = "ARP PATT";
+        else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_ARPEGGIO) label = "ARP P/R/L";
         else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_REPEAT) label = "RATE";
+        else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_STRUM) label = "STRUM SPEED";
+        else if (row == 7 && g_hiChordPerformance.mode() == HICHORD_SEQUENCER) label = "SEQ LENGTH";
         canvas.setCursor(2, y); canvas.printf("%c %-10s", row == g_chordParameter ? '>' : ' ', label);
         switch (row) {
             case 0: canvas.print(modeNames[g_hiChordPerformance.mode()]); break;
@@ -416,15 +419,25 @@ static void drawChordPage() {
                          g_hiChordPerformance.mode() == HICHORD_AUTO_DRUM)
                     canvas.printf("%u/8", g_hiChordGrooveVariation + 1);
                 else if (g_hiChordPerformance.mode() == HICHORD_CHORD_HIRO)
-                    canvas.print(hiChordPracticeSong(g_hiChordPracticeSong).name);
+                    canvas.printf("%.10s %u/%u S%u", hiChordPracticeSong(g_hiChordPracticeSong).name,
+                                  min<uint8_t>(hiChordPracticeSong(g_hiChordPracticeSong).length,
+                                               g_hiChordPracticePosition + 1u),
+                                  hiChordPracticeSong(g_hiChordPracticeSong).length,
+                                  inputChordHiroScore());
                 else if (g_hiChordPerformance.mode() == HICHORD_EAR_TRAINER)
                     canvas.printf("%u score:%u", g_hiChordEarLevel + 1, g_hiChordEarScore);
                 else if (g_hiChordPerformance.mode() == HICHORD_ARPEGGIO) {
-                    static const char* arpNames[] = {"UP","DOWN","UP/DN","DN/UP","RANDOM","CHORD"};
-                    canvas.printf("%s x%u L%u", arpNames[g_hiChordArpPattern],
-                                  g_hiChordArpRate, g_hiChordArpLayer + 1);
+                    static const char* arpNames[] = {"UP","DOWN","UP/DN","DN/UP","RANDOM","FINGER"};
+                    canvas.printf("%s %s L%u", arpNames[g_hiChordArpPattern],
+                                  hiChordRateName(static_cast<HiChordRate>(g_hiChordArpRate)),
+                                  g_hiChordArpLayer + 1);
                 } else if (g_hiChordPerformance.mode() == HICHORD_REPEAT)
-                    canvas.printf("x%u", g_hiChordRepeatRate);
+                    canvas.print(hiChordRateName(static_cast<HiChordRate>(g_hiChordRepeatRate)));
+                else if (g_hiChordPerformance.mode() == HICHORD_STRUM) {
+                    static const char* speeds[] = {"SLOW 120ms","MED 80ms","FAST 40ms"};
+                    canvas.print(speeds[g_hiChordStrumSpeed]);
+                } else if (g_hiChordPerformance.mode() == HICHORD_SEQUENCER)
+                    canvas.printf("%u STEPS", g_hiChordSequenceLength);
                 else canvas.printf("%+d", g_chordSettings.inversion[g_chordDegree]);
                 break;
         }
@@ -535,7 +548,9 @@ static void drawMedoPage() {
         else if (row == 3) canvas.printf("%+d", settings.octave);
         else if (row == 4) canvas.printf("%u all roles", g_medoPerformance.sharedBars());
         else if (row == 5) canvas.print(scales[g_medoPerformance.scale()]);
-        else canvas.printf("%s x%u", arp[g_medoPerformance.arpDirection()], g_medoPerformance.arpRate());
+        else canvas.printf("%s %s x%u", g_medoPerformance.arpEnabled() ? "ON" : "OFF",
+                           arp[g_medoPerformance.arpDirection()],
+                           g_medoPerformance.arpRate());
     }
     canvas.setTextColor(COL_DIM); canvas.setCursor(2, 121);
     canvas.printf("%u bars  %u events  click/press/slide + IMU",
@@ -652,9 +667,14 @@ static void drawLoopsPage() {
     const LoopEngineSnapshot loops = loopEngineSnapshot();
     canvas.setTextColor(COL_TEXT);
     canvas.setCursor(2, 15);
-    canvas.printf("6 AUDIO LOOPS%s%s %.1fs", loops.paused ? " PAUSE" : "",
-                  loops.metronome ? " MET" : "", loops.timelineFrames /
-                  static_cast<float>(SAMPLE_RATE));
+    if (g_hiChordLoopBars)
+        canvas.printf("6 LOOPS %ubar%s%s %.1fs", g_hiChordLoopBars,
+                      loops.paused ? " PAUSE" : "", loops.metronome ? " MET" : "",
+                      loops.timelineFrames / static_cast<float>(SAMPLE_RATE));
+    else
+        canvas.printf("6 LOOPS FREE%s%s %.1fs", loops.paused ? " PAUSE" : "",
+                      loops.metronome ? " MET" : "",
+                      loops.timelineFrames / static_cast<float>(SAMPLE_RATE));
     canvas.setTextColor(COL_DIM);
     canvas.setCursor(145, 15);
     canvas.printf("R/W %lu/%lu", static_cast<unsigned long>(loops.maxReadUs / 1000),

@@ -41,10 +41,13 @@ struct StreamingSamplerSnapshot {
 void streamingSamplerInit(bool sdMounted);
 int32_t streamingSamplerRender();
 bool streamingSamplerTrigger(uint8_t slot, uint8_t key,
-                             const SamplerLockEntry* lock = nullptr);
+                             const SamplerLockEntry* lock = nullptr,
+                             uint8_t velocity = 127);
 bool streamingSamplerAssign(uint8_t slot, const char* filename,
                             SamplerSlotMode mode);
 bool streamingSamplerClear(uint8_t slot);
+bool streamingSamplerCopySlice(uint8_t sourceSlot, uint8_t sourceSlice,
+                               uint8_t destinationSlot, uint8_t destinationSlice);
 bool streamingSamplerBeginRecord(uint8_t slot, SamplerSlotMode mode,
                                  uint32_t sourceRate, StreamingSamplerInput input,
                                  uint32_t maximumSourceFrames = 0,

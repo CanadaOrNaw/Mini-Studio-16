@@ -31,7 +31,10 @@ static ChordSettings decodeChord(const SaveChordSettings &in) {
 
 void performanceProjectEncode(SavePerformanceState &out) {
     memset(&out, 0, sizeof(out)); out.chord = encodeChord(g_chordSettings);
-    out.hiChordMode = g_hiChordPerformance.mode();
+    // Preserve the v9 layout: low nibble is the mode, high nibble is the
+    // HiChord Track-1 length selector (0 = free, 1..8 = fixed bars).
+    out.hiChordMode = static_cast<uint8_t>(g_hiChordPerformance.mode() |
+                                           (g_hiChordLoopBars << 4));
     for (uint8_t i = 0; i < 16; ++i) out.chordSequence[i] = g_hiChordPerformance.sequenceStep(i);
     for (uint8_t p = 0; p < 16; ++p) for (uint8_t s = 0; s < 16; ++s)
         out.poEffects[p][s] = g_poPatternEffects.get(p, s);
@@ -44,18 +47,24 @@ void performanceProjectEncode(SavePerformanceState &out) {
     out.vocoder = g_vocoder.settings();
     out.swing = g_swing;
     out.hiChordArpPattern = g_hiChordArpPattern;
-    out.hiChordArpLayer = g_hiChordArpLayer;
+    // Keep the v9 byte layout stable: bits 0..1 hold the arp layer and bits
+    // 2..3 hold the independent three-position strum speed.
+    out.hiChordArpLayer = static_cast<uint8_t>(
+        (g_hiChordArpLayer & 0x03u) | ((g_hiChordStrumSpeed & 0x03u) << 2));
     out.hiChordArpRate = g_hiChordArpRate;
     out.hiChordRepeatRate = g_hiChordRepeatRate;
     out.hiChordDrumKit = g_hiChordDrumKit;
     out.hiChordGrooveStyle = g_hiChordGrooveStyle;
     out.hiChordGrooveVariation = g_hiChordGrooveVariation;
     out.hiChordPracticeSong = g_hiChordPracticeSong;
-    out.hiChordPracticePosition = g_hiChordPracticePosition;
+    out.hiChordPracticePosition = static_cast<uint8_t>(
+        (g_hiChordPracticePosition & 0x0Fu) |
+        (((g_hiChordSequenceLength / 4u) - 1u) << 4));
     out.hiChordEarLevel = g_hiChordEarLevel;
     out.hiChordEarScore = g_hiChordEarScore;
     out.medoScale = g_medoPerformance.scale();
-    out.medoArpDirection = g_medoPerformance.arpDirection();
+    out.medoArpDirection = static_cast<uint8_t>(g_medoPerformance.arpDirection() |
+        (g_medoPerformance.arpEnabled() ? 0x80u : 0u));
     out.medoArpRate = g_medoPerformance.arpRate();
     out.medoSharedBars = static_cast<uint8_t>(g_medoPerformance.sharedBars() == 128 ? 0 : g_medoPerformance.sharedBars());
     for (uint8_t preset = 0; preset < 4; ++preset) {
@@ -67,17 +76,23 @@ void performanceProjectEncode(SavePerformanceState &out) {
 }
 
 bool performanceProjectValidate(const SavePerformanceState &in) {
-    if (!validChord(in.chord) || in.hiChordMode >= HICHORD_MODE_COUNT ||
+    if (!validChord(in.chord) || (in.hiChordMode & 0x0Fu) >= HICHORD_MODE_COUNT ||
+        (in.hiChordMode >> 4) > 8 ||
         in.medoRole >= MEDO_ROLE_COUNT || in.swing < 50 || in.swing > 75 ||
-        in.hiChordArpPattern >= ARP_PATTERN_COUNT || in.hiChordArpLayer > ARP_CHORD_AND_BASS ||
-        (in.hiChordArpRate != 1 && in.hiChordArpRate != 2 && in.hiChordArpRate != 4 && in.hiChordArpRate != 8) ||
-        (in.hiChordRepeatRate != 1 && in.hiChordRepeatRate != 2 && in.hiChordRepeatRate != 4 && in.hiChordRepeatRate != 8) ||
+        in.hiChordArpPattern >= ARP_PATTERN_COUNT ||
+        (in.hiChordArpLayer & 0x03u) >= ARP_LAYER_COUNT ||
+        ((in.hiChordArpLayer >> 2) & 0x03u) >= HICHORD_STRUM_SPEED_COUNT ||
+        (in.hiChordArpLayer & 0xF0u) != 0 ||
+        in.hiChordArpRate >= HICHORD_RATE_COUNT ||
+        in.hiChordRepeatRate >= HICHORD_RATE_COUNT ||
         in.hiChordDrumKit >= HiChordDrumGrooves::KIT_COUNT ||
         in.hiChordGrooveStyle >= HiChordDrumGrooves::STYLE_COUNT ||
         in.hiChordGrooveVariation >= HiChordDrumGrooves::VARIATION_COUNT ||
-        in.hiChordPracticeSong >= hiChordPracticeSongCount() || in.hiChordPracticePosition >= 16 ||
+        in.hiChordPracticeSong >= hiChordPracticeSongCount() ||
+        (in.hiChordPracticePosition & 0x0Fu) >= 16 ||
+        (in.hiChordPracticePosition >> 4) > 3 ||
         in.hiChordEarLevel > 3 || in.medoScale >= MEDO_SCALE_COUNT ||
-        in.medoArpDirection >= MEDO_ARP_COUNT ||
+        (in.medoArpDirection & 0x7Fu) >= MEDO_ARP_COUNT ||
         (in.medoArpRate != 1 && in.medoArpRate != 2 && in.medoArpRate != 4 && in.medoArpRate != 8))
         return false;
     for (uint8_t i = 0; i < 16; ++i) {
@@ -109,7 +124,8 @@ bool performanceProjectDecode(const SavePerformanceState &in) {
     if (!performanceProjectValidate(in)) return false;
     g_chordSettings = decodeChord(in.chord); g_chordEngine.reset();
     g_hiChordPerformance.reset();
-    g_hiChordPerformance.setMode(static_cast<HiChordMode>(in.hiChordMode));
+    g_hiChordPerformance.setMode(static_cast<HiChordMode>(in.hiChordMode & 0x0Fu));
+    g_hiChordLoopBars = static_cast<uint8_t>(in.hiChordMode >> 4);
     for (uint8_t i = 0; i < 16; ++i) g_hiChordPerformance.setSequenceStep(i, in.chordSequence[i]);
     g_poPatternEffects.clear();
     for (uint8_t p = 0; p < 16; ++p) for (uint8_t s = 0; s < 16; ++s)
@@ -127,20 +143,25 @@ bool performanceProjectDecode(const SavePerformanceState &in) {
     if (!g_vocoder.applySettings(in.vocoder)) return false;
     g_swing = in.swing;
     g_hiChordArpPattern = in.hiChordArpPattern;
-    g_hiChordArpLayer = in.hiChordArpLayer;
+    g_hiChordArpLayer = static_cast<uint8_t>(in.hiChordArpLayer & 0x03u);
+    g_hiChordStrumSpeed = static_cast<uint8_t>((in.hiChordArpLayer >> 2) & 0x03u);
     g_hiChordArpRate = in.hiChordArpRate;
     g_hiChordRepeatRate = in.hiChordRepeatRate;
     g_hiChordDrumKit = in.hiChordDrumKit;
     g_hiChordGrooveStyle = in.hiChordGrooveStyle;
     g_hiChordGrooveVariation = in.hiChordGrooveVariation;
     g_hiChordPracticeSong = in.hiChordPracticeSong;
-    g_hiChordPracticePosition = in.hiChordPracticePosition;
+    g_hiChordPracticePosition = static_cast<uint8_t>(in.hiChordPracticePosition & 0x0Fu);
+    g_hiChordSequenceLength = static_cast<uint8_t>(
+        (((in.hiChordPracticePosition >> 4) & 0x03u) + 1u) * 4u);
     g_hiChordEarLevel = in.hiChordEarLevel;
     g_hiChordEarScore = in.hiChordEarScore;
     if (!g_medoPerformance.setScale(static_cast<MedoScale>(in.medoScale)) ||
-        !g_medoPerformance.setArpDirection(static_cast<MedoArpDirection>(in.medoArpDirection)) ||
+        !g_medoPerformance.setArpDirection(static_cast<MedoArpDirection>(
+            in.medoArpDirection & 0x7Fu)) ||
         !g_medoPerformance.setArpRate(in.medoArpRate) ||
         !g_medoPerformance.setSharedBars(in.medoSharedBars == 0 ? 128 : in.medoSharedBars)) return false;
+    g_medoPerformance.setArpEnabled((in.medoArpDirection & 0x80u) != 0);
     for (uint8_t preset = 0; preset < 4; ++preset) {
         g_performancePresets[preset].valid = in.presets[preset].valid;
         g_performancePresets[preset].chord = decodeChord(in.presets[preset].chord);

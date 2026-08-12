@@ -39,6 +39,16 @@ extern uint8_t g_hiChordArpPattern;
 extern uint8_t g_hiChordArpLayer;
 extern uint8_t g_hiChordArpRate;
 extern uint8_t g_hiChordRepeatRate;
+extern uint8_t g_hiChordStrumSpeed;
+extern uint8_t g_hiChordLoopBars;
+extern uint8_t g_hiChordSequenceLength;
+extern uint8_t g_hiChordBounceSource;
+
+enum HiChordBounceSource : uint8_t {
+    HICHORD_BOUNCE_SEQUENCE = 0,
+    HICHORD_BOUNCE_DRUM_LOOP,
+    HICHORD_BOUNCE_DRONE,
+};
 
 void performanceStateInit();
 bool performanceStorePreset(uint8_t index);

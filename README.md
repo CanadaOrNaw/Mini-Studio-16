@@ -4,8 +4,8 @@ SD-backed groovebox, multi-engine synthesizer, sampler, looper, motion
 controller, recorder, and MIDI firmware for the **M5Stack Cardputer-ADV**.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
-[![Build v3 alpha](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml/badge.svg?branch=agent%2Fv3-alpha-sd-streaming)](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml)
-[![Pages](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/pages.yml/badge.svg?branch=agent%2Fv3-alpha-sd-streaming)](https://canadaornaw.github.io/MiniStudio.github.io/)
+[![Build v3 alpha](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml/badge.svg?branch=main)](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml)
+[![Pages](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/pages.yml/badge.svg?branch=main)](https://canadaornaw.github.io/MiniStudio.github.io/)
 
 **[Open the Mini Studio 16 project site →](https://canadaornaw.github.io/MiniStudio.github.io/)**
 
@@ -44,12 +44,12 @@ first physical print/fit remains a hardware gate; see
 
 | System | Implemented software | Remaining proof |
 | --- | --- | --- |
-| HiChord instrument | Seven diatonic chord keys; 10 scales, 28 chord types, three directional maps, inversions, locks, root/slash bass, voice leading; all 15 performance modes; strum/arp/repeat/drone; seven kits/56 grooves; chord sequencer bounce; pitch-detected mic sample, tuner, practice, ear training, mixer, presets, effects, and vocoder | Playing feel, pitch-detection calibration, and full-duplex mic vocoder on the physical codec |
+| HiChord instrument | Seven diatonic chord keys; 10 scales, 28 chord types, three directional maps, inversions, locks, root/slash bass and voice leading; all 15 modes with three strum speeds, six arp patterns/three layers/nine rates, repeat, monophonic Lead and latched Drone; seven kits/56 grooves; directional auto-drum; 4/8/12/16-step sequencer and three auto-bounce sources; timed Chord Hiro, audible one/four-chord Ear Trainer, pitch-detected mic sample, tuner, mixer, presets, effects and vocoder | Playing feel, pitch-detection calibration, and full-duplex mic vocoder on the physical codec |
 | Synthesis | Per-track selectable original `MG/303`, expanded subtractive `MGX`, or genuine four-operator `FM4`; fixed-size DSP, banked SOUND UI, velocity/note-off, automation, CLI, and GBX v9 persistence | Real render time and safe simultaneous FM polyphony under full device load |
-| Six-track audio looper | Six independent 22.05 kHz mono SD streams, up to 20 seconds; Track 1 fixes the frame length; tracks 2–6 align to its boundary; mute, volume, recovery, and resync | Zero-underrun playback and simultaneous recording on the actual card |
-| PO-33 workflow | 16 SD-streamed slots sharing a normalized 40-second quota; melodic/sliced modes, per-slice trim/copy, sound copy, pitch/gain/filter, four voices, quantized live recording, swing, parameter locks, and all 15 momentary/recordable punch effects | Performance and latency on the actual SD card |
+| Six-track audio looper | Six independent 22.05 kHz mono SD streams, up to 20 seconds; Track 1 is free-length or fixed to 1–8 bars after a four-beat count-in; tracks 2–6 wait for its boundary and capture its exact frame count; auto-advance, mute, solo, volume, pause, metronome, recovery and resync | Zero-underrun playback and simultaneous recording on the actual card |
+| PO-33 workflow | 16 SD-streamed slots sharing a normalized 40-second quota; melodic/sliced modes, per-slice trim and real same-rate cross-slot PCM copy, sound copy, pitch/gain/filter, four voices, quantized live recording, swing, parameter locks, and all 15 momentary/recordable punch effects | Performance and latency on the actual SD card |
 | Sequencer | 16 patterns × 16 steps and a 128-entry chain | Keyboard/UI usability pass |
-| MEDO workflow | Five role-mapped drum/bass/chord/lead/sample tracks, shared 1–128-bar length, overdub, three quantize modes, per-role level/octave, natural/pentatonic scales, arp state, and 2,048 events | Long-run timing and live workflow |
+| MEDO workflow | Five role-mapped drum/bass/chord/lead/sample tracks, shared 1–128-bar length, overdub, three quantize modes, dynamic per-role level/octave, natural/pentatonic scales, actual four-direction/four-rate chord arp, eight gesture outputs, and 2,048 events | Long-run timing and live workflow |
 | Motion | BMI270 filtering plus Click/Press/Slide/Slap/Tilt/Shake/Wiggle/Move control messages, four internal mappings, MIDI output, and recordable automation | IMU calibration and gesture thresholds |
 | MIDI/boot | BLE MIDI input/output; composite USB CDC+MIDI device app; direct USB-MIDI host app; combined dual-slot image with validated on-device role selector and reboot; notes, CC, clock, song position, start/continue/stop | Bidirectional role switching, enumeration, reconnect, clock jitter, OTG/VBUS behavior |
 | Recording | Long master WAVs and optional five-bus master/synth1/synth2/synth3/drums stem containers on SD | Zero-drop 30-minute captures and power-cut cycles |

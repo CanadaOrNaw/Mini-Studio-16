@@ -42,6 +42,8 @@ File s_recordFile;
 uint32_t s_recordFileFrames = 0;
 alignas(4) uint32_t s_recordFileTrack = LOOP_NO_TRACK;
 alignas(4) uint32_t s_recordRequests = 0;
+alignas(4) uint32_t s_recordTargetFrames[LOOP_STREAM_TRACKS] = {};
+alignas(4) uint32_t s_recordCountInFrames[LOOP_STREAM_TRACKS] = {};
 alignas(4) uint32_t s_clearRequests = 0;
 alignas(4) uint32_t s_clearOutstanding = 0;
 portMUX_TYPE s_metricsMux = portMUX_INITIALIZER_UNLOCKED;
@@ -275,10 +277,16 @@ bool startRecording(uint8_t track) {
         { SdIoGuard guard; if (SD.exists(temp)) SD.remove(temp); }
         return false;
     }
+    const uint32_t requestedTarget = __atomic_exchange_n(
+        &s_recordTargetFrames[track], 0u, __ATOMIC_ACQ_REL);
+    const uint32_t requestedCountIn = __atomic_exchange_n(
+        &s_recordCountInFrames[track], 0u, __ATOMIC_ACQ_REL);
     const uint32_t timeline = s_core.timelineFrames();
-    const uint32_t scheduled = track == 0 ? s_core.absoluteFrame() :
+    const uint32_t scheduled = track == 0
+        ? s_core.absoluteFrame() + requestedCountIn :
         scheduleWithMargin(s_core.absoluteFrame(), timeline);
-    const uint32_t target = track == 0 ? kMaximumLoopFrames : timeline;
+    const uint32_t target = track == 0
+        ? (requestedTarget ? requestedTarget : kMaximumLoopFrames) : timeline;
     if (!s_core.beginRecording(track, scheduled, target)) {
         { SdIoGuard guard; s_recordFile.close(); }
         { SdIoGuard guard; if (SD.exists(temp)) SD.remove(temp); }  // P1-2
@@ -455,6 +463,10 @@ void loopEngineInit(bool sdMounted) {
     s_core.reset();
     __atomic_store_n(&s_recordFileTrack, LOOP_NO_TRACK, __ATOMIC_RELEASE);
     __atomic_store_n(&s_recordRequests, 0u, __ATOMIC_RELEASE);
+    for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
+        __atomic_store_n(&s_recordTargetFrames[track], 0u, __ATOMIC_RELEASE);
+        __atomic_store_n(&s_recordCountInFrames[track], 0u, __ATOMIC_RELEASE);
+    }
     __atomic_store_n(&s_clearRequests, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_clearOutstanding, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_paused, 0u, __ATOMIC_RELEASE);
@@ -484,7 +496,8 @@ int32_t loopEngineProcessFrame(int16_t dryInput) {
 }
 int32_t loopEngineLastTrackPcm(uint8_t track) { return s_core.lastTrackOutput(track); }
 
-bool loopEngineRequestRecord(uint8_t track) {
+bool loopEngineRequestRecord(uint8_t track, uint32_t targetFrames,
+                             uint32_t countInFrames) {
     if (!s_sdMounted || track >= LOOP_STREAM_TRACKS || loopEngineIsRecording() ||
         masterRecorderIsBusy() || stemRecorderIsBusy() || sdDiagnosticsIsRunning() ||
         micRecActive() || streamingSamplerIsRecording() ||
@@ -493,11 +506,23 @@ bool loopEngineRequestRecord(uint8_t track) {
     const LoopStreamState state = s_core.trackState(track);
     if (state != LOOP_STREAM_EMPTY && state != LOOP_STREAM_ERROR) return false;
     if (track > 0 && s_core.timelineFrames() == 0) return false;
+    if (track > 0 && (targetFrames != 0 || countInFrames != 0)) return false;
+    if (track == 0 && targetFrames > kMaximumLoopFrames) return false;
+    __atomic_store_n(&s_recordTargetFrames[track], targetFrames, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_recordCountInFrames[track], countInFrames, __ATOMIC_RELEASE);
     __atomic_fetch_or(&s_recordRequests, 1u << track, __ATOMIC_ACQ_REL);
     return true;
 }
 
 bool loopEngineStopRecording(uint8_t track) {
+    if (track > 0 && track < LOOP_STREAM_TRACKS) {
+        const LoopStreamState state = s_core.trackState(track);
+        // Layers 2..6 are exact Track-1-length takes. An early button press
+        // means "finish this layer" at the already scheduled boundary; an
+        // immediate finalize would create a short file and reject it.
+        if (state == LOOP_STREAM_RECORD_WAIT || state == LOOP_STREAM_RECORDING)
+            return true;
+    }
     return s_core.requestStopRecording(track);
 }
 
@@ -531,9 +556,10 @@ bool loopEngineSetSolo(uint8_t track, bool solo) {
     return true;
 }
 
-void loopEngineSetPaused(bool paused) {
-    if (!loopEngineIsRecording())
-        __atomic_store_n(&s_paused, paused ? 1u : 0u, __ATOMIC_RELEASE);
+bool loopEngineSetPaused(bool paused) {
+    if (loopEngineIsRecording()) return false;
+    __atomic_store_n(&s_paused, paused ? 1u : 0u, __ATOMIC_RELEASE);
+    return true;
 }
 void loopEngineSetMetronome(bool enabled) {
     __atomic_store_n(&s_metronome, enabled ? 1u : 0u, __ATOMIC_RELEASE);

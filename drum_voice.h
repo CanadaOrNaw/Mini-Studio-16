@@ -167,6 +167,7 @@ struct DrumLane {
     float      tune;         // semitones -12..+12 (synth) / pitch (sample)
     float      decay;        // 0.5..2.0 (synth engines only)
     uint8_t    chokeGroup;   // 0 = none; lanes sharing a group choke each other
+    float      velocityGain; // transient per-hit gain, not a saved parameter
 
     DrumSynthVoice sv;
     SampleVoice    smp;
@@ -174,12 +175,15 @@ struct DrumLane {
     void init(DrumEngine e, uint8_t t) {
         engine = e; type = t; sampleSlot = -1;
         volume = 0.85f; tune = 0.0f; decay = 1.0f; chokeGroup = 0;
+        velocityGain = 1.0f;
         sv.init(); smp.init();
     }
 
-    void trigger() {
+    void trigger(uint8_t velocity = 127) {
+        velocityGain = static_cast<float>(velocity) / 127.0f;
         if (engine == ENG_SMPL) {
-            smp.trigger(sampleSlot, powf(2.0f, tune / 12.0f), volume);
+            smp.trigger(sampleSlot, powf(2.0f, tune / 12.0f),
+                        volume * velocityGain);
         } else {
             sv.trigger(engine == ENG_909, type, decay, tune);
         }
@@ -191,7 +195,7 @@ struct DrumLane {
     }
 
     inline float render() {
-        if (engine == ENG_SMPL) return smp.render() * 1.0f;   // volume baked into gain
-        return sv.render() * volume;
+        if (engine == ENG_SMPL) return smp.render() * 1.0f;   // gain baked at trigger
+        return sv.render() * volume * velocityGain;
     }
 };

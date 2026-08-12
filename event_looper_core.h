@@ -21,6 +21,7 @@ enum EventLoopType : uint8_t {
 };
 
 static const uint8_t EVENT_LOOP_FLAG_NOTE_OFF = 1u;
+static const uint8_t EVENT_LOOP_FLAG_ROLE_GAIN = 2u;
 
 enum EventLoopRole : uint8_t {
     EVENT_ROLE_DRUM = 0,
@@ -163,8 +164,11 @@ public:
 
 private:
     static bool validFlags(EventLoopType type, uint8_t flags) {
-        return type == EVENT_LOOP_NOTE ? (flags & ~EVENT_LOOP_FLAG_NOTE_OFF) == 0
-                                       : flags == 0;
+        if (type == EVENT_LOOP_CONTROL) return flags == 0;
+        const uint8_t allowed = type == EVENT_LOOP_NOTE
+            ? static_cast<uint8_t>(EVENT_LOOP_FLAG_NOTE_OFF | EVENT_LOOP_FLAG_ROLE_GAIN)
+            : EVENT_LOOP_FLAG_ROLE_GAIN;
+        return (flags & ~allowed) == 0;
     }
 
     EventLoopEvent _events[EVENT_LOOP_CAPACITY];

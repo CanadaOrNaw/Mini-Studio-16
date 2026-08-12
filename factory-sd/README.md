@@ -12,7 +12,7 @@ Copy the `groovebox/` folder to the root of a FAT32 microSD card:
 
 Mini Studio 16 creates `groovebox/loops`, `groovebox/recordings`, and
 `groovebox/diag` as needed. The inherited P1 project loads through the legacy
-GBX migration path; saving writes the current GBX v8 format while retaining a
+GBX migration path; saving writes the current GBX v9 format while retaining a
 backup of the prior project.
 
 The demo project uses only the built-in 808/909 engines, so it plays even

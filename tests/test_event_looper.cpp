@@ -32,7 +32,9 @@ int main() {
     assert(looper.event(2).step == 35);
     assert(looper.clearTrack(EVENT_ROLE_DRUM));
     assert(looper.count() == 2);
-    assert(!looper.add(0, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 60, 0, 2));
+    assert(looper.add(0, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 60, 127,
+                      EVENT_LOOP_FLAG_ROLE_GAIN));
+    assert(!looper.add(0, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 60, 0, 4));
     assert(!looper.add(0, EVENT_ROLE_BASS, EVENT_LOOP_DRUM, 0, 127, 0,
                        EVENT_LOOP_FLAG_NOTE_OFF));
 

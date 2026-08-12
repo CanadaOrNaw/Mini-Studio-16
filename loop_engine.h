@@ -21,12 +21,13 @@ struct LoopEngineSnapshot {
 void loopEngineInit(bool sdMounted);
 int32_t loopEngineProcessFrame(int16_t dryInput);
 int32_t loopEngineLastTrackPcm(uint8_t track);
-bool loopEngineRequestRecord(uint8_t track);
+bool loopEngineRequestRecord(uint8_t track, uint32_t targetFrames = 0,
+                             uint32_t countInFrames = 0);
 bool loopEngineStopRecording(uint8_t track);
 bool loopEngineSetMuted(uint8_t track, bool muted);
 bool loopEngineSetVolume(uint8_t track, uint8_t percent);
 bool loopEngineSetSolo(uint8_t track, bool solo);
-void loopEngineSetPaused(bool paused);
+bool loopEngineSetPaused(bool paused);
 void loopEngineSetMetronome(bool enabled);
 bool loopEngineClear(uint8_t track);
 bool loopEngineIsRecording();

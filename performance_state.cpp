@@ -31,9 +31,13 @@ uint8_t g_hiChordEarLevel = 0;
 uint8_t g_hiChordEarTarget = 0;
 uint16_t g_hiChordEarScore = 0;
 uint8_t g_hiChordArpPattern = ARP_UP;
-uint8_t g_hiChordArpLayer = ARP_CHORD_ONLY;
-uint8_t g_hiChordArpRate = 1;
-uint8_t g_hiChordRepeatRate = 1;
+uint8_t g_hiChordArpLayer = ARP_ONLY;
+uint8_t g_hiChordArpRate = HICHORD_RATE_1_8;
+uint8_t g_hiChordRepeatRate = HICHORD_RATE_1_8;
+uint8_t g_hiChordStrumSpeed = HICHORD_STRUM_MEDIUM;
+uint8_t g_hiChordLoopBars = 0;
+uint8_t g_hiChordSequenceLength = 4;
+uint8_t g_hiChordBounceSource = HICHORD_BOUNCE_SEQUENCE;
 PerformancePreset g_performancePresets[4];
 
 void performanceStateInit() {
@@ -61,9 +65,13 @@ void performanceStateInit() {
     g_hiChordEarLevel = g_hiChordEarTarget = 0;
     g_hiChordEarScore = 0;
     g_hiChordArpPattern = ARP_UP;
-    g_hiChordArpLayer = ARP_CHORD_ONLY;
-    g_hiChordArpRate = 1;
-    g_hiChordRepeatRate = 1;
+    g_hiChordArpLayer = ARP_ONLY;
+    g_hiChordArpRate = HICHORD_RATE_1_8;
+    g_hiChordRepeatRate = HICHORD_RATE_1_8;
+    g_hiChordStrumSpeed = HICHORD_STRUM_MEDIUM;
+    g_hiChordLoopBars = 0;
+    g_hiChordSequenceLength = 4;
+    g_hiChordBounceSource = HICHORD_BOUNCE_SEQUENCE;
     memset(g_performancePresets, 0, sizeof(g_performancePresets));
 }
 

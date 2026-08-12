@@ -2,7 +2,7 @@ name: Build and deploy Pages
 
 on:
   push:
-    branches: ["main", "agent/v3-alpha-sd-streaming"]
+    branches: ["main", "agent/v3-alpha-sd-streaming", "agent/complete-three-in-one"]
     paths:
       - "site/**"
       - "hardware/**"
@@ -55,7 +55,10 @@ jobs:
           python-version: "3.12"
       - uses: actions/configure-pages@v5
         id: pages-config
-        if: github.event_name != 'pull_request' || github.head_ref == 'agent/v3-alpha-sd-streaming'
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.head_ref == 'agent/v3-alpha-sd-streaming' ||
+          github.head_ref == 'agent/complete-three-in-one'
         # Forks and fresh repositories can validate/download the complete site
         # artifact before an owner enables Pages in Settings. Once enabled,
         # this step succeeds and the deploy job becomes eligible.
@@ -79,12 +82,9 @@ jobs:
           path: build/pages
 
   deploy:
-    # The long-running alpha branch is the product's current integration ref.
-    # Deploy it during this draft PR; after merge, pushes to main take over.
     if: >-
       needs.build.outputs.pages-ready == 'true' &&
-      (github.event_name != 'pull_request' ||
-      github.head_ref == 'agent/v3-alpha-sd-streaming')
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -105,12 +105,11 @@ jobs:
   # that gap: when the SITE_PUSH_TOKEN secret exists (a fine-grained PAT
   # with contents read/write on MiniStudio.github.io only), every push
   # publishes the freshly built tree there and then FAILS the workflow if
-  # the live site does not serve this exact commit within ~5 minutes.
   # Without the secret (forks, first-time setup) the job explains itself
   # and exits green; the manual flow remains:
   #   python tools/build_site.py && push build/pages to MiniStudio.github.io
   publish-site:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     steps:

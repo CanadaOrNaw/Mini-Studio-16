@@ -65,6 +65,10 @@ class MiniStudioCliTests(unittest.TestCase):
         self.assertEqual(cli.command_words(args), ["loop", 6, "record"])
         args = cli.parser().parse_args(["loop", "2", "volume", "65"])
         self.assertEqual(cli.command_words(args), ["loop", 2, "volume", 65])
+        args = cli.parser().parse_args(["loop", "3", "solo"])
+        self.assertEqual(cli.command_words(args), ["loop", 3, "solo"])
+        args = cli.parser().parse_args(["loop-transport", "metronome_on"])
+        self.assertEqual(cli.command_words(args), ["loop", "metronome_on"])
 
     def test_sample_commands(self):
         args = cli.parser().parse_args(["sample-status"])
@@ -141,6 +145,8 @@ class MiniStudioCliTests(unittest.TestCase):
         self.assertEqual(cli.command_words(args), ["medo", "quantize", 3, 2])
         args = cli.parser().parse_args(["medo-set", "bars", "128"])
         self.assertEqual(cli.command_words(args), ["medo", "set", "bars", 128])
+        args = cli.parser().parse_args(["medo-set", "arp_enabled", "1"])
+        self.assertEqual(cli.command_words(args), ["medo", "set", "arp_enabled", 1])
 
     def test_audio_cap_commands(self):
         args = cli.parser().parse_args(["cap-status"])

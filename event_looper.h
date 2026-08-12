@@ -12,6 +12,7 @@ void eventLooperResetTransport();
 void eventLooperSetPosition(uint16_t step);
 void eventLooperAdvance();
 void eventLooperSetRecordRoleOverride(int8_t role);
+void eventLooperSetRecordRoleGain(bool enabled);
 bool eventLooperRecordSynth(uint16_t step, uint8_t synthTrack,
                             uint8_t midiNote, uint8_t velocity);
 bool eventLooperRecordSynthRelease(uint16_t step, uint8_t synthTrack,

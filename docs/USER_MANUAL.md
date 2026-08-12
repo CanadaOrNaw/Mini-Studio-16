@@ -115,15 +115,25 @@ degree as the slash bass.
 
 The MODE row selects Play, Strum, Lead, Drone, Arpeggio, Repeat, Mic Sample,
 Drum, Drum Loops, Auto Drum, Sequencer, Chord Hiro, Ear Trainer, Tuner, or
-Mixer. Arp patterns are Up/Down/Up-Down/Down-Up/Random/Chord with chord, bass,
-or combined layers. In arp mode `tab` advances pattern (`m+tab` advances
-layer); in repeat mode it advances rate. Leaving a playing chord sequence
-arms the first empty audio loop and bounces one synchronized bar.
+Mixer. Lead is monophonic and a new key replaces its current note; Drone
+latches one chord until another chord or mode replaces it. Strum has 120, 80,
+and 40 ms spacing. Arp patterns are Up/Down/Up-Down/Down-Up/Random/Fingerpick
+with Arp-only, Chord+Arp, or Rhythm+Arp layers. Arp and Repeat offer 1/1,
+1/2, 1/4, 1/8, 1/16, 1/16-triplet, 1/32, swing-8 and swing-16 rates. In arp
+mode `tab` advances rate (`m+tab` advances layer); in repeat mode it advances
+rate. The sequence length is selectable at 4/8/12/16 steps. Leaving a playing
+chord sequence, Drum Loop, or Drone arms the first empty audio loop and
+bounces it at the exact loop boundary.
 
-Drum mode selects seven kits; Drum Loops/Auto Drum expose seven styles × eight
-variations (56 grooves). Tuner uses a held AUX mic capture and displays Hz,
-MIDI note, and cents. Mic Sample records up to three seconds, detects the root,
-and maps it chromatically. Mixer chord keys control L1–L6 mute and metronome.
+Drum mode selects seven kits; Drum Loops expose seven styles × eight
+variations (56 grooves), while Auto Drum uses held direction keys for quarter,
+eighth, sixteenth, thirty-second, triplet and swing triggers. Tuner uses a
+held AUX mic capture and displays Hz, MIDI note, and cents. Mic Sample records
+up to three seconds, detects the root, maps it chromatically, and enters Lead.
+Chord Hiro starts with PLAY and grades timing at the documented difficulty
+windows. Ear Trainer auditions one chord on levels 1/3 or a four-chord
+progression on levels 2/4; levels 3/4 also require the directional variant.
+Tap AUX for a root hint. Mixer chord keys control L1–L6 mute and metronome.
 Pattern keys `4`–`7` recall four presets; hold them to store.
 
 The serial protocol additionally exposes exact chord locks, inversion, octave
@@ -158,8 +168,10 @@ SD-streamed instrument.
 - Hold `n` to start/stop a streamed master-bus recording into the current slot.
 - `z` clears the current streamed slot and its sequence events.
 - Tap LOAD to copy the current whole sound (or selected slice); tap SAVE on a
-  destination to paste. Slice paste stays within the same source asset so no
-  hidden cross-file reference can be created.
+  destination to paste. A same-slot slice paste is metadata-only; a cross-slot
+  paste asynchronously rebuilds a real destination WAV from PCM. Source and
+  destination assets must currently have the same rate; a mismatch rejects
+  explicitly instead of creating a wrong hidden reference.
 
 Slots share 40 seconds after normalization to the 22.05 kHz engine rate.
 Assignment rejects an asset that would exceed the remaining quota.
@@ -196,10 +208,13 @@ when the lock table is full.
 Six independent WAV tracks live at `/groovebox/loops/L1.wav`–`L6.wav`.
 
 - `v/c` or pattern keys 1–6 select a track.
-- `/` arms recording; press again to stop/finalize L1 early.
-- L1 is free length up to 20 seconds and establishes the exact timeline.
+- `/` arms recording; press again to stop/finalize free-length L1 early.
+- L1 is free length up to 20 seconds or fixed to 1–8 bars. Hold `m` and press
+  `x/b` to choose FREE/1–8 bars. Fixed mode plays a four-beat count-in and
+  auto-stops at the exact frame count.
 - L2–L6 wait for the next L1 boundary and automatically stop at L1's frame
-  count.
+  count. An early stop request means “finish at that boundary,” never a short
+  rejected take. After finalize, the cursor advances to the next empty track.
 - `x/b` changes volume in 5% steps.
 - `.` mutes/unmutes without losing phase.
 - `tab` solos/unsolos the selected track; `n` pauses/resumes the loop timeline;
@@ -235,6 +250,12 @@ role for additive overdub and `z` clears it. The first/shared performance
 length is 1–128 bars and applies to every role. Quantize choices are As Played,
 Snap 16, and MEDO Groove. Natural, major-pentatonic, and minor-pentatonic note
 maps and per-role octave/level are persisted.
+
+`tab` toggles the Chord-role arpeggiator. Its Up/Down/Up-Down/Random direction
+and ×1/×2/×4/×8 rate are real note scheduling, not display-only state. Role
+levels are stored as dynamic mixer gain flags in newly recorded events, so
+changing a role volume also changes existing playback rather than baking the
+old level into every event.
 
 Click/Press/Slide are represented by keys and pressure/modifier controls;
 Slap/Tilt/Shake/Wiggle/Move come from the BMI270 motion layer. All eight have

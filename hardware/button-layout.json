@@ -101,12 +101,12 @@
     },
     "chord": {
       "title":"Chord / HiChord",
-      "summary":"Play I–VII, choose 15 performance modes, use directional chord maps, grooves, presets, tuner and mixer.",
+      "summary":"Play I–VII across 15 real modes: strum/arp/repeat/lead/drone, grooves, variable sequence+bounce, timed practice, ear rounds, tuner and mixer.",
       "keys":["fn","shift","a","s","d","f","g","x","c","v","b","tab","m","4","5","6","7","period"]
     },
     "sample": {
       "title":"Sample",
-      "summary":"Browse or assign 16 slots, perform melodic/sliced sounds, edit locks, and capture mic or master bus.",
+      "summary":"Browse or assign 16 slots, perform melodic/sliced sounds, trim or PCM-copy slices, edit locks, and capture mic or master bus.",
       "keys":["tab","x","c","v","b","n","m","comma","period","slash","fn","shift","a","s","d","f","g","h","j","k","l","semicolon","quote","enter","q","w"]
     },
     "ko": {
@@ -116,7 +116,7 @@
     },
     "loops": {
       "title":"Loops",
-      "summary":"Record six synchronized SD-backed loops; select, level, mute, solo, pause or clear independent tracks and toggle metronome.",
+      "summary":"Record six synchronized SD-backed loops; Track 1 is free or 1–8 bars with count-in; level, mute, solo, pause, clear and metronome controls.",
       "keys":["4","5","6","7","8","9","tab","x","c","v","b","n","comma","z","period","slash"]
     },
     "event": {
@@ -126,7 +126,7 @@
     },
     "medo": {
       "title":"MEDO",
-      "summary":"Perform/overdub Drum, Bass, Chord, Lead and Sample roles with shared 1–128 bars, quantize, scales and gestures.",
+      "summary":"Perform/overdub Drum, Bass, Chord, Lead and Sample roles with shared 1–128 bars, dynamic role mix, quantize, scales, real arp and gestures.",
       "keys":["fn","shift","a","s","d","f","g","h","j","k","l","semicolon","quote","enter","q","w","x","c","v","b","m","z","slash"]
     },
     "motion": {

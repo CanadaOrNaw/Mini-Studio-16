@@ -84,8 +84,8 @@ uint32_t sequencerMidiClockDropped();
 void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent,
                    bool legato, uint8_t velocity = 0);
 void liveSynthRelease(uint8_t track, uint8_t midiNote);
-void liveDrumHit(uint8_t lane);
-void liveSampleHit(uint8_t slot, uint8_t key);
+void liveDrumHit(uint8_t lane, uint8_t velocity = 127);
+void liveSampleHit(uint8_t slot, uint8_t key, uint8_t velocity = 127);
 
 // pattern + lane helpers (new-layout / sampling additions)
 void clonePatternTo(uint8_t dst);   // copy current pattern into slot dst

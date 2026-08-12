@@ -604,9 +604,12 @@ static bool validateEventsV5(const ProjectFileV5& pf, bool highResolution) {
         const EventLoopEvent& event = pf.events[index];
         if (event.track >= EVENT_LOOP_TRACKS ||
             event.type < EVENT_LOOP_NOTE || event.type > EVENT_LOOP_CONTROL ||
-            (event.type == EVENT_LOOP_NOTE
-                 ? (event.flags & ~EVENT_LOOP_FLAG_NOTE_OFF) != 0
-                 : event.flags != 0))
+            (event.type == EVENT_LOOP_CONTROL
+                 ? event.flags != 0
+                 : event.type == EVENT_LOOP_NOTE
+                     ? (event.flags & ~(EVENT_LOOP_FLAG_NOTE_OFF |
+                                        EVENT_LOOP_FLAG_ROLE_GAIN)) != 0
+                     : (event.flags & ~EVENT_LOOP_FLAG_ROLE_GAIN) != 0))
             return false;
         const uint16_t bars = pf.eventTracks[event.track].bars == 0
             ? 128 : pf.eventTracks[event.track].bars;

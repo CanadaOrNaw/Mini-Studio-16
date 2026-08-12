@@ -161,7 +161,7 @@ For each track, test `MG/303`, `MGX`, and `FM4` at one, two, and three voices.
 Confirm engine switching retains each patch, MG/303 matches the inherited
 sound/slide/decay behavior, MGX filter modes/envelopes/LFO/PWM/sub/drive and
 velocity respond, and every FM algorithm/ratio/operator envelope/feedback
-produces a useful bounded sound. Save as GBX v8, reboot/reload, then load an
+produces a useful bounded sound. Save as GBX v9, reboot/reload, then load an
 older GBX file and confirm it selects `MG/303`.
 
 Use the CLI to make the pass reproducible:
@@ -188,6 +188,39 @@ automation active. The final safe polyphony is the highest repeatable setting
 with zero missed deadlines, no reboot, and no audible breakup; compilation does
 not establish this limit.
 
+## 2b. HiChord, PO-33, and MEDO workflows
+
+This pass is mandatory: capacities alone do not prove the product workflows.
+
+On CHORD, play all seven degree buttons in all ten scales and exercise the
+center/eight directional maps. Check inversions, octave shifts, chord locks,
+root/slash bass and voice leading. Then step through all 15 modes: Play,
+Strum, Lead, Drone, Arp (all six patterns and three layers), Repeat, Mic
+Sample, Drum, Drum Loops, Auto Drum, Sequencer/bounce, Chord Hiro, Ear
+Trainer, Tuner and Mixer. Verify seven kits, every 56-groove selection,
+pitch-detected three-second sampling, four presets, seven master effects,
+Loop-1 vocoder, mixer solo/mute/volume/pause/metronome and exact loop bounce.
+For mic vocoder, record whether the onboard codec can remain full duplex.
+
+On SAMPLE/KO, fill/copy melodic sounds and individual slices; edit tone,
+filter and trim; live-record with all swing settings; confirm patterns 1–16,
+128 chain entries, parameter locks, all 15 momentary punch effects, and
+per-step effect replay. Releasing a punch key must return dry immediately.
+
+On MEDO, overdub Drum/Bass/Chord/Lead/Sample roles to one shared 1–128-bar
+length. Verify As Played/Snap 16/MEDO Groove, role volume/octave, natural and
+major/minor pentatonic note maps, arp directions/rates and Click/Press/Slide/
+Slap/Tilt/Shake/Wiggle/Move MIDI output. Save/reboot/reload and confirm every
+state survives GBX v9. Useful reproducible probes:
+
+```bash
+python tools/ministudio_cli.py --port /dev/ttyACM0 chord-play 1 0
+python tools/ministudio_cli.py --port /dev/ttyACM0 chord-lock 5 9
+python tools/ministudio_cli.py --port /dev/ttyACM0 po-lock 1 4 14
+python tools/ministudio_cli.py --port /dev/ttyACM0 medo-set bars 128
+python tools/ministudio_cli.py --port /dev/ttyACM0 medo-quantize 3 2
+```
+
 ## 3. SD diagnostic
 
 1. Start the demo or a dense pattern and leave it playing.
@@ -212,7 +245,7 @@ Preserve failures: maximum stall and minimum heap matter more than PASS/FAIL.
 ## 4. Six-track looper
 
 Standalone controls: LOOPS page, `v/c` select, `x/b` volume, `/` record/stop,
-`.` mute, `z` clear. CLI equivalents:
+`.` mute, `tab` solo, `n` pause, `,` metronome, `z` clear. CLI equivalents:
 
 ```bash
 python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 record
@@ -227,7 +260,7 @@ Verify:
 - L1 free-stops and fixes the exact timeline, capped at 20 seconds;
 - L2–L6 wait for an L1 boundary and stop at exactly L1's frame count;
 - mute consumes audio and unmute returns at the correct phase;
-- volume changes are click-free enough for use and persist through GBX v8;
+- volume changes are click-free enough for use and persist through GBX v9;
 - six tracks play for 30 minutes without phase drift or audible underrun;
 - an injected/real stall increments underrun and the track returns only at the
   next boundary, never late/off-phase;
@@ -237,8 +270,9 @@ Verify:
 ## 5. Streamed sampler
 
 Fill all 16 slots with mono 16-bit WAVs. Exercise melodic and sliced modes,
-all 16 performance keys, trim, pitch, gain, cutoff, resonance, four overlapping
-voices, pattern events, and step locks. Then record both bus and mic sources:
+sound/slice copy, all 16 performance keys, trim, pitch, gain, cutoff,
+resonance, four overlapping voices, pattern events, and step locks. Then
+record both bus and mic sources:
 
 ```bash
 python tools/ministudio_cli.py --port /dev/ttyACM0 sample-record 1 bus melodic
@@ -259,7 +293,7 @@ synth/drum/sample parts, mute/unmute, save/reboot, and confirm musical tick
 alignment. Fill toward the bounded 2,048-event capacity and verify graceful
 rejection rather than corruption.
 
-On MOTION, exercise tilt X/Y, acceleration, gyro, shake, and slap. Calibrate
+On MOTION, exercise tilt X/Y, acceleration, gyro, shake, slap, and wiggle. Calibrate
 neutral position, useful range, noise, cooldown, and false triggers. Record
 motion automation into an armed event track and confirm repeatable playback.
 Verify outgoing mapping CCs on channel 16, controllers 16–19.

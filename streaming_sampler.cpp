@@ -37,6 +37,7 @@ enum CommandType : uint8_t {
     COMMAND_CLEAR,
     COMMAND_STOP_ALL,
     COMMAND_RECORD_START,
+    COMMAND_COPY_SLICE,
 };
 
 struct SamplerCommand {
@@ -527,6 +528,118 @@ bool assignSlot(const SamplerCommand& command) {
     return ok;
 }
 
+bool copySliceAsset(const SamplerCommand& command) {
+    const uint8_t sourceSlot = command.slot;
+    const uint8_t sourceSlice = command.key;
+    const uint8_t destinationSlot = command.mode;
+    const uint8_t destinationSlice = static_cast<uint8_t>(command.targetFrames);
+    SamplerSlot source = {}, destination = {};
+    if (sourceSlot >= SAMPLER_SLOT_COUNT || destinationSlot >= SAMPLER_SLOT_COUNT ||
+        sourceSlice >= SAMPLER_SLICE_COUNT || destinationSlice >= SAMPLER_SLICE_COUNT ||
+        !g_samplerSlotBank.snapshotSlot(sourceSlot, source) ||
+        !g_samplerSlotBank.snapshotSlot(destinationSlot, destination) ||
+        source.mode != SAMPLER_SLOT_SLICED || destination.mode != SAMPLER_SLOT_SLICED ||
+        source.sourceRate == 0 || source.sourceRate != destination.sourceRate)
+        return false;
+
+    char sourcePath[96], destinationPath[96], tempPath[96], finalPath[96];
+    char finalName[SAMPLE_NAME_LEN];
+    samplePath(source.filename, sourcePath, sizeof(sourcePath));
+    samplePath(destination.filename, destinationPath, sizeof(destinationPath));
+    snprintf(tempPath, sizeof(tempPath), "%s/.COPY%02u.tmp", DIR_SAMPLES,
+             static_cast<unsigned>(destinationSlot + 1u));
+    if (!selectRecordPath(destinationSlot, finalPath, sizeof(finalPath),
+                          finalName, sizeof(finalName))) return false;
+
+    File sourceFile, destinationFile, output;
+    {
+        SdIoGuard guard;
+        SD.remove(tempPath);
+        sourceFile = SD.open(sourcePath, FILE_READ);
+        destinationFile = SD.open(destinationPath, FILE_READ);
+        output = SD.open(tempPath, FILE_WRITE);
+    }
+    uint8_t placeholder[WAV_PCM_HEADER_BYTES];
+    wavBuildMono16Header(placeholder, destination.sourceRate, 0);
+    bool ok = sourceFile && destinationFile && output;
+    if (ok) {
+        SdIoGuard guard;
+        ok = output.write(placeholder, sizeof(placeholder)) == sizeof(placeholder);
+    }
+
+    uint32_t segmentLengths[SAMPLER_SLICE_COUNT] = {};
+    uint32_t totalFrames = 0;
+    int16_t buffer[kReadFrames];
+    for (uint8_t slice = 0; ok && slice < SAMPLER_SLICE_COUNT; ++slice) {
+        const bool useSource = slice == destinationSlice;
+        const SamplerSlot& asset = useSource ? source : destination;
+        const SamplerRegion region = useSource
+            ? source.slices[sourceSlice] : destination.slices[slice];
+        File& input = useSource ? sourceFile : destinationFile;
+        if (region.lengthFrames == 0 ||
+            static_cast<uint64_t>(region.startFrame) + region.lengthFrames >
+                asset.sourceFrames) {
+            ok = false;
+            break;
+        }
+        {
+            SdIoGuard guard;
+            ok = input.seek(WAV_PCM_HEADER_BYTES +
+                            region.startFrame * sizeof(int16_t));
+        }
+        uint32_t remaining = region.lengthFrames;
+        while (ok && remaining) {
+            const size_t frames = min<uint32_t>(remaining, kReadFrames);
+            const size_t bytes = frames * sizeof(int16_t);
+            int got = 0;
+            size_t written = 0;
+            {
+                SdIoGuard guard;
+                got = input.read(reinterpret_cast<uint8_t*>(buffer), bytes);
+                if (got == static_cast<int>(bytes))
+                    written = output.write(reinterpret_cast<uint8_t*>(buffer), bytes);
+            }
+            ok = got == static_cast<int>(bytes) && written == bytes;
+            remaining -= ok ? static_cast<uint32_t>(frames) : 0u;
+        }
+        if (ok) {
+            segmentLengths[slice] = region.lengthFrames;
+            totalFrames += region.lengthFrames;
+        }
+    }
+
+    if (ok && totalFrames >= SAMPLER_SLICE_COUNT) {
+        uint8_t header[WAV_PCM_HEADER_BYTES];
+        wavBuildMono16Header(header, destination.sourceRate, totalFrames);
+        SdIoGuard guard;
+        ok = output.seek(0) && output.write(header, sizeof(header)) == sizeof(header);
+        if (ok) output.flush();
+    } else ok = false;
+    {
+        SdIoGuard guard;
+        if (sourceFile) sourceFile.close();
+        if (destinationFile) destinationFile.close();
+        if (output) output.close();
+        if (ok) ok = SD.rename(tempPath, finalPath);
+        else SD.remove(tempPath);
+    }
+    if (!ok) return false;
+
+    ok = g_samplerSlotBank.assign(destinationSlot, finalName, totalFrames,
+                                  destination.sourceRate, SAMPLER_SLOT_SLICED);
+    uint32_t cursor = 0;
+    for (uint8_t slice = 0; ok && slice < SAMPLER_SLICE_COUNT; ++slice) {
+        ok = g_samplerSlotBank.setSlice(destinationSlot, slice, cursor,
+                                        segmentLengths[slice]);
+        cursor += segmentLengths[slice];
+    }
+    if (!ok) {
+        SdIoGuard guard;
+        SD.remove(finalPath);
+    }
+    return ok;
+}
+
 void processCommand(const SamplerCommand& command) {
     bool ok = true;
     switch (command.type) {
@@ -548,13 +661,15 @@ void processCommand(const SamplerCommand& command) {
             break;
         case COMMAND_STOP_ALL: stopAllVoices(); break;
         case COMMAND_RECORD_START: ok = beginRecordWorker(command); break;
+        case COMMAND_COPY_SLICE: ok = copySliceAsset(command); break;
         default: ok = false; break;
     }
     if (!ok) {
         if (command.type == COMMAND_RECORD_START) failRecording(false);
         else noteError();
     }
-    if (command.type == COMMAND_ASSIGN || command.type == COMMAND_CLEAR)
+    if (command.type == COMMAND_ASSIGN || command.type == COMMAND_CLEAR ||
+        command.type == COMMAND_COPY_SLICE)
         __atomic_sub_fetch(&s_pendingMutations, 1u, __ATOMIC_ACQ_REL);
     __atomic_sub_fetch(&s_pendingCommands, 1u, __ATOMIC_ACQ_REL);
 }
@@ -584,7 +699,8 @@ bool queueCommand(const SamplerCommand& command) {
         return false;
     }
     const bool mutation = command.type == COMMAND_ASSIGN ||
-                          command.type == COMMAND_CLEAR;
+                          command.type == COMMAND_CLEAR ||
+                          command.type == COMMAND_COPY_SLICE;
     // Publish the counters before the command becomes visible to the worker.
     // Otherwise a fast worker can pop/decrement a just-pushed command before
     // this producer increments the corresponding count.
@@ -644,7 +760,7 @@ int32_t streamingSamplerRender() {
 }
 
 bool streamingSamplerTrigger(uint8_t slot, uint8_t key,
-                             const SamplerLockEntry* lock) {
+                             const SamplerLockEntry* lock, uint8_t velocity) {
     if (slot >= SAMPLER_SLOT_COUNT || key >= SAMPLER_SLICE_COUNT) return false;
     SamplerCommand command = {};
     command.type = COMMAND_TRIGGER;
@@ -656,6 +772,19 @@ bool streamingSamplerTrigger(uint8_t slot, uint8_t key,
     if (!g_samplerSlotBank.snapshotSlot(slot, command.slotData)) return false;
     if (command.slotData.mode == SAMPLER_SLOT_EMPTY) return false;
     if (lock) { command.lock = *lock; command.hasLock = true; }
+    if (velocity < 127) {
+        if (!command.hasLock) {
+            command.lock = {};
+            command.lock.pattern = command.lock.step = 0;
+            command.lock.slot = slot;
+            command.hasLock = true;
+        }
+        const uint16_t base = (command.lock.flags & SAMPLER_LOCK_GAIN)
+            ? command.lock.gainQ15 : command.slotData.gainQ15;
+        command.lock.flags |= SAMPLER_LOCK_GAIN;
+        command.lock.gainQ15 = static_cast<uint16_t>(
+            static_cast<uint32_t>(base) * velocity / 127u);
+    }
     return queueCommand(command);
 }
 
@@ -685,6 +814,21 @@ bool streamingSamplerClear(uint8_t slot) {
     SamplerCommand command = {};
     command.type = COMMAND_CLEAR;
     command.slot = slot;
+    return queueCommand(command);
+}
+
+bool streamingSamplerCopySlice(uint8_t sourceSlot, uint8_t sourceSlice,
+                               uint8_t destinationSlot, uint8_t destinationSlice) {
+    if (sourceSlot >= SAMPLER_SLOT_COUNT || destinationSlot >= SAMPLER_SLOT_COUNT ||
+        sourceSlice >= SAMPLER_SLICE_COUNT || destinationSlice >= SAMPLER_SLICE_COUNT ||
+        sourceSlot == destinationSlot || streamingSamplerIsRecording())
+        return false;
+    SamplerCommand command = {};
+    command.type = COMMAND_COPY_SLICE;
+    command.slot = sourceSlot;
+    command.key = sourceSlice;
+    command.mode = destinationSlot;
+    command.targetFrames = destinationSlice;
     return queueCommand(command);
 }
 

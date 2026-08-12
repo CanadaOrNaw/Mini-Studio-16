@@ -105,6 +105,8 @@ def command_words(args: argparse.Namespace) -> List[object]:
         if args.volume is not None:
             words.append(args.volume)
         return words
+    if args.command == "loop-transport":
+        return ["loop", args.action]
     if args.command == "sample-status":
         return ["sample", "status"]
     if args.command == "sample-assign":
@@ -220,8 +222,11 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("loop-status", help="show six-track streaming state and counters")
     loop = sub.add_parser("loop")
     loop.add_argument("track", type=int, choices=range(1, 7))
-    loop.add_argument("action", choices=("record", "stop", "mute", "unmute", "clear", "volume"))
+    loop.add_argument("action", choices=("record", "stop", "mute", "unmute", "clear",
+                                         "volume", "solo", "unsolo"))
     loop.add_argument("volume", type=int, nargs="?", choices=range(0, 101))
+    loop_transport = sub.add_parser("loop-transport", help="pause/resume loops or control metronome")
+    loop_transport.add_argument("action", choices=("pause", "resume", "metronome_on", "metronome_off"))
     sub.add_parser("sample-status", help="show streamed sampler quota, voices and counters")
     sample_assign = sub.add_parser("sample-assign")
     sample_assign.add_argument("slot", type=int, choices=range(1, 17))
@@ -303,8 +308,8 @@ def parser() -> argparse.ArgumentParser:
     medo_quantize = sub.add_parser("medo-quantize")
     medo_quantize.add_argument("role", type=int, choices=range(1, 6))
     medo_quantize.add_argument("mode", type=int, choices=range(0, 3))
-    medo_set = sub.add_parser("medo-set", help="set scale, arp_direction, arp_rate, or bars")
-    medo_set.add_argument("parameter", choices=("scale", "arp_direction", "arp_rate", "bars"))
+    medo_set = sub.add_parser("medo-set", help="set scale, arpeggiator, or shared bars")
+    medo_set.add_argument("parameter", choices=("scale", "arp_enabled", "arp_direction", "arp_rate", "bars"))
     medo_set.add_argument("value", type=int, choices=range(0, 256))
     sub.add_parser("cap-status", help="show optional Audio Cap connection and stream counters")
     sub.add_parser("cap-pair", help="discover and pair conventional Bluetooth audio output")

@@ -39,10 +39,9 @@
 #include "boot_selector.h"
 #include "audio_cap.h"
 #include "performance_state.h"
+#include "input.h"
 #include "ui.h"
 
-void inputInit();
-void inputUpdate();
 
 static bool s_sdOk = false;
 

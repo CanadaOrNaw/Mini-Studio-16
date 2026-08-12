@@ -160,6 +160,11 @@ struct SynthTrack {
                     uint8_t midiNote, uint8_t velocity);
     void noteOff(uint8_t midiNote);
     void releaseAll();
+    // Performance-mode panic used when a latched Drone/Lead voice must stop.
+    // Unlike noteOff(), this also stops the intentionally note-off-agnostic
+    // legacy MG/303 voice; ordinary MG/303 sequencing remains unchanged.
+    void hardStop();
+    void sustainLegacy();
     void releaseSequenced();
     void prepareStep(bool hasNotes, bool legato);
     float render();
@@ -174,4 +179,3 @@ struct SynthTrack {
 const char* synthEngineName(SynthEngine engine);
 const char* synthFilterModeName(SynthFilterMode mode);
 const char* synthLfoDestinationName(SynthLfoDestination destination);
-

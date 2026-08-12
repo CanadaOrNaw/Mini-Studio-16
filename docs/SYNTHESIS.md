@@ -18,10 +18,11 @@ a golden PCM hash (P2-19: an earlier revision of this page overclaimed
 | `MGX` | Oscillator + optional sub → bounded drive → LP/BP/HP SVF → ADSR/VCA | New behavior is isolated from legacy projects; amp/filter ADSR, PWM, velocity, and one LFO share a coherent subtractive patch |
 | `FM4` | Four sine operators in one of eight fixed graphs → velocity/VCA | Actual audio-rate phase modulation, fixed 32-bit phase accumulators, 256-point interpolated Q15 sine table, per-operator ADSR/ratio/level, and bounded one-sample operator-4 feedback |
 
-GBX v8 appends 98 bytes of engine/patch state per synth track to the v7
-payload. The existing base record still stores voice count and the original
-MG/303 patch. GBX v1–v7 load through their unchanged layouts and explicitly
-select `MG/303`; v8 validation completes before project state is applied.
+GBX v8 introduced 98 bytes of engine/patch state per synth track; current GBX
+v9 keeps that exact nested record and appends the three-in-one performance
+state. The existing base record still stores voice count and the original
+MG/303 patch. GBX v1–v7 explicitly select `MG/303`; v8/v9 validate their
+engine records before project state is applied.
 
 ## MGX parameter model
 

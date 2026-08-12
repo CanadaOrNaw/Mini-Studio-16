@@ -35,10 +35,14 @@ public:
     bool setScale(MedoScale scale);
     bool setArpDirection(MedoArpDirection direction);
     bool setArpRate(uint8_t rate);
+    void setArpEnabled(bool enabled) { arpEnabled_ = enabled; }
     bool setSharedBars(uint16_t bars);
     MedoScale scale() const { return scale_; }
     MedoArpDirection arpDirection() const { return arpDirection_; }
     uint8_t arpRate() const { return arpRate_; }
+    bool arpEnabled() const { return arpEnabled_; }
+    uint8_t arpNoteIndex(uint8_t noteCount, uint32_t tick) const;
+    uint32_t arpIntervalUs(uint16_t bpm) const;
     uint16_t sharedBars() const { return sharedBars_ == 0 ? 128 : sharedBars_; }
     uint8_t quantizeNote(uint8_t midiNote) const;
     const MedoTrackSettings &settings(MedoRole role) const;
@@ -52,5 +56,6 @@ private:
     MedoScale scale_;
     MedoArpDirection arpDirection_;
     uint8_t arpRate_;
+    bool arpEnabled_;
     uint8_t sharedBars_; // zero encodes 128 bars
 };

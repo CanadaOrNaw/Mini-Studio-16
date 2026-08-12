@@ -6,10 +6,13 @@
 EventLooperCore g_eventLooper;
 uint16_t g_eventLoopPosition = 0;
 static int8_t s_recordRoleOverride = -1;
+static bool s_recordRoleGain = false;
 
 void eventLooperSetRecordRoleOverride(int8_t role) {
     s_recordRoleOverride = role >= 0 && role < EVENT_LOOP_TRACKS ? role : -1;
 }
+
+void eventLooperSetRecordRoleGain(bool enabled) { s_recordRoleGain = enabled; }
 
 void eventLooperInit() {
     g_eventLooper.clearAll();
@@ -48,7 +51,8 @@ bool eventLooperRecordSynth(uint16_t step, uint8_t synthTrack, uint8_t midiNote,
         ? static_cast<uint8_t>(s_recordRoleOverride)
         : static_cast<uint8_t>(eventLooperRoleForSynth(synthTrack));
     return g_eventLooper.add(quantizedRoleTick(step, static_cast<EventLoopRole>(role)), role, EVENT_LOOP_NOTE,
-                             synthTrack, midiNote, velocity);
+                             synthTrack, midiNote, s_recordRoleGain ? 127 : velocity,
+                             s_recordRoleGain ? EVENT_LOOP_FLAG_ROLE_GAIN : 0);
 }
 
 bool eventLooperRecordSynthRelease(uint16_t step, uint8_t synthTrack,
@@ -59,20 +63,23 @@ bool eventLooperRecordSynthRelease(uint16_t step, uint8_t synthTrack,
         : static_cast<uint8_t>(eventLooperRoleForSynth(synthTrack));
     return g_eventLooper.add(quantizedRoleTick(step, static_cast<EventLoopRole>(role)), role, EVENT_LOOP_NOTE,
                              synthTrack, midiNote, 0,
-                             EVENT_LOOP_FLAG_NOTE_OFF);
+                             static_cast<uint8_t>(EVENT_LOOP_FLAG_NOTE_OFF |
+                                 (s_recordRoleGain ? EVENT_LOOP_FLAG_ROLE_GAIN : 0)));
 }
 
 bool eventLooperRecordDrum(uint16_t step, uint8_t lane, uint8_t velocity) {
     if (lane >= NUM_DRUM_LANES) return false;
     return g_eventLooper.add(quantizedRoleTick(step, EVENT_ROLE_DRUM), EVENT_ROLE_DRUM, EVENT_LOOP_DRUM,
-                             lane, velocity, 0);
+                             lane, s_recordRoleGain ? 127 : velocity, 0,
+                             s_recordRoleGain ? EVENT_LOOP_FLAG_ROLE_GAIN : 0);
 }
 
 bool eventLooperRecordSample(uint16_t step, uint8_t slot, uint8_t key,
                              uint8_t velocity) {
     if (slot >= 16 || key >= 16) return false;
     return g_eventLooper.add(quantizedRoleTick(step, EVENT_ROLE_SAMPLE), EVENT_ROLE_SAMPLE, EVENT_LOOP_SAMPLE,
-                             slot, key, velocity);
+                             slot, key, s_recordRoleGain ? 127 : velocity,
+                             s_recordRoleGain ? EVENT_LOOP_FLAG_ROLE_GAIN : 0);
 }
 
 bool eventLooperRecordControl(uint16_t step, uint8_t control, uint8_t value) {

@@ -26,9 +26,7 @@
 #include "synth_parameters.h"
 #include "synth_ui_model.h"
 #include "performance_state.h"
-
-void inputInit();
-void inputUpdate();
+#include "input.h"
 
 #define LONG_PRESS_MS 450
 #define HINT_AFTER_MS 140    // progress bar appears after this
@@ -66,14 +64,44 @@ static uint8_t s_heldMidiNoteCount = 0;
 struct HeldChord {
     uint8_t key, degree, count, chordToneCount, bass;
     uint8_t note[7], track[7], role[7];
+    uint8_t velocity;
+    bool medoArp;
+    bool medoRoleGain;
     uint32_t nextArpUs, arpTick;
 };
 static HeldChord s_heldChords[7];
 static uint8_t s_heldChordCount = 0;
+struct PendingChordRelease {
+    uint8_t track, note, role;
+    bool audition;
+    uint32_t dueUs;
+};
+static PendingChordRelease s_chordReleases[21];
+static uint8_t s_chordReleaseCount = 0;
+struct HeldAutoDrum {
+    uint8_t key, lane, rate;
+    uint32_t nextUs, tick;
+};
+static HeldAutoDrum s_autoDrums[7];
+static uint8_t s_autoDrumCount = 0;
 static uint8_t s_sampleCopySlot = 0xFF;
 static uint8_t s_sampleCopySlice = 0xFF;
 static uint8_t s_selectedSampleSlice = 0;
 static uint8_t s_poEffectKey = KC_NONE;
+static uint32_t s_hiroStartUs = 0;
+static uint16_t s_hiroScore = 0;
+static HiChordHiroGrade s_hiroLastGrade = HICHORD_HIRO_MISS;
+static uint8_t s_earDegrees[4] = {};
+static uint8_t s_earDirections[4] = {};
+static uint8_t s_earCount = 1, s_earPosition = 0;
+static uint16_t s_earStreak = 0, s_earBestStreak = 0;
+static uint32_t s_earRandom = 1;
+static uint32_t s_earAuditionStartUs = 0;
+static uint8_t s_earAuditionNext = 0, s_earAuditionEnd = 0;
+static bool s_earAuditionRootOnly = false;
+static uint8_t s_previousLoopState[LOOP_STREAM_TRACKS] = {};
+
+uint16_t inputChordHiroScore() { return s_hiroScore; }
 
 static int8_t chordKeyDegree(uint8_t key) {
     static const uint8_t keys[7] = {KC_FN, KC_SHIFT, 'a', 's', 'd', 'f', 'g'};
@@ -99,9 +127,60 @@ static void fireChordMidi(HeldChord &held, uint8_t index) {
     if (index >= held.count) return;
     const uint8_t midi = held.note[index], track = held.track[index];
     eventLooperSetRecordRoleOverride(held.role[index]);
+    eventLooperSetRecordRoleGain(held.medoRoleGain);
     liveSynthNote(track, static_cast<uint8_t>(midi % 12u + 1u),
-                  static_cast<uint8_t>(midi / 12u - 1u), false, index > 0, 104);
+                  static_cast<uint8_t>(midi / 12u - 1u), false, index > 0,
+                  held.velocity);
     eventLooperSetRecordRoleOverride(-1);
+    eventLooperSetRecordRoleGain(false);
+}
+
+static void scheduleChordRelease(const HeldChord &held, uint8_t index,
+                                 uint32_t dueUs) {
+    if (index >= held.count) return;
+    for (uint8_t i = 0; i < s_chordReleaseCount; ++i) {
+        PendingChordRelease &pending = s_chordReleases[i];
+        if (pending.track == held.track[index] && pending.note == held.note[index]) {
+            pending.dueUs = dueUs;
+            pending.role = held.role[index];
+            pending.audition = false;
+            return;
+        }
+    }
+    if (s_chordReleaseCount < sizeof(s_chordReleases) / sizeof(s_chordReleases[0]))
+        s_chordReleases[s_chordReleaseCount++] = {
+            held.track[index], held.note[index], held.role[index], false, dueUs};
+}
+
+static void processChordReleases(uint32_t nowUs) {
+    for (uint8_t i = 0; i < s_chordReleaseCount;) {
+        const PendingChordRelease pending = s_chordReleases[i];
+        if (static_cast<int32_t>(nowUs - pending.dueUs) < 0) { ++i; continue; }
+        if (pending.audition) {
+            g_synths[pending.track].noteOff(pending.note);
+            midiOutputNoteOff(pending.track, pending.note);
+        } else {
+            eventLooperSetRecordRoleOverride(pending.role);
+            liveSynthRelease(pending.track, pending.note);
+            eventLooperSetRecordRoleOverride(-1);
+        }
+        s_chordReleases[i] = s_chordReleases[--s_chordReleaseCount];
+    }
+}
+
+void inputStopHiChordPerformanceNotes() {
+    for (uint8_t chord = 0; chord < s_heldChordCount; ++chord) {
+        HeldChord &held = s_heldChords[chord];
+        for (uint8_t note = 0; note < held.count; ++note) {
+            eventLooperSetRecordRoleOverride(held.role[note]);
+            liveSynthRelease(held.track[note], held.note[note]);
+        }
+    }
+    eventLooperSetRecordRoleOverride(-1);
+    for (uint8_t track = 0; track < NUM_SYNTHS; ++track) g_synths[track].hardStop();
+    s_heldChordCount = 0;
+    s_chordReleaseCount = 0;
+    s_autoDrumCount = 0;
 }
 
 static void applyHiChordDrumKit(uint8_t kit) {
@@ -128,16 +207,179 @@ static void writeHiChordGroove(uint8_t style, uint8_t variation) {
     }
 }
 
-static void playChord(uint8_t key, const KeySnap &keys) {
+static bool armHiChordBounce(HiChordBounceSource source) {
+    const LoopEngineSnapshot loops = loopEngineSnapshot();
+    for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
+        if (loops.tracks[track].state != LOOP_STREAM_EMPTY) continue;
+        if (!loopEngineRequestRecord(track)) continue;
+        g_hiChordBounceActive = true;
+        g_hiChordBounceTrack = track;
+        g_hiChordBounceSource = source;
+        if (!g_playing) sequencerStart(true);
+        uiStatus(source == HICHORD_BOUNCE_DRONE ? "DRONE BOUNCE ARMED" :
+                 source == HICHORD_BOUNCE_DRUM_LOOP ? "DRUM BOUNCE ARMED" :
+                 "SEQ BOUNCE ARMED");
+        return true;
+    }
+    return false;
+}
+
+static bool requestLoopRecord(uint8_t track) {
+    if (track != 0 || g_hiChordLoopBars == 0)
+        return loopEngineRequestRecord(track);
+    const uint32_t target = hiChordLoopFrames(g_hiChordLoopBars, g_bpm, SAMPLE_RATE);
+    const uint32_t countIn = hiChordCountInFrames(g_bpm, SAMPLE_RATE);
+    return target != 0 && loopEngineRequestRecord(track, target, countIn);
+}
+
+static void startChordHiro() {
+    g_hiChordPracticePosition = 0;
+    s_hiroScore = 0;
+    s_hiroLastGrade = HICHORD_HIRO_MISS;
+    const uint32_t beat = 60000000UL / (g_bpm ? g_bpm : 120u);
+    s_hiroStartUs = micros() + beat; // one-beat ready count
+    uiStatus("CHORD HIRO: GET READY");
+}
+
+static void updateChordHiro(uint32_t nowUs) {
+    if (!s_hiroStartUs || g_hiChordPerformance.mode() != HICHORD_CHORD_HIRO)
+        return;
+    const HiChordPracticeSong& song = hiChordPracticeSong(g_hiChordPracticeSong);
+    const uint32_t beat = 60000000UL / (g_bpm ? g_bpm : 120u);
+    const uint8_t difficulty = min<uint8_t>(3, g_hiChordPracticeSong / 4u);
+    while (g_hiChordPracticePosition < song.length) {
+        const uint32_t due = s_hiroStartUs +
+            static_cast<uint32_t>(g_hiChordPracticePosition) * beat;
+        const uint32_t lateUs = static_cast<uint32_t>(
+            hiChordHiroWindowMs(difficulty)) * 1000u;
+        if (static_cast<int32_t>(nowUs - (due + lateUs)) <= 0) break;
+        s_hiroLastGrade = HICHORD_HIRO_MISS;
+        ++g_hiChordPracticePosition;
+    }
+    if (g_hiChordPracticePosition >= song.length) {
+        s_hiroStartUs = 0;
+        uiStatus("CHORD HIRO COMPLETE");
+        g_needRedraw = true;
+    }
+}
+
+static uint32_t nextEarRandom() {
+    s_earRandom = s_earRandom * 1664525u + 1013904223u;
+    return s_earRandom;
+}
+
+static void stopEarAudition() {
+    s_earAuditionStartUs = 0;
+    for (uint8_t index = 0; index < s_chordReleaseCount;) {
+        const PendingChordRelease pending = s_chordReleases[index];
+        if (!pending.audition) { ++index; continue; }
+        g_synths[pending.track].noteOff(pending.note);
+        midiOutputNoteOff(pending.track, pending.note);
+        s_chordReleases[index] = s_chordReleases[--s_chordReleaseCount];
+    }
+}
+
+static void queueEarAudition(bool rootHint = false) {
+    stopEarAudition();
+    s_earAuditionNext = rootHint ? s_earPosition : 0;
+    s_earAuditionEnd = static_cast<uint8_t>(
+        s_earAuditionNext + (rootHint ? 1 : s_earCount));
+    s_earAuditionRootOnly = rootHint;
+    s_earAuditionStartUs = micros();
+}
+
+static void startEarRound() {
+    s_earCount = (g_hiChordEarLevel & 1u) ? 4 : 1;
+    s_earPosition = 0;
+    for (uint8_t index = 0; index < s_earCount; ++index) {
+        s_earDegrees[index] = static_cast<uint8_t>(nextEarRandom() % 7u);
+        s_earDirections[index] = g_hiChordEarLevel >= 2
+            ? static_cast<uint8_t>(1u + nextEarRandom() % 8u)
+            : static_cast<uint8_t>(CHORD_DIR_CENTER);
+    }
+    g_hiChordEarTarget = s_earDegrees[0];
+    queueEarAudition(false);
+    uiStatus(s_earCount == 1 ? "LISTEN: ONE CHORD" : "LISTEN: 4 CHORDS");
+}
+
+static void updateEarAudition(uint32_t nowUs) {
+    if (!s_earAuditionStartUs || s_earAuditionNext >= s_earAuditionEnd) return;
+    const uint8_t sequenceOffset = static_cast<uint8_t>(
+        s_earAuditionNext - (s_earAuditionRootOnly ? s_earPosition : 0));
+    const uint32_t due = s_earAuditionStartUs +
+        static_cast<uint32_t>(sequenceOffset) * 500000u;
+    if (static_cast<int32_t>(nowUs - due) < 0) return;
+    const uint8_t targetIndex = s_earAuditionNext++;
+    const ChordDirection direction = g_hiChordEarLevel >= 2
+        ? static_cast<ChordDirection>(s_earDirections[targetIndex])
+        : CHORD_DIR_CENTER;
+    const ChordVoicing chord = g_chordEngine.build(
+        g_chordSettings, s_earDegrees[targetIndex], direction);
+    const uint8_t noteCount = s_earAuditionRootOnly ? 1 : chord.count;
+    g_synths[0].setVoices(3); g_synths[1].setVoices(3);
+    for (uint8_t noteIndex = 0; noteIndex < noteCount; ++noteIndex) {
+        const uint8_t midi = chord.notes[noteIndex];
+        const uint8_t track = static_cast<uint8_t>(noteIndex / 3u);
+        g_synths[track].noteOnLive(
+            noteToFreq(static_cast<uint8_t>(midi % 12u + 1u),
+                       static_cast<uint8_t>(midi / 12u - 1u)),
+            false, false, midi, 96);
+        midiOutputNoteOn(track, midi, 96);
+        if (s_chordReleaseCount < sizeof(s_chordReleases) /
+                                      sizeof(s_chordReleases[0]))
+            s_chordReleases[s_chordReleaseCount++] = {
+                track, midi, EVENT_ROLE_CHORD, true, nowUs + 350000u};
+    }
+    if (s_earAuditionNext >= s_earAuditionEnd) s_earAuditionStartUs = 0;
+}
+
+static void updateLoopAutoAdvance() {
+    const LoopEngineSnapshot loops = loopEngineSnapshot();
+    for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
+        const LoopStreamState previous = static_cast<LoopStreamState>(
+            s_previousLoopState[track]);
+        const LoopStreamState current = loops.tracks[track].state;
+        if ((previous == LOOP_STREAM_RECORDING || previous == LOOP_STREAM_FINALIZING) &&
+            (current == LOOP_STREAM_PLAYING || current == LOOP_STREAM_MUTED)) {
+            for (uint8_t offset = 1; offset < LOOP_STREAM_TRACKS; ++offset) {
+                const uint8_t candidate = static_cast<uint8_t>(
+                    (track + offset) % LOOP_STREAM_TRACKS);
+                if (loops.tracks[candidate].state == LOOP_STREAM_EMPTY) {
+                    g_loopCursor = candidate;
+                    break;
+                }
+            }
+        }
+        s_previousLoopState[track] = static_cast<uint8_t>(current);
+    }
+}
+
+static void playChord(uint8_t key, const KeySnap &keys, uint8_t velocity = 104,
+                      int8_t performanceOctave = 0, bool medoArp = false,
+                      int8_t roleOverride = -1) {
     const int8_t degree = chordKeyDegree(key);
-    if (degree < 0 || s_heldChordCount >= 7) return;
+    if (degree < 0) return;
     g_chordDegree = static_cast<uint8_t>(degree);
-    const HiChordMode mode = g_hiChordPerformance.mode();
+    const HiChordMode mode = roleOverride >= 0
+        ? HICHORD_PLAY : g_hiChordPerformance.mode();
     if (mode == HICHORD_DRUM) { liveDrumHit(static_cast<uint8_t>(degree)); return; }
-    if (mode == HICHORD_DRUM_LOOPS || mode == HICHORD_AUTO_DRUM) {
+    if (mode == HICHORD_DRUM_LOOPS) {
         writeHiChordGroove(static_cast<uint8_t>(degree), g_hiChordGrooveVariation);
-        if (mode == HICHORD_AUTO_DRUM && !g_playing) sequencerStart(true);
         uiStatus("GROOVE LOADED"); g_needRedraw = true; return;
+    }
+    if (mode == HICHORD_AUTO_DRUM) {
+        const ChordDirection direction = heldChordDirection(keys);
+        liveDrumHit(static_cast<uint8_t>(degree));
+        if (direction != CHORD_DIR_CENTER && s_autoDrumCount < 7) {
+            HeldAutoDrum &held = s_autoDrums[s_autoDrumCount++];
+            held.key = key; held.lane = static_cast<uint8_t>(degree);
+            held.rate = static_cast<uint8_t>(hiChordAutoDrumRate(direction));
+            held.tick = 1;
+            held.nextUs = micros() + hiChordRateIntervalUs(
+                static_cast<HiChordRate>(held.rate), g_bpm, 0);
+            uiStatus("AUTO DRUM HELD");
+        }
+        return;
     }
     if (mode == HICHORD_MIC_SAMPLE) {
         liveSampleHit(g_streamSampleSlot, static_cast<uint8_t>(degree)); return;
@@ -154,22 +396,56 @@ static void playChord(uint8_t key, const KeySnap &keys) {
     }
     if (mode == HICHORD_TUNER) { uiStatus("HOLD AUX FOR TUNER INPUT"); return; }
     if (mode == HICHORD_EAR_TRAINER) {
-        if (static_cast<uint8_t>(degree) == g_hiChordEarTarget) {
-            ++g_hiChordEarScore;
-            HiChordEarTrainer trainer(g_hiChordEarScore * 1103u + micros());
-            g_hiChordEarTarget = trainer.nextDegree(g_hiChordEarLevel);
-            uiStatus("CORRECT!");
-        } else uiStatus("TRY AGAIN");
+        const bool degreeCorrect = static_cast<uint8_t>(degree) == g_hiChordEarTarget;
+        const bool directionCorrect = g_hiChordEarLevel < 2 ||
+            heldChordDirection(keys) ==
+                static_cast<ChordDirection>(s_earDirections[s_earPosition]);
+        if (degreeCorrect && directionCorrect) {
+            ++g_hiChordEarScore; ++s_earStreak;
+            if (s_earStreak > s_earBestStreak) s_earBestStreak = s_earStreak;
+            ++s_earPosition;
+            if (s_earPosition >= s_earCount) {
+                uiStatus("ROUND CORRECT!");
+                startEarRound();
+            } else {
+                g_hiChordEarTarget = s_earDegrees[s_earPosition];
+                uiStatus("CORRECT - NEXT");
+            }
+        } else {
+            s_earStreak = 0;
+            uiStatus(directionCorrect ? "TRY ANOTHER CHORD" : "WRONG DIRECTION");
+        }
     }
     if (mode == HICHORD_CHORD_HIRO) {
         const HiChordPracticeSong &song = hiChordPracticeSong(g_hiChordPracticeSong);
-        if (song.degrees[g_hiChordPracticePosition] == degree) {
-            g_hiChordPracticePosition = static_cast<uint8_t>((g_hiChordPracticePosition + 1u) % song.length);
-            uiStatus("NICE!");
-        } else uiStatus("WRONG CHORD");
+        if (!s_hiroStartUs) {
+            uiStatus("PRESS PLAY TO START");
+        } else {
+            const uint32_t beat = 60000000UL / (g_bpm ? g_bpm : 120u);
+            const uint32_t due = s_hiroStartUs +
+                static_cast<uint32_t>(g_hiChordPracticePosition) * beat;
+            const int32_t errorMs = static_cast<int32_t>(micros() - due) / 1000;
+            const uint8_t difficulty = min<uint8_t>(3, g_hiChordPracticeSong / 4u);
+            s_hiroLastGrade = hiChordHiroGrade(
+                song.degrees[g_hiChordPracticePosition], static_cast<uint8_t>(degree),
+                errorMs, difficulty);
+            if (s_hiroLastGrade != HICHORD_HIRO_MISS)
+                s_hiroScore = static_cast<uint16_t>(s_hiroScore + s_hiroLastGrade * 25u);
+            ++g_hiChordPracticePosition;
+            uiStatus(hiChordHiroGradeName(s_hiroLastGrade));
+            if (g_hiChordPracticePosition >= song.length) s_hiroStartUs = 0;
+        }
     }
+    // Lead is strictly monophonic and Drone is a single latched chord. A new
+    // button replaces the previous sound instead of accumulating hidden held
+    // notes until the seven-entry array fills.
+    if (mode == HICHORD_LEAD || mode == HICHORD_DRONE)
+        inputStopHiChordPerformanceNotes();
+    if (s_heldChordCount >= 7) return;
     const ChordDirection direction = heldChordDirection(keys);
     ChordSettings buildSettings = g_chordSettings;
+    buildSettings.octave = static_cast<int8_t>(constrain(
+        static_cast<int>(buildSettings.octave) + performanceOctave, 1, 7));
     if (mode == HICHORD_LEAD) buildSettings.bassMode = CHORD_BASS_OFF;
     uint8_t slashDegree = 0xFF;
     if (buildSettings.bassMode == CHORD_BASS_SLASH && s_heldChordCount)
@@ -180,25 +456,37 @@ static void playChord(uint8_t key, const KeySnap &keys) {
     HeldChord &held = s_heldChords[s_heldChordCount++];
     held.key = key; held.degree = static_cast<uint8_t>(degree);
     held.count = voicing.count; held.chordToneCount = voicing.chordToneCount;
-    held.bass = voicing.bass; held.arpTick = 0; held.nextArpUs = micros();
+    held.bass = voicing.bass; held.velocity = velocity; held.medoArp = medoArp;
+    held.medoRoleGain = roleOverride >= 0;
+    held.arpTick = 0; held.nextArpUs = micros();
     for (uint8_t i = 0; i < voicing.count; ++i) {
         held.note[i] = voicing.notes[i];
         held.track[i] = i < voicing.chordToneCount ? static_cast<uint8_t>(i / 3u) : 2u;
-        held.role[i] = i < voicing.chordToneCount ? EVENT_ROLE_CHORD : EVENT_ROLE_BASS;
+        held.role[i] = roleOverride >= 0 ? static_cast<uint8_t>(roleOverride) :
+            static_cast<uint8_t>(i < voicing.chordToneCount
+                ? EVENT_ROLE_CHORD : EVENT_ROLE_BASS);
     }
     if (g_recEnabled || g_hiChordPerformance.mode() == HICHORD_SEQUENCER) {
         const HiChordSequenceStep sequence = {static_cast<uint8_t>(degree),
             static_cast<uint8_t>(direction), slashDegree, 1};
         g_hiChordPerformance.setSequenceStep(g_curStep, sequence);
         if (g_hiChordPerformance.mode() == HICHORD_SEQUENCER)
-            g_curStep = static_cast<uint8_t>((g_curStep + 1u) % NUM_STEPS);
+            g_curStep = static_cast<uint8_t>((g_curStep + 1u) %
+                                             g_hiChordSequenceLength);
     }
     g_synths[0].setVoices(3); g_synths[1].setVoices(3);
-    if (mode == HICHORD_STRUM) {
+    if (medoArp) {
+        held.nextArpUs = micros();
+    } else if (mode == HICHORD_STRUM) {
         HiChordScheduledNote scheduled[7];
-        g_hiChordPerformance.scheduleStrum(voicing, false, SAMPLE_RATE / 50, scheduled);
+        const uint16_t spacing = hiChordStrumSpacingFrames(
+            static_cast<HiChordStrumSpeed>(g_hiChordStrumSpeed), SAMPLE_RATE);
+        g_hiChordPerformance.scheduleStrum(voicing, false, spacing, scheduled);
         for (uint8_t i = 0; i < held.count; ++i) held.note[i] = scheduled[i].note;
-        fireChordMidi(held, 0); held.arpTick = 1; held.nextArpUs += 20000;
+        fireChordMidi(held, 0); held.arpTick = 1;
+        held.nextArpUs += static_cast<uint32_t>(spacing) * 1000000u / SAMPLE_RATE;
+    } else if (mode == HICHORD_ARPEGGIO && g_hiChordArpLayer == ARP_CHORD_PLUS) {
+        for (uint8_t i = 0; i < held.count; ++i) fireChordMidi(held, i);
     } else if (mode != HICHORD_ARPEGGIO && mode != HICHORD_REPEAT) {
         for (uint8_t i = 0; i < held.count; ++i) fireChordMidi(held, i);
     }
@@ -206,10 +494,15 @@ static void playChord(uint8_t key, const KeySnap &keys) {
 }
 
 static void releaseChord(uint8_t key) {
+    for (uint8_t index = 0; index < s_autoDrumCount; ++index)
+        if (s_autoDrums[index].key == key) {
+            s_autoDrums[index] = s_autoDrums[--s_autoDrumCount];
+            return;
+        }
     for (uint8_t index = 0; index < s_heldChordCount; ++index) {
         HeldChord &held = s_heldChords[index];
         if (held.key != key) continue;
-        if (g_hiChordPerformance.mode() != HICHORD_DRONE)
+        if (held.medoArp || g_hiChordPerformance.mode() != HICHORD_DRONE)
             for (uint8_t i = 0; i < held.count; ++i) {
                 eventLooperSetRecordRoleOverride(held.role[i]);
                 liveSynthRelease(held.track[i], held.note[i]);
@@ -222,28 +515,70 @@ static void releaseChord(uint8_t key) {
 
 static void updateHeldChords() {
     const uint32_t now = micros();
+    processChordReleases(now);
+    for (uint8_t drum = 0; drum < s_autoDrumCount; ++drum) {
+        HeldAutoDrum &held = s_autoDrums[drum];
+        if (static_cast<int32_t>(now - held.nextUs) < 0) continue;
+        liveDrumHit(held.lane);
+        held.nextUs += hiChordRateIntervalUs(
+            static_cast<HiChordRate>(held.rate), g_bpm, held.tick++);
+    }
     for (uint8_t h = 0; h < s_heldChordCount; ++h) {
         HeldChord &held = s_heldChords[h];
+        if (g_hiChordPerformance.mode() == HICHORD_DRONE) {
+            for (uint8_t track = 0; track < NUM_SYNTHS; ++track)
+                g_synths[track].sustainLegacy();
+        }
         if (static_cast<int32_t>(now - held.nextArpUs) < 0) continue;
         const HiChordMode mode = g_hiChordPerformance.mode();
-        if (mode == HICHORD_STRUM && held.arpTick < held.count) {
+        if (held.medoArp) {
+            const uint32_t interval = g_medoPerformance.arpIntervalUs(g_bpm);
+            if (interval == 0) continue;
+            const uint8_t note = g_medoPerformance.arpNoteIndex(
+                held.chordToneCount ? held.chordToneCount : held.count, held.arpTick);
+            fireChordMidi(held, note);
+            scheduleChordRelease(held, note, now + min<uint32_t>(
+                200000u, interval * 3u / 4u));
+            ++held.arpTick;
+            held.nextArpUs += interval;
+        } else if (mode == HICHORD_STRUM && held.arpTick < held.count) {
             fireChordMidi(held, static_cast<uint8_t>(held.arpTick++));
-            held.nextArpUs += 20000;
+            const uint16_t spacing = hiChordStrumSpacingFrames(
+                static_cast<HiChordStrumSpeed>(g_hiChordStrumSpeed), SAMPLE_RATE);
+            held.nextArpUs += static_cast<uint32_t>(spacing) * 1000000u / SAMPLE_RATE;
         } else if (mode == HICHORD_ARPEGGIO || mode == HICHORD_REPEAT) {
-            const uint8_t rate = mode == HICHORD_ARPEGGIO ? g_hiChordArpRate : g_hiChordRepeatRate;
-            const uint32_t interval = 60000000UL / g_bpm / 4u / rate;
-            if (mode == HICHORD_REPEAT || g_hiChordArpPattern == ARP_CHORD) {
-                for (uint8_t note = 0; note < held.count; ++note) fireChordMidi(held, note);
+            const HiChordRate rate = static_cast<HiChordRate>(
+                mode == HICHORD_ARPEGGIO ? g_hiChordArpRate : g_hiChordRepeatRate);
+            const uint32_t interval = hiChordRateIntervalUs(rate, g_bpm, held.arpTick);
+            const uint32_t gate = interval < 266666u ? interval * 3u / 4u : 200000u;
+            if (mode == HICHORD_REPEAT) {
+                for (uint8_t note = 0; note < held.count; ++note) {
+                    fireChordMidi(held, note);
+                    scheduleChordRelease(held, note, now + gate);
+                }
+                ++held.arpTick; held.nextArpUs += interval; continue;
             } else {
+                if (g_hiChordArpLayer == ARP_RHYTHM_PLUS)
+                    for (uint8_t note = 0; note < held.count; ++note) {
+                        fireChordMidi(held, note);
+                        scheduleChordRelease(held, note, now + gate);
+                    }
                 ChordVoicing voicing = {};
                 voicing.count = held.count; voicing.chordToneCount = held.chordToneCount;
                 voicing.bass = held.bass;
                 for (uint8_t note = 0; note < held.count; ++note) voicing.notes[note] = held.note[note];
-                const uint8_t selected = g_hiChordPerformance.arpNote(
+                uint8_t selected[2] = {};
+                const uint8_t selectedCount = g_hiChordPerformance.arpNotes(
                     voicing, static_cast<HiChordArpPattern>(g_hiChordArpPattern),
-                    static_cast<HiChordArpLayer>(g_hiChordArpLayer), held.arpTick);
-                for (uint8_t note = 0; note < held.count; ++note)
-                    if (held.note[note] == selected) { fireChordMidi(held, note); break; }
+                    held.arpTick, selected);
+                for (uint8_t selectedIndex = 0; selectedIndex < selectedCount; ++selectedIndex)
+                    for (uint8_t note = 0; note < held.count; ++note)
+                        if (held.note[note] == selected[selectedIndex]) {
+                            fireChordMidi(held, note);
+                            if (g_hiChordArpLayer != ARP_CHORD_PLUS)
+                                scheduleChordRelease(held, note, now + gate);
+                            break;
+                        }
             }
             ++held.arpTick;
             held.nextArpUs += interval;
@@ -361,21 +696,42 @@ static void adjustSampleParameter(int direction) {
                 g_samplerSlotBank.endEdit(g_streamSampleSlot);
                 break;
             case 4: {
-                const uint32_t amount = min<uint32_t>(256, slot.sourceFrames);
-                const int next = constrain(static_cast<int>(slot.trimStart) +
-                                           direction * static_cast<int>(amount),
-                                           0, static_cast<int>(slot.sourceFrames - SAMPLER_SLICE_COUNT));
-                const uint32_t length = min<uint32_t>(slot.trimLength,
-                                                      slot.sourceFrames - next);
-                g_samplerSlotBank.setTrim(g_streamSampleSlot, next,
-                                          max<uint32_t>(SAMPLER_SLICE_COUNT, length));
+                if (slot.mode == SAMPLER_SLOT_SLICED) {
+                    const SamplerRegion region = slot.slices[s_selectedSampleSlice];
+                    const uint32_t trimEnd = slot.trimStart + slot.trimLength;
+                    const uint32_t maximum = trimEnd - region.lengthFrames;
+                    const uint32_t next = static_cast<uint32_t>(constrain(
+                        static_cast<int>(region.startFrame) + direction * 128,
+                        static_cast<int>(slot.trimStart), static_cast<int>(maximum)));
+                    g_samplerSlotBank.setSlice(g_streamSampleSlot, s_selectedSampleSlice,
+                                               next, region.lengthFrames);
+                } else {
+                    const uint32_t amount = min<uint32_t>(256, slot.sourceFrames);
+                    const int next = constrain(static_cast<int>(slot.trimStart) +
+                                               direction * static_cast<int>(amount),
+                                               0, static_cast<int>(slot.sourceFrames - SAMPLER_SLICE_COUNT));
+                    const uint32_t length = min<uint32_t>(slot.trimLength,
+                                                          slot.sourceFrames - next);
+                    g_samplerSlotBank.setTrim(g_streamSampleSlot, next,
+                                              max<uint32_t>(SAMPLER_SLICE_COUNT, length));
+                }
                 break;
             }
             case 5: {
-                const int next = constrain(static_cast<int>(slot.trimLength) + direction * 256,
-                                           static_cast<int>(SAMPLER_SLICE_COUNT),
-                                           static_cast<int>(slot.sourceFrames - slot.trimStart));
-                g_samplerSlotBank.setTrim(g_streamSampleSlot, slot.trimStart, next);
+                if (slot.mode == SAMPLER_SLOT_SLICED) {
+                    const SamplerRegion region = slot.slices[s_selectedSampleSlice];
+                    const uint32_t maximum = slot.trimStart + slot.trimLength - region.startFrame;
+                    const uint32_t next = static_cast<uint32_t>(constrain(
+                        static_cast<int>(region.lengthFrames) + direction * 128,
+                        2, static_cast<int>(maximum)));
+                    g_samplerSlotBank.setSlice(g_streamSampleSlot, s_selectedSampleSlice,
+                                               region.startFrame, next);
+                } else {
+                    const int next = constrain(static_cast<int>(slot.trimLength) + direction * 256,
+                                               static_cast<int>(SAMPLER_SLICE_COUNT),
+                                               static_cast<int>(slot.sourceFrames - slot.trimStart));
+                    g_samplerSlotBank.setTrim(g_streamSampleSlot, slot.trimStart, next);
+                }
                 break;
             }
         }
@@ -560,16 +916,18 @@ static void arrow(uint8_t act, const KeySnap& now) {
                         const HiChordMode next = static_cast<HiChordMode>(
                             (previous + HICHORD_MODE_COUNT + dx) % HICHORD_MODE_COUNT);
                         g_hiChordPerformance.setMode(next);
-                        if (previous == HICHORD_SEQUENCER && next != HICHORD_SEQUENCER) {
-                            const LoopEngineSnapshot loops = loopEngineSnapshot();
-                            for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
-                                if (loops.tracks[track].state != LOOP_STREAM_EMPTY) continue;
-                                if (loopEngineRequestRecord(track)) {
-                                    g_hiChordBounceActive = true; g_hiChordBounceTrack = track;
-                                    sequencerStart(true); uiStatus("SEQ BOUNCE ARMED");
-                                }
-                                break;
-                            }
+                        if (previous != next) {
+                            if (previous == HICHORD_CHORD_HIRO) s_hiroStartUs = 0;
+                            if (previous == HICHORD_EAR_TRAINER) stopEarAudition();
+                            bool deferredDroneStop = false;
+                            if (previous == HICHORD_SEQUENCER)
+                                armHiChordBounce(HICHORD_BOUNCE_SEQUENCE);
+                            else if (previous == HICHORD_DRUM_LOOPS)
+                                armHiChordBounce(HICHORD_BOUNCE_DRUM_LOOP);
+                            else if (previous == HICHORD_DRONE)
+                                deferredDroneStop = armHiChordBounce(HICHORD_BOUNCE_DRONE);
+                            if (!deferredDroneStop) inputStopHiChordPerformanceNotes();
+                            if (next == HICHORD_EAR_TRAINER) startEarRound();
                         }
                         break;
                     }
@@ -593,19 +951,27 @@ static void arrow(uint8_t act, const KeySnap& now) {
                             g_hiChordPracticeSong = static_cast<uint8_t>((g_hiChordPracticeSong +
                                 hiChordPracticeSongCount() + dx) % hiChordPracticeSongCount());
                             g_hiChordPracticePosition = 0;
+                            s_hiroStartUs = 0;
                         } else if (g_hiChordPerformance.mode() == HICHORD_EAR_TRAINER) {
                             g_hiChordEarLevel = static_cast<uint8_t>((g_hiChordEarLevel + 4 + dx) % 4);
-                            HiChordEarTrainer trainer(micros());
-                            g_hiChordEarTarget = trainer.nextDegree(g_hiChordEarLevel);
+                            startEarRound();
                         } else if (g_hiChordPerformance.mode() == HICHORD_ARPEGGIO) {
                             if (accentHeld(now))
                                 g_hiChordArpLayer = static_cast<uint8_t>((g_hiChordArpLayer + 3 + dx) % 3);
                             else
                                 g_hiChordArpPattern = static_cast<uint8_t>((g_hiChordArpPattern + ARP_PATTERN_COUNT + dx) % ARP_PATTERN_COUNT);
                         } else if (g_hiChordPerformance.mode() == HICHORD_REPEAT) {
-                            static const uint8_t rates[] = {1,2,4,8};
-                            uint8_t index = 0; while (index < 3 && rates[index] != g_hiChordRepeatRate) ++index;
-                            g_hiChordRepeatRate = rates[(index + 4 + dx) % 4];
+                            g_hiChordRepeatRate = static_cast<uint8_t>(
+                                (g_hiChordRepeatRate + HICHORD_RATE_COUNT + dx) % HICHORD_RATE_COUNT);
+                        } else if (g_hiChordPerformance.mode() == HICHORD_STRUM) {
+                            g_hiChordStrumSpeed = static_cast<uint8_t>(
+                                (g_hiChordStrumSpeed + HICHORD_STRUM_SPEED_COUNT + dx) %
+                                HICHORD_STRUM_SPEED_COUNT);
+                        } else if (g_hiChordPerformance.mode() == HICHORD_SEQUENCER) {
+                            const int lengthIndex = g_hiChordSequenceLength / 4 - 1;
+                            g_hiChordSequenceLength = static_cast<uint8_t>(
+                                ((lengthIndex + 4 + dx) % 4 + 1) * 4);
+                            if (g_curStep >= g_hiChordSequenceLength) g_curStep = 0;
                         } else g_chordSettings.inversion[g_chordDegree] = static_cast<int8_t>(constrain(
                             static_cast<int>(g_chordSettings.inversion[g_chordDegree]) + dx, -2, 3));
                         break;
@@ -662,7 +1028,11 @@ static void arrow(uint8_t act, const KeySnap& now) {
         case PAGE_LOOPS:
             if (dy) g_loopCursor = static_cast<uint8_t>(
                 (g_loopCursor + LOOP_STREAM_TRACKS + dy) % LOOP_STREAM_TRACKS);
-            if (dx) {
+            if (dx && accentHeld(now)) {
+                g_hiChordLoopBars = static_cast<uint8_t>(
+                    (g_hiChordLoopBars + 9 + dx) % 9);
+                uiStatus(g_hiChordLoopBars ? "TRACK 1 FIXED BARS" : "TRACK 1 FREE LENGTH");
+            } else if (dx) {
                 const LoopStreamTrackSnapshot& item =
                     loopEngineSnapshot().tracks[g_loopCursor];
                 const int volume = constrain(
@@ -755,7 +1125,10 @@ static void doImmediate(uint8_t act, const KeySnap& now) {
                 if (loops.recordTrack == g_loopCursor)
                     uiStatus(loopEngineStopRecording(g_loopCursor) ? "FINALIZING" : "STOP FAILED");
                 else
-                    uiStatus(loopEngineRequestRecord(g_loopCursor) ? "LOOP ARMED" : "RECORD FAILED");
+                    uiStatus(requestLoopRecord(g_loopCursor)
+                             ? (g_loopCursor == 0 && g_hiChordLoopBars
+                                    ? "4-BEAT COUNT-IN" : "LOOP ARMED")
+                             : "RECORD FAILED");
             } else if (g_curPage == PAGE_EVENT) {
                 const bool armed = !g_eventLooper.track(g_eventCursor).armed;
                 g_eventLooper.setArmed(g_eventCursor, armed);
@@ -800,13 +1173,18 @@ static void doImmediate(uint8_t act, const KeySnap& now) {
                         g_hiChordArpLayer = static_cast<uint8_t>((g_hiChordArpLayer + 1u) % 3u);
                         uiStatus("ARP LAYER");
                     } else {
-                        g_hiChordArpPattern = static_cast<uint8_t>((g_hiChordArpPattern + 1u) % ARP_PATTERN_COUNT);
-                        uiStatus("ARP PATTERN");
+                        g_hiChordArpRate = static_cast<uint8_t>(
+                            (g_hiChordArpRate + 1u) % HICHORD_RATE_COUNT);
+                        uiStatus("ARP RATE");
                     }
                 } else if (g_hiChordPerformance.mode() == HICHORD_REPEAT) {
-                    static const uint8_t rates[] = {1,2,4,8};
-                    uint8_t index = 0; while (rates[index] != g_hiChordRepeatRate && index < 3) ++index;
-                    g_hiChordRepeatRate = rates[(index + 1u) % 4u]; uiStatus("REPEAT RATE");
+                    g_hiChordRepeatRate = static_cast<uint8_t>(
+                        (g_hiChordRepeatRate + 1u) % HICHORD_RATE_COUNT);
+                    uiStatus("REPEAT RATE");
+                } else if (g_hiChordPerformance.mode() == HICHORD_STRUM) {
+                    g_hiChordStrumSpeed = static_cast<uint8_t>(
+                        (g_hiChordStrumSpeed + 1u) % HICHORD_STRUM_SPEED_COUNT);
+                    uiStatus("STRUM SPEED");
                 } else {
                     g_chordSettings.map = static_cast<ChordMap>((g_chordSettings.map + 1) % 3);
                     uiStatus("CHORD MAP");
@@ -819,6 +1197,9 @@ static void doImmediate(uint8_t act, const KeySnap& now) {
                 const bool solo = loops.soloTrack != g_loopCursor;
                 uiStatus(loopEngineSetSolo(g_loopCursor, solo)
                          ? (solo ? "LOOP SOLO" : "SOLO OFF") : "SOLO FAILED");
+            } else if (g_curPage == PAGE_MEDO) {
+                g_medoPerformance.setArpEnabled(!g_medoPerformance.arpEnabled());
+                uiStatus(g_medoPerformance.arpEnabled() ? "MEDO ARP ON" : "MEDO ARP OFF");
             } else {
                 g_patternBank ^= 1;
                 uiStatus(g_patternBank ? "PATTERNS 9-16" : "PATTERNS 1-8");
@@ -843,11 +1224,15 @@ static void doShort(uint8_t act) {
         bool copied = false;
         if (s_sampleCopySlot < SAMPLER_SLOT_COUNT && s_sampleCopySlice != 0xFF &&
             g_samplerSlotBank.slot(g_streamSampleSlot).mode == SAMPLER_SLOT_SLICED)
-            copied = g_samplerSlotBank.copySlice(s_sampleCopySlot, s_sampleCopySlice,
-                                                  g_streamSampleSlot, s_selectedSampleSlice);
+            copied = s_sampleCopySlot == g_streamSampleSlot
+                ? g_samplerSlotBank.copySlice(s_sampleCopySlot, s_sampleCopySlice,
+                                              g_streamSampleSlot, s_selectedSampleSlice)
+                : streamingSamplerCopySlice(s_sampleCopySlot, s_sampleCopySlice,
+                                            g_streamSampleSlot, s_selectedSampleSlice);
         else if (s_sampleCopySlot < SAMPLER_SLOT_COUNT)
             copied = g_samplerSlotBank.copySlot(s_sampleCopySlot, g_streamSampleSlot);
-        uiStatus(copied ? "PASTED" : "PASTE FAILED");
+        uiStatus(copied ? (s_sampleCopySlice == 0xFF ? "PASTED" : "SLICE COPY QUEUED")
+                        : "PASTE FAILED");
         return;
     }
     // track select
@@ -928,7 +1313,10 @@ static void doShort(uint8_t act) {
             g_needRedraw = true; break;
 
         case ACT_PLAY:
-            if (g_playing) sequencerStop(); else sequencerStart(false);
+            if (g_curPage == PAGE_CHORD &&
+                g_hiChordPerformance.mode() == HICHORD_CHORD_HIRO)
+                startChordHiro();
+            else if (g_playing) sequencerStop(); else sequencerStart(false);
             g_needRedraw = true; break;
 
         case ACT_CLR:
@@ -964,8 +1352,9 @@ static void doShort(uint8_t act) {
                 g_swing = swings[next % 4]; uiStatus("SWING");
             } else if (g_curPage == PAGE_LOOPS) {
                 const LoopEngineSnapshot loops = loopEngineSnapshot();
-                loopEngineSetPaused(!loops.paused);
-                uiStatus(loops.paused ? "LOOPS RESUME" : "LOOPS PAUSE");
+                if (loopEngineSetPaused(!loops.paused))
+                    uiStatus(loops.paused ? "LOOPS RESUME" : "LOOPS PAUSE");
+                else uiStatus("STOP RECORDING FIRST");
             } else {
                 g_songMode = !g_songMode;
                 uiStatus(g_songMode ? "SONG MODE" : "PATTERN MODE");
@@ -1000,6 +1389,9 @@ static void doShort(uint8_t act) {
                 uiStatus("TARGET CHANGED");
             } else if (g_curPage == PAGE_KO) {
                 g_poEffectProcessor.engage(PO_FX_NONE); uiStatus("FX OFF");
+            } else if (g_curPage == PAGE_CHORD &&
+                       g_hiChordPerformance.mode() == HICHORD_EAR_TRAINER) {
+                queueEarAudition(true); uiStatus("ROOT HINT");
             } else if (g_curPage == PAGE_SONG) {
                 g_songLoopStart = g_songCursor;
                 uiStatus("LOOP SET"); g_needRedraw = true;
@@ -1158,15 +1550,26 @@ static bool doMedoKey(uint8_t kc, const KeySnap &now) {
     if (role == MEDO_DRUM) {
         const int8_t lane = padLane(kc);
         if (lane < 0) return false;
-        liveDrumHit(static_cast<uint8_t>(lane)); return true;
+        outputMedoGesture(MEDO_CLICK, g_medoPerformance.settings(role).volume);
+        eventLooperSetRecordRoleGain(true);
+        liveDrumHit(static_cast<uint8_t>(lane),
+                    g_medoPerformance.settings(role).volume);
+        eventLooperSetRecordRoleGain(false); return true;
     }
     if (role == MEDO_SAMPLE) {
         const int8_t key = samplePerformanceKey(kc);
         if (key < 0) return false;
-        liveSampleHit(g_streamSampleSlot, static_cast<uint8_t>(key)); return true;
+        outputMedoGesture(MEDO_CLICK, g_medoPerformance.settings(role).volume);
+        eventLooperSetRecordRoleGain(true);
+        liveSampleHit(g_streamSampleSlot, static_cast<uint8_t>(key),
+                      g_medoPerformance.settings(role).volume);
+        eventLooperSetRecordRoleGain(false); return true;
     }
     if (role == MEDO_CHORD && chordKeyDegree(kc) >= 0) {
-        playChord(kc, now); return true;
+        outputMedoGesture(MEDO_CLICK, g_medoPerformance.settings(role).volume);
+        playChord(kc, now, g_medoPerformance.settings(role).volume,
+                  g_medoPerformance.settings(role).octave,
+                  g_medoPerformance.arpEnabled(), EVENT_ROLE_CHORD); return true;
     }
     const int8_t semi = pianoSemi(kc);
     if (semi < 0) return false;
@@ -1174,10 +1577,13 @@ static bool doMedoKey(uint8_t kc, const KeySnap &now) {
     const int midi = g_medoPerformance.quantizeNote(static_cast<uint8_t>(
         constrain((g_curOctave + 1 + octaveShift) * 12 + semi, 12, 127)));
     const uint8_t track = role == MEDO_BASS ? 0 : 1;
+    outputMedoGesture(MEDO_CLICK, g_medoPerformance.settings(role).volume);
     if (accentHeld(now)) outputMedoGesture(MEDO_PRESS, 110);
+    eventLooperSetRecordRoleGain(true);
     liveSynthNote(track, static_cast<uint8_t>(midi % 12 + 1),
                   static_cast<uint8_t>(midi / 12 - 1), accentHeld(now), false,
                   g_medoPerformance.settings(role).volume);
+    eventLooperSetRecordRoleGain(false);
     rememberMidiNote(kc, track, static_cast<uint8_t>(midi));
     return true;
 }
@@ -1188,7 +1594,15 @@ void inputInit() {
     s_nHolds = 0; s_rptAct = ACT_NONE;
     s_heldMidiNoteCount = 0;
     s_heldChordCount = 0;
+    s_chordReleaseCount = 0;
+    s_autoDrumCount = 0;
     s_poEffectKey = KC_NONE;
+    s_hiroStartUs = 0; s_hiroScore = 0;
+    s_earAuditionStartUs = 0; s_earAuditionNext = s_earAuditionEnd = 0;
+    s_earStreak = s_earBestStreak = 0;
+    s_earRandom = micros() | 1u;
+    for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track)
+        s_previousLoopState[track] = static_cast<uint8_t>(LOOP_STREAM_EMPTY);
     g_poLiveEffectActive = false;
     g_holdProg = 0; g_holdLabel[0] = 0;
 }
@@ -1197,6 +1611,9 @@ void inputUpdate() {
     M5Cardputer.update();
     uint32_t nowMs = millis();
     updateHeldChords();
+    updateChordHiro(micros());
+    updateEarAudition(micros());
+    updateLoopAutoAdvance();
 
     // -- CLR held while live-recording = erase at playhead --
     if (g_playing && g_recEnabled && s_prev.has('z')) clearStepAtPlayhead();
