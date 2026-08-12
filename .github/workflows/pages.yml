@@ -132,7 +132,12 @@ jobs:
             exit 0
           fi
           git clone --depth 1 "https://x-access-token:${SITE_PUSH_TOKEN}@github.com/CanadaOrNaw/MiniStudio.github.io.git" live-site
-          rsync -a --delete --exclude ".git" build/pages/ live-site/
+          # A fresh clone gives every destination file the same checkout-time
+          # timestamp. Size+mtime quick checks can therefore skip a generated
+          # file whose contents changed but byte length did not (BUILD_INFO's
+          # SHA is always 40 bytes). Compare content so the published tree is
+          # byte-identical to the validated artifact.
+          rsync -a --checksum --delete --exclude ".git" build/pages/ live-site/
           cd live-site
           git add -A
           # BUILD_INFO.json embeds this commit's SHA, so a push always

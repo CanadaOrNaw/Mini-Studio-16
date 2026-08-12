@@ -113,6 +113,11 @@ class SiteBuildTests(unittest.TestCase):
         version = (ROOT / "RELEASE_VERSION").read_text(encoding="utf-8").strip()
         self.assertRegex(version, r"^v[0-9]+\.[0-9]+\.[0-9]+(?:[.-][0-9A-Za-z.-]+)?$")
 
+    def test_site_publish_compares_generated_file_contents(self):
+        workflow = (ROOT / ".github" / "workflows" /
+                    "pages.yml").read_text(encoding="utf-8")
+        self.assertIn("rsync -a --checksum --delete", workflow)
+
     def test_builder_refuses_unrecognized_output_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "unrelated"
