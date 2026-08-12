@@ -14,4 +14,3 @@ public:
     static PitchEstimate detect(const int16_t *pcm, size_t frames, uint32_t sampleRate,
                                 float minimumHz = 50.0f, float maximumHz = 1200.0f);
 };
-

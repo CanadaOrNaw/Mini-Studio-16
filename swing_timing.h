@@ -7,4 +7,3 @@ static inline uint32_t swingStepPeriod(uint32_t straightPeriod, uint8_t swing,
     const uint32_t factor = (step & 1u) ? 100u - swing : swing;
     return straightPeriod * factor / 50u;
 }
-

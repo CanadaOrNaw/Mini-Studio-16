@@ -26,4 +26,3 @@ int main() {
     assert(!fx.setMix(static_cast<MasterEffectType>(99), 1));
     return 0;
 }
-

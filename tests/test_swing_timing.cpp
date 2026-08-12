@@ -9,4 +9,3 @@ int main() {
     assert(swingStepPeriod(1000, 99, 0) == 1500);
     return 0;
 }
-

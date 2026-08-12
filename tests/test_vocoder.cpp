@@ -22,4 +22,3 @@ int main() {
     assert(!v.applySettings(s));
     return 0;
 }
-

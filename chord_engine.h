@@ -66,4 +66,3 @@ private:
     uint8_t previous_[6];
     uint8_t previousCount_;
 };
-

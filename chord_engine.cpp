@@ -157,4 +157,3 @@ const char *ChordEngine::scaleName(ChordScale scale) {
 const char *ChordEngine::typeName(ChordType type) {
     return type < CHORD_TYPE_COUNT ? kTypeNames[type] : "MAJ";
 }
-
