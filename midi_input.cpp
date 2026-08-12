@@ -15,6 +15,8 @@ MidiTransportClock s_transport;
 bool s_dispatching = false;
 
 void routeEvent(const MidiEvent& event) {
+    if (event.type == MIDI_EVENT_CLOCK && s_transport.running())
+        sequencerExternalEventTick();
     const MidiTransportResult transport = s_transport.consume(event);
     switch (transport.action) {
         case MIDI_TRANSPORT_START: sequencerExternalStart(true); break;

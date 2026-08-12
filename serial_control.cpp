@@ -20,6 +20,8 @@
 #include "synth_parameters.h"
 #include "boot_selector.h"
 #include "audio_cap.h"
+#include "performance_state.h"
+#include "midi_output.h"
 
 #include <Arduino.h>
 #include <M5Cardputer.h>
@@ -28,6 +30,17 @@
 
 namespace {
 SerialLineBuffer<CONTROL_LINE_MAX> s_line;
+uint8_t s_serialChordNotes[7] = {};
+uint8_t s_serialChordTracks[7] = {};
+uint8_t s_serialChordCount = 0;
+
+void serialChordOff() {
+    for (uint8_t i = 0; i < s_serialChordCount; ++i) {
+        g_synths[s_serialChordTracks[i]].noteOff(s_serialChordNotes[i]);
+        midiOutputNoteOff(s_serialChordTracks[i], s_serialChordNotes[i]);
+    }
+    s_serialChordCount = 0;
+}
 
 void replyError(const char* id, const char* error) {
     Serial.printf(CONTROL_PROTOCOL_PREFIX " %s ERR %s\n",
@@ -239,6 +252,29 @@ void dispatch(const ControlRequest& request) {
                               static_cast<unsigned>(request.arg2));
             else
                 replyError(request.id, "loop_volume_rejected");
+            break;
+
+        case CONTROL_LOOP_SOLO:
+        case CONTROL_LOOP_UNSOLO: {
+            const bool solo = request.command == CONTROL_LOOP_SOLO;
+            if (loopEngineSetSolo(static_cast<uint8_t>(request.arg1 - 1u), solo))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK loop=%u solo=%u\n", request.id,
+                              static_cast<unsigned>(request.arg1), solo ? 1u : 0u);
+            else replyError(request.id, "loop_solo_rejected");
+            break;
+        }
+        case CONTROL_LOOP_PAUSE:
+        case CONTROL_LOOP_RESUME:
+            if (loopEngineSetPaused(request.command == CONTROL_LOOP_PAUSE))
+                Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK loops=%s\n", request.id,
+                              request.command == CONTROL_LOOP_PAUSE ? "paused" : "playing");
+            else replyError(request.id, "loop_recording_busy");
+            break;
+        case CONTROL_LOOP_METRONOME_ON:
+        case CONTROL_LOOP_METRONOME_OFF:
+            loopEngineSetMetronome(request.command == CONTROL_LOOP_METRONOME_ON);
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK metronome=%u\n", request.id,
+                          request.command == CONTROL_LOOP_METRONOME_ON ? 1u : 0u);
             break;
 
         case CONTROL_SAMPLE_STATUS: {
@@ -604,6 +640,185 @@ void dispatch(const ControlRequest& request) {
             Serial.printf(CONTROL_PROTOCOL_PREFIX
                           " %s OK dsp=reset\n", request.id);
             break;
+
+        case CONTROL_CHORD_STATUS:
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK mode=%u key=%u scale=%u map=%u octave=%d bass=%u "
+                          "voiceLead=%u degree=%u swing=%u arpPattern=%u arpLayer=%u "
+                          "arpRate=%u repeatRate=%u strumSpeed=%u loopBars=%u sequenceLength=%u\n", request.id,
+                          static_cast<unsigned>(g_hiChordPerformance.mode()),
+                          static_cast<unsigned>(g_chordSettings.key),
+                          static_cast<unsigned>(g_chordSettings.scale),
+                          static_cast<unsigned>(g_chordSettings.map),
+                          static_cast<int>(g_chordSettings.octave),
+                          static_cast<unsigned>(g_chordSettings.bassMode),
+                          g_chordSettings.voiceLeading ? 1u : 0u,
+                          static_cast<unsigned>(g_chordDegree + 1u),
+                          static_cast<unsigned>(g_swing),
+                          static_cast<unsigned>(g_hiChordArpPattern),
+                          static_cast<unsigned>(g_hiChordArpLayer),
+                          static_cast<unsigned>(g_hiChordArpRate),
+                          static_cast<unsigned>(g_hiChordRepeatRate),
+                          static_cast<unsigned>(g_hiChordStrumSpeed),
+                          static_cast<unsigned>(g_hiChordLoopBars),
+                          static_cast<unsigned>(g_hiChordSequenceLength));
+            break;
+
+        case CONTROL_CHORD_PLAY: {
+            serialChordOff();
+            const ChordVoicing chord = g_chordEngine.build(g_chordSettings,
+                static_cast<uint8_t>(request.arg1 - 1u),
+                static_cast<ChordDirection>(request.arg2));
+            g_synths[0].setVoices(3); g_synths[1].setVoices(3);
+            for (uint8_t i = 0; i < chord.count; ++i) {
+                const uint8_t midi = chord.notes[i];
+                const uint8_t track = i < chord.chordToneCount ? static_cast<uint8_t>(i / 3u) : 2u;
+                g_synths[track].noteOnLive(noteToFreq(static_cast<uint8_t>(midi % 12u + 1u),
+                    static_cast<uint8_t>(midi / 12u - 1u)), false, false, midi, 104);
+                midiOutputNoteOn(track, midi, 104);
+                s_serialChordNotes[s_serialChordCount] = midi;
+                s_serialChordTracks[s_serialChordCount++] = track;
+            }
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK chord=%u notes=%u\n",
+                          request.id, static_cast<unsigned>(request.arg1),
+                          static_cast<unsigned>(chord.count));
+            break;
+        }
+
+        case CONTROL_CHORD_OFF:
+            serialChordOff();
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK chord=off\n", request.id);
+            break;
+
+        case CONTROL_CHORD_SET: {
+            const uint16_t value = request.arg1;
+            bool ok = true;
+            if (!strcmp(request.text, "key") && value <= 11) g_chordSettings.key = value;
+            else if (!strcmp(request.text, "scale") && value < CHORD_SCALE_COUNT)
+                g_chordSettings.scale = static_cast<ChordScale>(value);
+            else if (!strcmp(request.text, "map") && value <= CHORD_MAP_CHROMATIC)
+                g_chordSettings.map = static_cast<ChordMap>(value);
+            else if (!strcmp(request.text, "mode") && value < HICHORD_MODE_COUNT)
+                g_hiChordPerformance.setMode(static_cast<HiChordMode>(value));
+            else if (!strcmp(request.text, "octave") && value >= 2 && value <= 6)
+                g_chordSettings.octave = static_cast<int8_t>(value);
+            else if (!strcmp(request.text, "bass") && value <= CHORD_BASS_SLASH)
+                g_chordSettings.bassMode = static_cast<ChordBassMode>(value);
+            else if (!strcmp(request.text, "voice_lead") && value <= 1)
+                g_chordSettings.voiceLeading = value != 0;
+            else if (!strcmp(request.text, "swing") && value >= 50 && value <= 75)
+                g_swing = static_cast<uint8_t>(value);
+            else if (!strcmp(request.text, "arp_pattern") && value < ARP_PATTERN_COUNT)
+                g_hiChordArpPattern = static_cast<uint8_t>(value);
+            else if (!strcmp(request.text, "arp_layer") && value < ARP_LAYER_COUNT)
+                g_hiChordArpLayer = static_cast<uint8_t>(value);
+            else if (!strcmp(request.text, "arp_rate") && value < HICHORD_RATE_COUNT)
+                g_hiChordArpRate = static_cast<uint8_t>(value);
+            else if (!strcmp(request.text, "repeat_rate") && value < HICHORD_RATE_COUNT)
+                g_hiChordRepeatRate = static_cast<uint8_t>(value);
+            else if (!strcmp(request.text, "strum_speed") &&
+                     value < HICHORD_STRUM_SPEED_COUNT)
+                g_hiChordStrumSpeed = static_cast<uint8_t>(value);
+            else if (!strcmp(request.text, "loop_bars") && value <= 8)
+                g_hiChordLoopBars = static_cast<uint8_t>(value);
+            else if (!strcmp(request.text, "sequence_length") && value >= 4 &&
+                     value <= 16 && (value % 4u) == 0)
+                g_hiChordSequenceLength = static_cast<uint8_t>(value);
+            else ok = false;
+            if (ok) Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK chordSet=%s value=%u\n",
+                                  request.id, request.text, static_cast<unsigned>(value));
+            else replyError(request.id, "chord_parameter_rejected");
+            break;
+        }
+
+        case CONTROL_CHORD_LOCK:
+            g_chordSettings.lockedType[request.arg1 - 1u] = static_cast<uint8_t>(request.arg2);
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK degree=%u chordType=%u locked=1\n",
+                          request.id, static_cast<unsigned>(request.arg1), static_cast<unsigned>(request.arg2));
+            break;
+        case CONTROL_CHORD_UNLOCK:
+            g_chordSettings.lockedType[request.arg1 - 1u] = CHORD_TYPE_COUNT;
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK degree=%u locked=0\n",
+                          request.id, static_cast<unsigned>(request.arg1));
+            break;
+        case CONTROL_CHORD_INVERSION:
+            g_chordSettings.inversion[request.arg1 - 1u] = static_cast<int8_t>(request.arg2) - 2;
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK degree=%u inversion=%d\n",
+                          request.id, static_cast<unsigned>(request.arg1),
+                          static_cast<int>(g_chordSettings.inversion[request.arg1 - 1u]));
+            break;
+        case CONTROL_CHORD_OCTAVE_SHIFT:
+            g_chordSettings.octaveShift[request.arg1 - 1u] = static_cast<int8_t>(request.arg2) - 2;
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK degree=%u octaveShift=%d\n",
+                          request.id, static_cast<unsigned>(request.arg1),
+                          static_cast<int>(g_chordSettings.octaveShift[request.arg1 - 1u]));
+            break;
+
+        case CONTROL_PO_EFFECT:
+            g_poEffectSelection = static_cast<uint8_t>(request.arg1);
+            g_poEffectProcessor.engage(static_cast<PoEffect>(request.arg1));
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK poEffect=%u\n", request.id,
+                          static_cast<unsigned>(request.arg1));
+            break;
+
+        case CONTROL_PO_LOCK:
+            g_poPatternEffects.set(static_cast<uint8_t>(request.arg1 - 1u),
+                                   static_cast<uint8_t>(request.arg2 - 1u),
+                                   static_cast<PoEffect>(request.arg3));
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK pattern=%u step=%u poEffect=%u\n",
+                          request.id, static_cast<unsigned>(request.arg1),
+                          static_cast<unsigned>(request.arg2), static_cast<unsigned>(request.arg3));
+            break;
+
+        case CONTROL_MEDO_STATUS: {
+            const MedoRole role = g_medoPerformance.role();
+            const MedoTrackSettings &settings = g_medoPerformance.settings(role);
+            Serial.printf(CONTROL_PROTOCOL_PREFIX
+                          " %s OK role=%u quantize=%u volume=%u octave=%d bars=%u events=%u "
+                          "scale=%u arpEnabled=%u arpDirection=%u arpRate=%u sharedBars=%u\n",
+                          request.id, static_cast<unsigned>(role + 1u),
+                          static_cast<unsigned>(settings.quantize),
+                          static_cast<unsigned>(settings.volume), static_cast<int>(settings.octave),
+                          static_cast<unsigned>(g_eventLooper.bars(role)),
+                          static_cast<unsigned>(g_eventLooper.count(role)),
+                          static_cast<unsigned>(g_medoPerformance.scale()),
+                          g_medoPerformance.arpEnabled() ? 1u : 0u,
+                          static_cast<unsigned>(g_medoPerformance.arpDirection()),
+                          static_cast<unsigned>(g_medoPerformance.arpRate()),
+                          static_cast<unsigned>(g_medoPerformance.sharedBars()));
+            break;
+        }
+        case CONTROL_MEDO_ROLE:
+            g_medoPerformance.setRole(static_cast<MedoRole>(request.arg1 - 1u));
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK role=%u\n", request.id,
+                          static_cast<unsigned>(request.arg1));
+            break;
+        case CONTROL_MEDO_QUANTIZE:
+            g_medoPerformance.setQuantize(static_cast<MedoRole>(request.arg1 - 1u),
+                                          static_cast<MedoQuantize>(request.arg2));
+            Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK role=%u quantize=%u\n", request.id,
+                          static_cast<unsigned>(request.arg1), static_cast<unsigned>(request.arg2));
+            break;
+        case CONTROL_MEDO_SET: {
+            const uint16_t value = request.arg1;
+            bool ok = false;
+            if (!strcmp(request.text, "scale") && value < MEDO_SCALE_COUNT)
+                ok = g_medoPerformance.setScale(static_cast<MedoScale>(value));
+            else if (!strcmp(request.text, "arp_direction") && value < MEDO_ARP_COUNT)
+                ok = g_medoPerformance.setArpDirection(static_cast<MedoArpDirection>(value));
+            else if (!strcmp(request.text, "arp_rate")) ok = g_medoPerformance.setArpRate(value);
+            else if (!strcmp(request.text, "arp_enabled") && value <= 1) {
+                g_medoPerformance.setArpEnabled(value != 0); ok = true;
+            }
+            else if (!strcmp(request.text, "bars")) {
+                ok = g_medoPerformance.setSharedBars(value);
+                if (ok) ok = g_eventLooper.setAllBars(value);
+            }
+            if (ok) Serial.printf(CONTROL_PROTOCOL_PREFIX " %s OK medoSet=%s value=%u\n",
+                                  request.id, request.text, static_cast<unsigned>(value));
+            else replyError(request.id, "medo_parameter_rejected");
+            break;
+        }
 
         case CONTROL_CAP_STATUS: {
             const AudioCapSnapshot cap = audioCapSnapshot();

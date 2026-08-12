@@ -1,10 +1,39 @@
 # Mini Studio 16 implementation and verification plan
 
-Branch: `agent/v3-alpha-sd-streaming`
+Branch: `agent/complete-three-in-one`
 
-All software-only milestones below are implemented. Their automated gates pass
-locally and are compiled in GitHub Actions; physical gates are explicitly left
-open until the Cardputer-ADV arrives.
+The earlier plan tracked headline capacities but did not trace the actual
+HiChord, PO-33, and MEDO workflows. That made its former "all software-only
+milestones" claim incorrect. This completion branch uses the official current
+manuals as the product contract and does not call a row complete until its
+firmware path, persistence, controls, and host evidence all exist.
+
+Official behavior references:
+
+- [HiChord manual](https://hichord.shop/pages/manual)
+- [PO-33 K.O! guide](https://teenage.engineering/guides/po-33/en)
+- [Donner MEDO manual](https://storage.donnermusic.com/official-user/202406/MEDO_manual.pdf)
+
+## Three-in-one product traceability
+
+| Product contract | Mini Studio implementation target | Software gate |
+| --- | --- | --- |
+| HiChord seven diatonic chord buttons | Ten scales, 28 chord types, three joystick maps, chord lock, per-button octave/inversion, slash/root bass, voice leading | Every scale/type/map is generated and bounds-tested; UI and project round trip |
+| HiChord Play/Strum/Lead/Drone/Arp/Repeat | Fixed-size scheduler with 120/80/40 ms strum, monophonic Lead, latched Drone, six real arp patterns/three layers, all nine rates and bounded repeat gates | Deterministic pattern/rate/strum tests and no render-path allocation |
+| HiChord mic sample/drums/drum loops/auto-drum/sequencer | Pitch-detected three-second mic capture that enters Lead; seven kits/56 grooves; directional auto-drum rates; selectable 4/8/12/16-step chord sequence and three auto-bounce sources | State/rate/project tests; loop bounce produces exact Track-1 length |
+| HiChord Chord Hiro/Ear Trainer/Tuner/Mixer | Sixteen practice songs with documented ±200/150/100/50 ms graded timing; audible one/four-chord ear rounds and modified-chord directions; pitch detector and six-loop mixer | Timing/dataset/state/pitch tests and UI reachability |
+| HiChord six discrete ~20-second loops | Six SD streams; Track 1 free or 1–8 bars with four-beat count-in; exact layer boundary/length, auto-advance, mute/solo/volume/pause/metronome and bounce | Stream/timeline/fixed-length tests plus mixer/bounce integration |
+| HiChord vocoder/presets/effects | Mic or Loop-1 modulator, bounded vocoder/effects, four user performance presets | Offline audio and project round-trip tests |
+| PO-33 16 melodic/drum slots and 40 seconds | Existing 16-slot streamed bank/quota, melodic mapping and 16 slices | Existing quota/slice tests |
+| PO-33 tone/filter/trim, per-slice edit and copy | Parameters/locks plus independent sound metadata copy and asynchronous PCM-rebuilding cross-slot slice copy (same-rate assets; mismatches reject explicitly) | Copy/quota/seqlock/project tests and firmware worker compile |
+| PO-33 16×16 patterns, live quantized record, swing, 128 chain | Existing patterns/chain plus live-record state and swing | Existing chain tests plus live-record timing tests |
+| PO-33 punch-in effects and recorded effects | All 15 named effects plus dry state, performance engagement and per-step persistence | Deterministic bounded PCM tests and project round trip |
+| PO-33 backup/restore and sync | GBX v9 project plus referenced SD WAVs, atomic `.bak` recovery, and standard copyable FAT32 files replace the PO audio-data dump; MIDI clock/start/stop/song-position replace analog pulse sync on stock hardware | Corruption/migration and MIDI-clock tests; any analog sync electrical path belongs to the future input expansion |
+| MEDO Drum/Bass/Chord/Lead/Sample roles | Five event tracks assigned to the documented roles, with dynamic role gain on replay rather than baking the mixer level into events | Role/volume/octave/clear/overdub tests |
+| MEDO 1–128 bars and three quantize modes | Existing 128-bar event core plus As-recorded, 16th snap and groove timing | Quantizer and first-note/first-loop tests |
+| MEDO eight gestures | Click, press, slide, slap, tilt, shake, wiggle and move mapped to internal modulation/MIDI | Gesture-message tests; physical thresholds are a hardware gate |
+| MEDO scales/transposition/arpeggio | Natural/major/minor pentatonic mapping, role octave, and an actual bounded chord arpeggiator with enable, four directions and four rates | Note/scale/direction/rate/output tests |
+| MEDO Bluetooth MIDI/audio | Existing BLE MIDI; conventional Bluetooth audio remains in the documented Audio Cap | BLE codec tests; RF/audio soak is a hardware gate |
 
 ## Fixed product targets
 
@@ -95,7 +124,7 @@ protocol operation allocates or performs file I/O in the render path.
    metadata and filenames, not long PCM payloads.
 5. A shared recursive arbiter serializes all FatFS calls and publishes
    contention/failure/max-hold telemetry.
-6. Every persisted format is versioned. GBX v8 is current; v1–v7 load paths are
+6. Every persisted format is versioned. GBX v9 is current; v1–v8 load paths are
    retained and explicitly select the original `MG/303` engine.
 7. New systems are additive. Original Microgroove workflows remain compiled
    and usable.
@@ -123,13 +152,14 @@ protocol operation allocates or performs file I/O in the render path.
 | M2 control plane | `MS16/1`, CLI, JSON, monitor/discovery, soak client | 100k malformed fuzz; 10k line soak; CLI tests | 10k commands while audio plays |
 | M3 master/stems | Long master WAV; interleaved five-bus stem container; splitter; temp recovery | WAV/session/header/split/recovery tests | 30-minute zero-drop files and power cuts |
 | M4 six loops | L1–L6 record/play/mute/volume/clear; exact timeline; SD refill; underrun resync; recovery | Timeline/stall/record/ring tests | Six streams for 30 minutes; six plus record |
-| M5 sampler/sequencer | 16 patterns, 128 chain, 16 streamed slots, 40-second quota, melodic/sliced, trim/params/locks, bus/mic recording, GBX v4+ | Layout, migration syntax, quota/slice/lock/voice tests | Reboot persistence and live latency |
+| M5 sampler/sequencer | 16 patterns, 128 chain, 16 streamed slots, 40-second quota, melodic/sliced, trim/params/locks/copy, bus/mic recording, swing, 15 punch effects, GBX v4–v9 | Layout, migration syntax, quota/slice/lock/copy/effect/voice tests | Reboot persistence and live latency |
 | M6 event/motion/MIDI | Five × 128-bar event tracks; BMI270 mappings/automation; BLE MIDI; composite USB device; alternate USB host | Event/motion/MIDI/BLE/USB descriptor tests; both images link | Gesture calibration, reconnect, enumeration, clock jitter |
 | M7 full duplex/expansion | Low-level ES8311 boundary plus complete solderless, Cardputer-powered Audio Cap: retail ATOM Lite/PCM1808 modules, fixed SPI/rate-conversion bridge, CLI and hard design manifest | Packet/CRC/sequence/ring/converter tests; requirement and regional-BOM tests; Cardputer and ATOM firmware compile | ES8311 experiment; cap power/audio/RF measurements |
 | M8 expanded synthesis | Per-track `MG/303`, `MGX`, and true four-operator `FM4`; banked UI/CLI; GBX v8 migration; render telemetry/benchmark | Legacy golden-vector regression; operator/algorithm/ratio/envelope/feedback/switch tests; deterministic offline PCM/spectral statistics; malformed patch validation; both images link under memory gates | Worst-case render time and safe simultaneous FM polyphony with loops/sampler/drums/recording |
 | M9 dual-role boot | Common pre-subsystem selector in both apps; `normal`/`usbhost` OTA slots; validated reboot switch; serial/CLI control; recording/mutation/diagnostic interlocks; combined and standalone artifacts | Pure role/runtime decision tests; malformed/missing/mismatched slot tests; all busy sources and blocker precedence; strict partition-layout and merge-placement tests; both profiles link against the same partition table; combined artifact manifest | Flash combined image, switch both directions repeatedly, power-cut the selection write, and verify USB role/enumeration after every reboot |
 | M10 physical/product layer | Original parameterized open cradle with committed STL; canonical 56-key map; print-ready SVG; responsive interactive Pages site; deterministic build/download manifest; upstream/mechanical attribution | Key/schema/context tests; SVG regeneration; binary STL bounds/manifold checks; static-site link/accessibility/build tests; Pages artifact workflow | Print and caliper fit, port/access/comfort check, photograph actual device, and tune clearances from measurements |
 | M11 solderless Audio Cap product layer | One 14-pin plug; EXT-powered ATOM Lite + PCM1808; no custom PCB/soldering/second cable; precrimp/lever harness; two-part compliant snap case, fit gauge, three-region BOM and beginner guide | Eight-constraint drift guard; protected-pin assertions; BOM coverage; three watertight bounded meshes; deterministic generator | Fit purchased revisions, measure 5VOUT/current/heat, tune case/snaps, analog/SPI/A2DP/battery soak |
+| M12 three-in-one workflows | Behavior-level HiChord modes/fixed loops/practice/ear rounds, real PO slice PCM copy/swing/punch effects, and MEDO roles/dynamic mix/real arp/quantize/scales/shared length/gestures, all reachable from UI/serial and persisted in GBX v9 | Pure timing/rate/arp/state/project/protocol/CLI tests, worker syntax checks, full legacy suite and malformed-input fuzz | Performance feel, motion/pitch thresholds, codec full duplex, and end-to-end audio timing |
 
 ## Hardware test sequence
 

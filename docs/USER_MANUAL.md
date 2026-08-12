@@ -91,6 +91,63 @@ is retained when switching away and back.
 
 Drum rows remain lane, engine, type/sample, volume, tune, decay, and choke.
 
+## FX and VOCODER pages
+
+FX provides seven bounded master effects: reverb, delay, chorus, flanger,
+tremolo, vibrato, and filter. `v/c` selects a row, `x/b` edits, and `/`
+toggles the selected effect. Mix is per effect; feedback, rate, and filter are
+shared. The audio task receives settings through a block-safe snapshot.
+
+VOCODER is an eight-band carrier/modulator processor. Loop 1 is a working
+modulator without extra hardware. The onboard mic and Audio Cap line choices
+are present and persisted, but live full-duplex validation is deliberately a
+hardware test. Use arrows to edit enabled/source/formant/Q/envelopes/noise/gate
+and `/` to toggle it.
+
+## CHORD page (HiChord workflow)
+
+The seven chord buttons are `fn shift a s d f g` (degrees I–VII). Hold one or
+two of `x/c/v/b` while pressing a chord for the eight directional chord
+variants. The harmony core provides 10 scales, 28 chord types, three maps,
+per-degree inversion/octave/lock state, root or slash bass, and voice leading.
+With slash bass selected, holding one chord and pressing another uses the first
+degree as the slash bass.
+
+The MODE row selects Play, Strum, Lead, Drone, Arpeggio, Repeat, Mic Sample,
+Drum, Drum Loops, Auto Drum, Sequencer, Chord Hiro, Ear Trainer, Tuner, or
+Mixer. Lead is monophonic and a new key replaces its current note; Drone
+latches one chord until another chord or mode replaces it. Strum has 120, 80,
+and 40 ms spacing. Arp patterns are Up/Down/Up-Down/Down-Up/Random/Fingerpick
+with Arp-only, Chord+Arp, or Rhythm+Arp layers. Arp and Repeat offer 1/1,
+1/2, 1/4, 1/8, 1/16, 1/16-triplet, 1/32, swing-8 and swing-16 rates. In arp
+mode `tab` advances rate (`m+tab` advances layer); in repeat mode it advances
+rate. The sequence length is selectable at 4/8/12/16 steps. Leaving a playing
+chord sequence, Drum Loop, or Drone arms the first empty audio loop and
+bounces it at the exact loop boundary.
+
+Drum mode selects seven kits; Drum Loops expose seven styles × eight
+variations (56 grooves), while Auto Drum uses held direction keys for quarter,
+eighth, sixteenth, thirty-second, triplet and swing triggers. Tuner uses a
+held AUX mic capture and displays Hz, MIDI note, and cents. Mic Sample records
+up to three seconds, detects the root, maps it chromatically, and enters Lead.
+Chord Hiro starts with PLAY and grades timing at the documented difficulty
+windows. Ear Trainer auditions one chord on levels 1/3 or a four-chord
+progression on levels 2/4; levels 3/4 also require the directional variant.
+Tap AUX for a root hint. Mixer chord keys control L1–L6 mute and metronome.
+Pattern keys `4`–`7` recall four presets; hold them to store.
+
+The serial protocol additionally exposes exact chord locks, inversion, octave
+shift, arp/layer/rate, and remote chord note control.
+
+## KO page (PO-33 performance workflow)
+
+Pattern keys `4`–`-` engage effects 1–8 immediately; switch the A/B bank for
+effects 9–16. Effects are momentary and return dry when released. While PLAY
+or REC is active, the effect is written to the same quantized 16-step position
+as note/sample recording. The 15 effects are loop lengths, unison variants,
+octave shifts, stutters, scratches, 6/8 quantize, retrigger, and reverse.
+`n` cycles swing and `z` clears the selected step effect.
+
 ## SAMPLE page
 
 This page combines the original sample browser with the new 16-slot
@@ -110,6 +167,11 @@ SD-streamed instrument.
   release to stop/finalize.
 - Hold `n` to start/stop a streamed master-bus recording into the current slot.
 - `z` clears the current streamed slot and its sequence events.
+- Tap LOAD to copy the current whole sound (or selected slice); tap SAVE on a
+  destination to paste. A same-slot slice paste is metadata-only; a cross-slot
+  paste asynchronously rebuilds a real destination WAV from PCM. Source and
+  destination assets must currently have the same rate; a mismatch rejects
+  explicitly instead of creating a wrong hidden reference.
 
 Slots share 40 seconds after normalization to the 22.05 kHz engine rate.
 Assignment rejects an asset that would exceed the remaining quota.
@@ -146,12 +208,17 @@ when the lock table is full.
 Six independent WAV tracks live at `/groovebox/loops/L1.wav`–`L6.wav`.
 
 - `v/c` or pattern keys 1–6 select a track.
-- `/` arms recording; press again to stop/finalize L1 early.
-- L1 is free length up to 20 seconds and establishes the exact timeline.
+- `/` arms recording; press again to stop/finalize free-length L1 early.
+- L1 is free length up to 20 seconds or fixed to 1–8 bars. Hold `m` and press
+  `x/b` to choose FREE/1–8 bars. Fixed mode plays a four-beat count-in and
+  auto-stops at the exact frame count.
 - L2–L6 wait for the next L1 boundary and automatically stop at L1's frame
-  count.
+  count. An early stop request means “finish at that boundary,” never a short
+  rejected take. After finalize, the cursor advances to the next empty track.
 - `x/b` changes volume in 5% steps.
 - `.` mutes/unmutes without losing phase.
+- `tab` solos/unsolos the selected track; `n` pauses/resumes the loop timeline;
+  `,` toggles the phase-locked metronome.
 - `z` clears a track. Clearing L1 clears the shared timeline/all loop tracks.
 
 An SD underrun is counted; the track stays silent and re-primes for a later
@@ -170,6 +237,30 @@ Five event tracks can each span 1–128 bars.
 Live synth notes, drum hits, streamed sample triggers, and mapped motion/control
 values are timestamped into the armed track. Capacity is 2,048 events total;
 overflow is rejected and counted rather than overwriting data.
+
+The event clock is 24 PPQN (96 ticks/bar), so a 128-bar take has real
+sub-step timing rather than stretching 128 bars across only 2,048 sixteenth
+positions. GBX v5–v8 event positions migrate from the legacy 16-unit scale.
+
+## MEDO page
+
+Five role tracks map to Drum, Bass, Chord, Lead, and Sample. `v/c` selects
+role/quantize/volume/octave/shared bars/scale/arp; `x/b` edits. `/` arms the
+role for additive overdub and `z` clears it. The first/shared performance
+length is 1–128 bars and applies to every role. Quantize choices are As Played,
+Snap 16, and MEDO Groove. Natural, major-pentatonic, and minor-pentatonic note
+maps and per-role octave/level are persisted.
+
+`tab` toggles the Chord-role arpeggiator. Its Up/Down/Up-Down/Random direction
+and ×1/×2/×4/×8 rate are real note scheduling, not display-only state. Role
+levels are stored as dynamic mixer gain flags in newly recorded events, so
+changing a role volume also changes existing playback rather than baking the
+old level into every event.
+
+Click/Press/Slide are represented by keys and pressure/modifier controls;
+Slap/Tilt/Shake/Wiggle/Move come from the BMI270 motion layer. All eight have
+defined MIDI messages, and decimated controls can be recorded into event
+automation. Physical gesture thresholds remain part of Cardputer calibration.
 
 ## MOTION page
 
@@ -191,11 +282,12 @@ pattern keys place the selected A/B-bank pattern; `z` clears; tap `.` sets the
 loop start; tap `n` toggles song/pattern mode. Hold `opt/alt` to select project
 P1–P8, then hold LOAD/SAVE.
 
-GBX v8 saves patterns, chain, all three selectable synth-engine patches,
+GBX v9 saves patterns, chain, all three selectable synth-engine patches,
 synth/drums, legacy sample references, all 16
 streamed slots/parameters/slices/events/locks, five event tracks, motion
-mappings, and six-loop volume/mute state. GBX v1–v7 files still load and select
-the original `MG/303` engine.
+mappings, PO effect locks/swing, HiChord harmony/modes/presets/practice,
+MEDO settings, master effects/vocoder, and six-loop volume/mute state. GBX
+v1–v8 files still load and select the original `MG/303` engine where needed.
 
 On SONG:
 

@@ -46,6 +46,10 @@ int main() {
     assert(request.command == CONTROL_LOOP_UNMUTE && request.arg1 == 2);
     request = parseOk("MS16/1 vol loop 2 volume 65");
     assert(request.command == CONTROL_LOOP_VOLUME && request.arg1 == 2 && request.arg2 == 65);
+    request = parseOk("MS16/1 lp loop pause");
+    assert(request.command == CONTROL_LOOP_PAUSE);
+    request = parseOk("MS16/1 ls loop 3 solo");
+    assert(request.command == CONTROL_LOOP_SOLO && request.arg1 == 3);
     request = parseOk("MS16/1 11 sample status");
     assert(request.command == CONTROL_SAMPLE_STATUS);
     request = parseOk("MS16/1 12 sample 16 assign CHORD.wav melodic");
@@ -97,6 +101,30 @@ int main() {
            request.arg2 == SYNTH_PARAM_FM_OP4_RATIO && request.arg3 == 675);
     request = parseOk("MS16/1 sr synth dsp_reset");
     assert(request.command == CONTROL_SYNTH_DSP_RESET);
+    request = parseOk("MS16/1 ch chord status");
+    assert(request.command == CONTROL_CHORD_STATUS);
+    request = parseOk("MS16/1 cp2 chord play 7 8");
+    assert(request.command == CONTROL_CHORD_PLAY && request.arg1 == 7 && request.arg2 == 8);
+    request = parseOk("MS16/1 cs2 chord set scale 9");
+    assert(request.command == CONTROL_CHORD_SET && request.arg1 == 9 &&
+           std::strcmp(request.text, "scale") == 0);
+    request = parseOk("MS16/1 cl chord lock 7 27");
+    assert(request.command == CONTROL_CHORD_LOCK && request.arg1 == 7 && request.arg2 == 27);
+    request = parseOk("MS16/1 cu chord unlock 2");
+    assert(request.command == CONTROL_CHORD_UNLOCK && request.arg1 == 2);
+    request = parseOk("MS16/1 ci chord inversion 3 5");
+    assert(request.command == CONTROL_CHORD_INVERSION && request.arg1 == 3 && request.arg2 == 5);
+    request = parseOk("MS16/1 po1 po effect 14");
+    assert(request.command == CONTROL_PO_EFFECT && request.arg1 == 14);
+    request = parseOk("MS16/1 po2 po lock 16 16 15");
+    assert(request.command == CONTROL_PO_LOCK && request.arg3 == 15);
+    request = parseOk("MS16/1 me medo role 5");
+    assert(request.command == CONTROL_MEDO_ROLE && request.arg1 == 5);
+    request = parseOk("MS16/1 mq medo quantize 3 2");
+    assert(request.command == CONTROL_MEDO_QUANTIZE && request.arg1 == 3 && request.arg2 == 2);
+    request = parseOk("MS16/1 ms medo set bars 128");
+    assert(request.command == CONTROL_MEDO_SET && request.arg1 == 128 &&
+           std::strcmp(request.text, "bars") == 0);
     request = parseOk("MS16/1 cs cap status");
     assert(request.command == CONTROL_CAP_STATUS);
     request = parseOk("MS16/1 cp cap pair");
@@ -136,6 +164,12 @@ int main() {
     assert(controlParseLine("MS16/1 1 synth 1 set fm.op5.ratio 100", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 cap monitor 101", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 cap power external", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 chord play 8 0", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 chord lock 1 28", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 chord inversion 1 6", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 po lock 1 17 0", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 medo quantize 1 3", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
+    assert(controlParseLine("MS16/1 1 medo set bars 256", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
     assert(controlParseLine("MS16/1 1 wat", invalid) == CONTROL_PARSE_UNKNOWN_COMMAND);
     assert(controlParseLine("MS16/1 1 ping extra", invalid) == CONTROL_PARSE_BAD_ARGUMENTS);
 

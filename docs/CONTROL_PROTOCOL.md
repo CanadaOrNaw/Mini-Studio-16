@@ -31,8 +31,9 @@ bytes per main-loop iteration.
 | `master start\|stop` | Start or finalize long master WAV capture |
 | `stems start\|stop` | Start or finalize five-bus stem capture |
 | `loop status` | Six loop states, frames, ring fill, drops, underruns, and volume |
-| `loop TRACK record\|stop\|mute\|unmute\|clear` | Control loop 1–6 |
+| `loop TRACK record\|stop\|mute\|unmute\|clear\|solo\|unsolo` | Control loop 1–6 |
 | `loop TRACK volume PERCENT` | Set loop volume 0–100 |
+| `loop pause\|resume\|metronome_on\|metronome_off` | Shared HiChord loop transport/mixer controls |
 | `sample status` | Slot quota, record state, voices, drops, underruns, and errors |
 | `sample SLOT assign FILE melodic\|sliced` | Assign a mono 16-bit WAV under `/groovebox/samples` |
 | `sample SLOT trigger KEY` | Trigger melodic key/slice 1–16 |
@@ -47,13 +48,24 @@ bytes per main-loop iteration.
 | `motion MAP clear` | Clear mapping 1–4 |
 | `midi status` | MIDI queue, BLE, USB role/mount, byte/message/error, and dropped output-clock counters |
 | `project status` | Current slot and occupied-slot bit mask |
-| `project SLOT save\|load` | Save or load complete GBX v8 project slot 1–8; v1–v7 remain readable |
+| `project SLOT save\|load` | Save or load complete GBX v9 project slot 1–8; v1–v8 remain readable |
 | `boot status` | Report compiled/running/configured role, installed-image validity, layout match, pending switch, and platform error |
 | `boot normal\|host` | Validate/select that OTA application and reboot; rejected while any audio recording is active (`usb_host` is accepted as an alias of `host`) |
 | `synth status` | Per-track engine/voices/volume/control summary plus render-block deadline telemetry |
 | `synth TRACK engine mg\|mgx\|fm4` | Select a track engine without deleting the other engine patches (aliases accepted: `mg303`/`303` for `mg`, `fm` for `fm4`) |
 | `synth TRACK set PARAM VALUE` | Set a validated named synth parameter using integer wire units |
 | `synth dsp_reset` | Reset block count, last/max render time, and missed-deadline count |
+| `chord status` | HiChord mode/harmony/arp/repeat/swing state |
+| `chord play DEGREE DIRECTION` / `chord off` | Play I–VII using direction 0–8, then release it |
+| `chord set PARAM VALUE` | Set `key`, `scale`, `map`, `mode`, `octave`, `bass`, `voice_lead`, `swing`, `arp_pattern`, `arp_layer`, `arp_rate`, `repeat_rate`, `strum_speed`, Track-1 `loop_bars` (`0` free, `1..8` fixed), or `sequence_length` (`4/8/12/16`) |
+| `chord lock DEGREE TYPE` / `chord unlock DEGREE` | Lock I–VII to one of chord types 0–27 or restore scale-derived type |
+| `chord inversion DEGREE ENCODED` | Set inversion −2..+3 using wire values 0..5 |
+| `chord octave_shift DEGREE ENCODED` | Set per-degree octave −2..+2 using wire values 0..4 |
+| `po effect EFFECT` | Engage punch effect 0–15 (`15` is dry) |
+| `po lock PATTERN STEP EFFECT` | Persist an effect in one of 16×16 pattern steps |
+| `medo status` / `medo role ROLE` | Inspect/select Drum, Bass, Chord, Lead, or Sample role 1–5 |
+| `medo quantize ROLE MODE` | Set As Played/Snap 16/Groove (0–2) per role |
+| `medo set PARAM VALUE` | Set `scale`, `arp_enabled`, `arp_direction`, `arp_rate`, or shared `bars` |
 | `cap status` | Optional cap presence, ADC/A2DP state, monitor level and all bridge counters |
 | `cap pair` | Arm selection of the first discovered Bluetooth audio-rendering device |
 | `cap disconnect` | Disconnect the current Bluetooth audio sink |
@@ -112,6 +124,8 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 transport start
 python tools/ministudio_cli.py --port /dev/ttyACM0 loop-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 record
 python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 volume 75
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop 1 solo
+python tools/ministudio_cli.py --port /dev/ttyACM0 loop-transport metronome_on
 python tools/ministudio_cli.py --port /dev/ttyACM0 sample-assign 1 KICK.wav sliced
 python tools/ministudio_cli.py --port /dev/ttyACM0 sample-trigger 1 4
 python tools/ministudio_cli.py --port /dev/ttyACM0 sample-record 2 bus melodic
@@ -132,6 +146,11 @@ python tools/ministudio_cli.py --port /dev/ttyACM0 synth-set 2 fm.op2.ratio 200
 python tools/ministudio_cli.py --port /dev/ttyACM0 note 2 60 110
 python tools/ministudio_cli.py --port /dev/ttyACM0 note-off 2 60
 python tools/ministudio_cli.py --port /dev/ttyACM0 synth-status
+python tools/ministudio_cli.py --port /dev/ttyACM0 chord-play 1 0
+python tools/ministudio_cli.py --port /dev/ttyACM0 chord-lock 5 9
+python tools/ministudio_cli.py --port /dev/ttyACM0 po-lock 1 4 14
+python tools/ministudio_cli.py --port /dev/ttyACM0 medo-set bars 128
+python tools/ministudio_cli.py --port /dev/ttyACM0 medo-quantize 3 2
 python tools/ministudio_cli.py --port /dev/ttyACM0 cap-status
 python tools/ministudio_cli.py --port /dev/ttyACM0 cap-monitor 25
 python tools/ministudio_cli.py --port /dev/ttyACM0 cap-pair

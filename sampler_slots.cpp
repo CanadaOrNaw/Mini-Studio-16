@@ -99,6 +99,41 @@ bool SamplerSlotBank::remove(uint8_t index) {
     return true;
 }
 
+bool SamplerSlotBank::copySlot(uint8_t source, uint8_t destination) {
+    if (!validSlot(source) || !validSlot(destination) || source == destination ||
+        _slots[source].mode == SAMPLER_SLOT_EMPTY)
+        return false;
+    const uint32_t oldQuota = _slots[destination].quotaFrames;
+    const uint64_t nextQuota = static_cast<uint64_t>(_quotaUsedFrames) - oldQuota +
+                               _slots[source].quotaFrames;
+    if (nextQuota > SAMPLER_QUOTA_FRAMES) return false;
+    beginEdit(destination);
+    _slots[destination] = _slots[source];
+    _quotaUsedFrames = static_cast<uint32_t>(nextQuota);
+    endEdit(destination);
+    return true;
+}
+
+bool SamplerSlotBank::copySlice(uint8_t sourceSlot, uint8_t sourceSlice,
+                                uint8_t destinationSlot, uint8_t destinationSlice) {
+    if (!validSlot(sourceSlot) || !validSlot(destinationSlot) ||
+        sourceSlice >= SAMPLER_SLICE_COUNT || destinationSlice >= SAMPLER_SLICE_COUNT ||
+        _slots[sourceSlot].mode == SAMPLER_SLOT_EMPTY ||
+        _slots[destinationSlot].mode != SAMPLER_SLOT_SLICED)
+        return false;
+    const SamplerRegion source = _slots[sourceSlot].slices[sourceSlice];
+    // Slice-copy is non-destructive metadata copying when both slices address
+    // the same underlying asset. A different asset cannot be referenced by
+    // SamplerRegion alone, so reject it instead of silently playing wrong PCM.
+    if (strncmp(_slots[sourceSlot].filename, _slots[destinationSlot].filename,
+                SAMPLE_NAME_LEN) != 0 || !validRegion(_slots[destinationSlot], source))
+        return false;
+    beginEdit(destinationSlot);
+    _slots[destinationSlot].slices[destinationSlice] = source;
+    endEdit(destinationSlot);
+    return true;
+}
+
 bool SamplerSlotBank::setMode(uint8_t index, SamplerSlotMode mode) {
     if (!validSlot(index) || _slots[index].mode == SAMPLER_SLOT_EMPTY ||
         (mode != SAMPLER_SLOT_MELODIC && mode != SAMPLER_SLOT_SLICED))

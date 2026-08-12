@@ -29,6 +29,7 @@ enum MotionGesture : uint8_t {
     MOTION_GESTURE_SHAKE = 1u << 0,
     MOTION_GESTURE_SLAP = 1u << 1,
     MOTION_GESTURE_MOVE = 1u << 2,
+    MOTION_GESTURE_WIGGLE = 1u << 3,
 };
 
 struct MotionInput {
@@ -118,6 +119,8 @@ public:
         output.values[MOTION_SOURCE_SHAKE] = static_cast<uint8_t>(_shakeLevel);
         output.values[MOTION_SOURCE_SLAP] = static_cast<uint8_t>(_slapLevel);
         if (gyroMagnitude > 80.0f) output.gestures |= MOTION_GESTURE_MOVE;
+        if (gyroMagnitude > 220.0f && fabsf(_fgz) > 120.0f)
+            output.gestures |= MOTION_GESTURE_WIGGLE;
         _lastTimeMs = input.timeMs;
         return output;
     }
@@ -146,4 +149,3 @@ private:
         return static_cast<uint8_t>(normalized * 127.0f + 0.5f);
     }
 };
-

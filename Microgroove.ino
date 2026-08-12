@@ -8,7 +8,7 @@
 //   - 16 patterns x 16 steps, 128-entry chain, live record with quantize
 //   - live mic sampling, SD-streamed sampler/looper, master/stem recording
 //   - BLE/USB MIDI, BMI270 motion, and USB serial control
-//   - project save/load to microSD (GBX v8; loads v1-v7 transparently)
+//   - project save/load to microSD (GBX v9; loads v1-v8 transparently)
 //
 // Portions of the synth voice, 808 drums, and audio task are derived
 // from qwertyuu/Cardputer-Adv-Tracker (MIT License) - see LICENSE.
@@ -38,10 +38,10 @@
 #include "sd_io_arbiter.h"
 #include "boot_selector.h"
 #include "audio_cap.h"
+#include "performance_state.h"
+#include "input.h"
 #include "ui.h"
 
-void inputInit();
-void inputUpdate();
 
 static bool s_sdOk = false;
 
@@ -114,6 +114,7 @@ void setup() {
     }
     loopEngineInit(s_sdOk);
     streamingSamplerInit(s_sdOk);
+    performanceStateInit();
     sequencerInit();
     midiInputInit();
     motionInit();

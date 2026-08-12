@@ -443,6 +443,23 @@ void SynthTrack::noteOff(uint8_t midiNote) {
 
 void SynthTrack::releaseAll() { noteOff(0xFF); }
 
+void SynthTrack::hardStop() {
+    for (int index = 0; index < MAX_POLY; ++index) {
+        v[index].active = false;
+        v[index].ampEnv = 0.0f;
+        mgxVoices[index].init();
+        fmVoices[index].init();
+    }
+    liveMask = 0;
+}
+
+void SynthTrack::sustainLegacy() {
+    if (engine != SYNTH_ENGINE_MG) return;
+    for (int index = 0; index < voices; ++index)
+        if (v[index].active && v[index].ampEnv < 0.72f)
+            v[index].ampEnv = 0.72f;
+}
+
 void SynthTrack::releaseSequenced() {
     // P2-9: the per-step release that used to be releaseAll(). Voices whose
     // liveMask bit is set belong to a player and are left alone.

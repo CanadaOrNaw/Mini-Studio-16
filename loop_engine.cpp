@@ -13,6 +13,8 @@
 #include <SD.h>
 #include <string.h>
 
+extern uint16_t g_bpm;
+
 namespace {
 constexpr uint32_t kPlaybackRingFrames = 1024;
 constexpr uint32_t kRecordRingFrames = 4096;
@@ -40,6 +42,11 @@ File s_recordFile;
 uint32_t s_recordFileFrames = 0;
 alignas(4) uint32_t s_recordFileTrack = LOOP_NO_TRACK;
 alignas(4) uint32_t s_recordRequests = 0;
+// Only Track 1 can establish a fixed bar/count-in length. Tracks 2..6 always
+// inherit its timeline, so per-track parameter arrays represented no valid
+// operation and unnecessarily consumed deterministic SRAM.
+alignas(4) uint32_t s_trackOneTargetFrames = 0;
+alignas(4) uint32_t s_trackOneCountInFrames = 0;
 alignas(4) uint32_t s_clearRequests = 0;
 alignas(4) uint32_t s_clearOutstanding = 0;
 portMUX_TYPE s_metricsMux = portMUX_INITIALIZER_UNLOCKED;
@@ -48,6 +55,10 @@ bool s_sdMounted = false;
 uint32_t s_maxReadUs = 0;
 uint32_t s_maxWriteUs = 0;
 uint32_t s_errors = 0;
+alignas(4) uint32_t s_paused = 0;
+alignas(4) uint32_t s_metronome = 0;
+alignas(4) uint32_t s_soloTrack = LOOP_NO_TRACK;
+uint8_t s_preSoloMutedMask = 0;
 
 void trackPath(uint8_t track, char* output, size_t capacity) {
     snprintf(output, capacity, "%s/L%u.wav", DIR_LOOPS,
@@ -269,10 +280,16 @@ bool startRecording(uint8_t track) {
         { SdIoGuard guard; if (SD.exists(temp)) SD.remove(temp); }
         return false;
     }
+    const uint32_t requestedTarget = track == 0 ? __atomic_exchange_n(
+        &s_trackOneTargetFrames, 0u, __ATOMIC_ACQ_REL) : 0u;
+    const uint32_t requestedCountIn = track == 0 ? __atomic_exchange_n(
+        &s_trackOneCountInFrames, 0u, __ATOMIC_ACQ_REL) : 0u;
     const uint32_t timeline = s_core.timelineFrames();
-    const uint32_t scheduled = track == 0 ? s_core.absoluteFrame() :
+    const uint32_t scheduled = track == 0
+        ? s_core.absoluteFrame() + requestedCountIn :
         scheduleWithMargin(s_core.absoluteFrame(), timeline);
-    const uint32_t target = track == 0 ? kMaximumLoopFrames : timeline;
+    const uint32_t target = track == 0
+        ? (requestedTarget ? requestedTarget : kMaximumLoopFrames) : timeline;
     if (!s_core.beginRecording(track, scheduled, target)) {
         { SdIoGuard guard; s_recordFile.close(); }
         { SdIoGuard guard; if (SD.exists(temp)) SD.remove(temp); }  // P1-2
@@ -449,8 +466,14 @@ void loopEngineInit(bool sdMounted) {
     s_core.reset();
     __atomic_store_n(&s_recordFileTrack, LOOP_NO_TRACK, __ATOMIC_RELEASE);
     __atomic_store_n(&s_recordRequests, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_trackOneTargetFrames, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_trackOneCountInFrames, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_clearRequests, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_clearOutstanding, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_paused, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_metronome, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_soloTrack, LOOP_NO_TRACK, __ATOMIC_RELEASE);
+    s_preSoloMutedMask = 0;
     portENTER_CRITICAL(&s_metricsMux);
     s_maxReadUs = s_maxWriteUs = s_errors = 0;
     portEXIT_CRITICAL(&s_metricsMux);
@@ -462,10 +485,20 @@ void loopEngineInit(bool sdMounted) {
 }
 
 int32_t loopEngineProcessFrame(int16_t dryInput) {
-    return s_sdMounted ? s_core.processFrame(dryInput) : 0;
+    if (!s_sdMounted || __atomic_load_n(&s_paused, __ATOMIC_ACQUIRE)) return 0;
+    int32_t output = s_core.processFrame(dryInput);
+    if (__atomic_load_n(&s_metronome, __ATOMIC_ACQUIRE)) {
+        const uint32_t beatFrames = static_cast<uint32_t>(SAMPLE_RATE) * 60u /
+                                    (g_bpm ? g_bpm : 120u);
+        const uint32_t phase = beatFrames ? s_core.absoluteFrame() % beatFrames : 0;
+        if (phase < 96) output += static_cast<int32_t>(5000 * (96 - phase) / 96);
+    }
+    return output;
 }
+int32_t loopEngineLastTrackPcm(uint8_t track) { return s_core.lastTrackOutput(track); }
 
-bool loopEngineRequestRecord(uint8_t track) {
+bool loopEngineRequestRecord(uint8_t track, uint32_t targetFrames,
+                             uint32_t countInFrames) {
     if (!s_sdMounted || track >= LOOP_STREAM_TRACKS || loopEngineIsRecording() ||
         masterRecorderIsBusy() || stemRecorderIsBusy() || sdDiagnosticsIsRunning() ||
         micRecActive() || streamingSamplerIsRecording() ||
@@ -474,11 +507,25 @@ bool loopEngineRequestRecord(uint8_t track) {
     const LoopStreamState state = s_core.trackState(track);
     if (state != LOOP_STREAM_EMPTY && state != LOOP_STREAM_ERROR) return false;
     if (track > 0 && s_core.timelineFrames() == 0) return false;
+    if (track > 0 && (targetFrames != 0 || countInFrames != 0)) return false;
+    if (track == 0 && targetFrames > kMaximumLoopFrames) return false;
+    if (track == 0) {
+        __atomic_store_n(&s_trackOneTargetFrames, targetFrames, __ATOMIC_RELEASE);
+        __atomic_store_n(&s_trackOneCountInFrames, countInFrames, __ATOMIC_RELEASE);
+    }
     __atomic_fetch_or(&s_recordRequests, 1u << track, __ATOMIC_ACQ_REL);
     return true;
 }
 
 bool loopEngineStopRecording(uint8_t track) {
+    if (track > 0 && track < LOOP_STREAM_TRACKS) {
+        const LoopStreamState state = s_core.trackState(track);
+        // Layers 2..6 are exact Track-1-length takes. An early button press
+        // means "finish this layer" at the already scheduled boundary; an
+        // immediate finalize would create a short file and reject it.
+        if (state == LOOP_STREAM_RECORD_WAIT || state == LOOP_STREAM_RECORDING)
+            return true;
+    }
     return s_core.requestStopRecording(track);
 }
 
@@ -489,6 +536,36 @@ bool loopEngineSetMuted(uint8_t track, bool muted) {
 bool loopEngineSetVolume(uint8_t track, uint8_t percent) {
     if (percent > 100) return false;
     return s_core.setVolumeQ15(track, static_cast<int16_t>(percent * 32767u / 100u));
+}
+
+bool loopEngineSetSolo(uint8_t track, bool solo) {
+    if (track >= LOOP_STREAM_TRACKS) return false;
+    const uint8_t current = static_cast<uint8_t>(
+        __atomic_load_n(&s_soloTrack, __ATOMIC_ACQUIRE));
+    if (solo) {
+        if (current != LOOP_NO_TRACK && current != track) loopEngineSetSolo(current, false);
+        s_preSoloMutedMask = 0;
+        for (uint8_t index = 0; index < LOOP_STREAM_TRACKS; ++index) {
+            if (s_core.muted(index)) s_preSoloMutedMask |= static_cast<uint8_t>(1u << index);
+            s_core.setMuted(index, index != track);
+        }
+        __atomic_store_n(&s_soloTrack, track, __ATOMIC_RELEASE);
+    } else {
+        if (current != track) return false;
+        for (uint8_t index = 0; index < LOOP_STREAM_TRACKS; ++index)
+            s_core.setMuted(index, (s_preSoloMutedMask & (1u << index)) != 0);
+        __atomic_store_n(&s_soloTrack, LOOP_NO_TRACK, __ATOMIC_RELEASE);
+    }
+    return true;
+}
+
+bool loopEngineSetPaused(bool paused) {
+    if (loopEngineIsRecording()) return false;
+    __atomic_store_n(&s_paused, paused ? 1u : 0u, __ATOMIC_RELEASE);
+    return true;
+}
+void loopEngineSetMetronome(bool enabled) {
+    __atomic_store_n(&s_metronome, enabled ? 1u : 0u, __ATOMIC_RELEASE);
 }
 
 bool loopEngineClear(uint8_t track) {
@@ -524,6 +601,10 @@ bool loopEngineHasActiveIo() {
 LoopEngineSnapshot loopEngineSnapshot() {
     LoopEngineSnapshot snapshot = {};
     snapshot.available = s_sdMounted && s_task != nullptr;
+    snapshot.paused = __atomic_load_n(&s_paused, __ATOMIC_ACQUIRE) != 0;
+    snapshot.metronome = __atomic_load_n(&s_metronome, __ATOMIC_ACQUIRE) != 0;
+    snapshot.soloTrack = static_cast<uint8_t>(
+        __atomic_load_n(&s_soloTrack, __ATOMIC_ACQUIRE));
     snapshot.recordTrack = s_core.recordTrack();
     if (snapshot.recordTrack == LOOP_NO_TRACK)
         snapshot.recordTrack = static_cast<uint8_t>(

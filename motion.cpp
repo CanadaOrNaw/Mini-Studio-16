@@ -3,6 +3,7 @@
 #include "event_looper.h"
 #include "sequencer.h"
 #include "midi_output.h"
+#include "performance_state.h"
 
 #include <Arduino.h>
 #include <M5Cardputer.h>
@@ -15,6 +16,16 @@ uint32_t s_lastUpdateMs = 0;
 uint16_t s_lastRecordStep[MOTION_MAPPING_COUNT];
 uint8_t s_lastRecordValue[MOTION_MAPPING_COUNT];
 uint8_t s_lastOutputValue[MOTION_MAPPING_COUNT];
+uint8_t s_lastMedoTilt = 0, s_lastMedoMove = 0;
+
+void sendMedoGesture(MedoGesture gesture, uint8_t value, bool release = false) {
+    const MedoMidiGesture midi = MedoPerformance::gestureMidi(gesture, value, 15);
+    uint8_t message[3] = {midi.status, midi.data1, midi.data2};
+    const uint8_t length = (midi.status & 0xF0u) == 0xD0u ? 2 : 3;
+    midiOutputMessage(message, length);
+    if (release && (midi.status & 0xF0u) == 0x90u)
+        midiOutputNoteOff(15, midi.data1);
+}
 
 void applyTarget(uint8_t target, uint8_t value) {
     if (target == MOTION_TARGET_NONE || target >= MOTION_TARGET_COUNT) return;
@@ -97,6 +108,18 @@ void motionUpdate() {
     s_snapshot.gestures = output.gestures;
     ++s_snapshot.samples;
     applyMappings();
+    const uint8_t tilt = output.values[MOTION_SOURCE_TILT_X];
+    const uint8_t move = output.values[MOTION_SOURCE_GYRO];
+    if (tilt > s_lastMedoTilt + 2 || tilt + 2 < s_lastMedoTilt) {
+        sendMedoGesture(MEDO_TILT, tilt); s_lastMedoTilt = tilt;
+    }
+    if (move > s_lastMedoMove + 3 || move + 3 < s_lastMedoMove) {
+        sendMedoGesture(MEDO_MOVE, move); s_lastMedoMove = move;
+    }
+    if (output.gestures & MOTION_GESTURE_SHAKE) sendMedoGesture(MEDO_SHAKE, 127, true);
+    if (output.gestures & MOTION_GESTURE_SLAP) sendMedoGesture(MEDO_SLAP, 127, true);
+    if (output.gestures & MOTION_GESTURE_WIGGLE)
+        sendMedoGesture(MEDO_WIGGLE, output.values[MOTION_SOURCE_TILT_Y]);
 }
 
 bool motionSetMapping(uint8_t mapping, MotionSource source, MotionTarget target) {

@@ -17,7 +17,8 @@ int main() {
     looper.forStep(2047, [&](const EventLoopEvent& event) {
         ++fired; assert(event.value1 == 60);
     });
-    looper.forStep(4095, [&](const EventLoopEvent&) { ++fired; });
+    looper.forStep(2047 + 128 * EVENT_LOOP_TICKS_PER_BAR,
+                   [&](const EventLoopEvent&) { ++fired; });
     assert(fired == 4);
 
     assert(looper.setMuted(EVENT_ROLE_BASS, true));
@@ -28,16 +29,22 @@ int main() {
     assert(looper.setBars(EVENT_ROLE_DRUM, 2));
     assert(looper.setArmed(EVENT_ROLE_DRUM, true));
     assert(looper.add(35, EVENT_ROLE_DRUM, EVENT_LOOP_DRUM, 3, 127, 0));
-    assert(looper.event(2).step == 3);
+    assert(looper.event(2).step == 35);
     assert(looper.clearTrack(EVENT_ROLE_DRUM));
     assert(looper.count() == 2);
-    assert(!looper.add(0, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 60, 0, 2));
+    assert(looper.add(0, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 60, 127,
+                      EVENT_LOOP_FLAG_ROLE_GAIN));
+    assert(!looper.add(0, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 60, 0, 4));
     assert(!looper.add(0, EVENT_ROLE_BASS, EVENT_LOOP_DRUM, 0, 127, 0,
                        EVENT_LOOP_FLAG_NOTE_OFF));
 
-    EventLoopEvent invalid = {2048, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 1, 2, 0};
+    EventLoopEvent invalid = {EVENT_LOOP_MAX_STEPS, EVENT_ROLE_BASS, EVENT_LOOP_NOTE, 0, 1, 2, 0};
     assert(!looper.appendLoaded(invalid));
     assert(!looper.setBars(0, 129));
+    assert(looper.setAllBars(128));
+    for (uint8_t track = 0; track < EVENT_LOOP_TRACKS; ++track)
+        assert(looper.bars(track) == 128);
+    assert(!looper.setAllBars(0));
 
     EventLooperCore capacity;
     assert(capacity.setArmed(0, true));
@@ -49,12 +56,12 @@ int main() {
     // length instead of orphaning them beyond it.
     EventLooperCore shrink;
     assert(shrink.setArmed(0, true));
-    assert(shrink.setBars(0, 4));   // 64 steps
+    assert(shrink.setBars(0, 4));   // 384 ticks
     assert(shrink.add(3, 0, EVENT_LOOP_DRUM, 0, 127, 0));
-    assert(shrink.add(50, 0, EVENT_LOOP_DRUM, 1, 127, 0));
-    assert(shrink.setBars(0, 2));   // 32 steps: step 50 must become 18
+    assert(shrink.add(350, 0, EVENT_LOOP_DRUM, 1, 127, 0));
+    assert(shrink.setBars(0, 2));   // 192 ticks: tick 350 must become 158
     bool sawWrapped = false;
-    shrink.forStep(18, [&](const EventLoopEvent& event) {
+    shrink.forStep(158, [&](const EventLoopEvent& event) {
         if (event.target == 1) sawWrapped = true;
     });
     assert(sawWrapped);

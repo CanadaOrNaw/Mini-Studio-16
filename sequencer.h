@@ -58,6 +58,7 @@ extern uint8_t    g_playStep;
 extern uint8_t    g_playPattern;    // pattern currently sounding
 extern uint8_t    g_songPos;
 extern uint16_t   g_bpm;
+extern uint8_t    g_swing;
 
 // edit state
 extern uint8_t    g_curPattern;     // pattern being edited/viewed
@@ -73,16 +74,18 @@ void sequencerTick();               // call every loop(); handles step timing
 void sequencerExternalStart(bool fromTop);
 void sequencerExternalStop();
 void sequencerExternalStep();
+void sequencerExternalEventTick();
 void sequencerExternalSongPosition(uint16_t position);
 uint16_t sequencerEventRecordStep();
+uint8_t sequencerPatternRecordStep();
 uint32_t sequencerMidiClockDropped();
 
 // Live input -> sound + optional record
 void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent,
                    bool legato, uint8_t velocity = 0);
 void liveSynthRelease(uint8_t track, uint8_t midiNote);
-void liveDrumHit(uint8_t lane);
-void liveSampleHit(uint8_t slot, uint8_t key);
+void liveDrumHit(uint8_t lane, uint8_t velocity = 127);
+void liveSampleHit(uint8_t slot, uint8_t key, uint8_t velocity = 127);
 
 // pattern + lane helpers (new-layout / sampling additions)
 void clonePatternTo(uint8_t dst);   // copy current pattern into slot dst

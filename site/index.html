@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#071016">
-  <meta name="description" content="Mini Studio 16 is an SD-backed groovebox, multi-engine synth, sampler, looper, recorder and MIDI controller for M5Stack Cardputer-ADV.">
+  <meta name="description" content="Mini Studio 16 combines HiChord-style harmony and looping, PO-33 sampling, MEDO performance, synthesis, recording and MIDI on M5Stack Cardputer-ADV.">
   <title>Mini Studio 16 — Cardputer-ADV groovebox</title>
   <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -22,7 +22,7 @@
       <a href="#controls">Controls</a>
       <a href="#audio-cap">Audio Cap</a>
       <a href="#make">Make it</a>
-      <a href="https://github.com/CanadaOrNaw/Mini-Studio-16/tree/agent/v3-alpha-sd-streaming">GitHub</a>
+      <a href="https://github.com/CanadaOrNaw/Mini-Studio-16">GitHub</a>
     </nav>
   </header>
 
@@ -31,11 +31,11 @@
       <div class="hero-copy">
         <div class="eyebrow"><span class="pulse"></span> PRE-HARDWARE VALIDATION ALPHA</div>
         <h1>A whole studio.<br><em>84 millimetres wide.</em></h1>
-        <p class="lede">Three synth engines, sixteen samples, six synced audio loops, five event tracks, motion, MIDI, master WAVs and stems—running standalone on the Cardputer-ADV.</p>
+        <p class="lede">A seven-chord HiChord-style instrument, complete PO-33-style sampler workflow, five-role MEDO performance layer, three synth engines, recording and MIDI—running standalone on the Cardputer-ADV.</p>
         <div class="actions">
           <a class="button primary" href="downloads/START_HERE.md" download>Start here</a>
           <a class="button secondary" href="#make">Build the alpha</a>
-          <a class="button secondary" href="https://github.com/CanadaOrNaw/Mini-Studio-16/pull/1">Follow development</a>
+          <a class="button secondary" href="https://github.com/CanadaOrNaw/Mini-Studio-16">View source</a>
         </div>
         <p class="honesty">Software paths compile and pass host tests. Physical audio, timing, fit, radio and SD performance still require the actual device.</p>
       </div>
@@ -68,6 +68,9 @@
         <p>Long audio streams through bounded RAM rings so the real-time renderer never waits on the SD filesystem.</p>
       </div>
       <div class="feature-grid">
+        <article class="feature feature-wide"><span class="feature-no">HI</span><h3>Chord instrument</h3><p>Seven diatonic buttons, 10 scales, 28 chord types, directional maps and all 15 behavior-level modes: three-speed strum, six-pattern arp, repeat, lead, drone, grooves, variable sequence+bounce, timed practice, audible ear rounds, pitch-detected mic sample, tuner, mixer, presets, effects and vocoder.</p><div class="chips"><b>CHORDS</b><b>6 LOOPS</b><b>15 MODES</b></div></article>
+        <article class="feature"><span class="feature-no">KO</span><h3>PO workflow</h3><p>Sixteen 40-second-share slots, melodic/sliced editing and real PCM slice copy, swing, parameter locks, 16×16 patterns, 128 chain entries and 15 punch effects.</p></article>
+        <article class="feature"><span class="feature-no">ME</span><h3>MEDO workflow</h3><p>Drum, Bass, Chord, Lead and Sample roles across 128 bars with overdub, dynamic role mix, three quantizers, scales, an actual four-direction arp and eight gestures.</p></article>
         <article class="feature feature-wide"><span class="feature-no">03</span><h3>Synthesis engines</h3><p>The untouched original MG/303, expanded subtractive MGX, and genuine four-operator FM4 are selectable per track.</p><div class="chips"><b>MG/303</b><b>MGX</b><b>FM4</b></div></article>
         <article class="feature"><span class="feature-no">16</span><h3>Sample slots</h3><p>Forty shared seconds, melodic or sliced playback, trim, pitch, filter and step locks.</p></article>
         <article class="feature"><span class="feature-no">06</span><h3>Audio loops</h3><p>Independent 20-second SD tracks locked to the exact Track 1 timeline.</p></article>
@@ -103,9 +106,14 @@
         <button role="tab" aria-selected="true" data-context="global">Global</button>
         <button role="tab" aria-selected="false" data-context="pattern">Pattern</button>
         <button role="tab" aria-selected="false" data-context="sound">Sound</button>
+        <button role="tab" aria-selected="false" data-context="fx">FX</button>
+        <button role="tab" aria-selected="false" data-context="vocoder">Vocoder</button>
+        <button role="tab" aria-selected="false" data-context="chord">Chord</button>
         <button role="tab" aria-selected="false" data-context="sample">Sample</button>
+        <button role="tab" aria-selected="false" data-context="ko">KO</button>
         <button role="tab" aria-selected="false" data-context="loops">Loops</button>
         <button role="tab" aria-selected="false" data-context="event">Event</button>
+        <button role="tab" aria-selected="false" data-context="medo">MEDO</button>
         <button role="tab" aria-selected="false" data-context="motion">Motion</button>
         <button role="tab" aria-selected="false" data-context="song">Song</button>
         <button role="tab" aria-selected="false" data-context="diag">SD test</button>
@@ -138,7 +146,7 @@
         </article>
         <article class="test-card">
           <p class="step-label">03 / TEST</p><h3>Run the hardware evidence pass</h3><p>The checked-in guide covers flash integrity, heap/stack telemetry, audio, mic, headphones, SD stalls, six streams, recording, MIDI, IMU, dual-role rebooting and power-cut recovery.</p>
-          <a class="text-link" href="https://github.com/CanadaOrNaw/Mini-Studio-16/blob/agent/v3-alpha-sd-streaming/docs/CARDPUTER_TESTING.md">Open the Cardputer test guide →</a>
+          <a class="text-link" href="https://github.com/CanadaOrNaw/Mini-Studio-16/blob/main/docs/CARDPUTER_TESTING.md">Open the Cardputer test guide →</a>
         </article>
       </div>
     </section>
@@ -155,7 +163,7 @@
   <footer>
     <div class="brand"><img src="assets/mark.svg" alt="" width="30" height="30"><span>MINI STUDIO <b>16</b></span></div>
     <p>Independent MIT-licensed fork of <a href="https://github.com/matoslav/MicroGroove">Microgroove</a> by <a href="https://lebiro.studio">lebiro.studio</a>. Cardputer-ADV is made by M5Stack. Launcher informed SD research; no Launcher code is included.</p>
-    <p><a href="https://github.com/CanadaOrNaw/Mini-Studio-16/tree/agent/v3-alpha-sd-streaming">Source</a> · <a href="https://github.com/CanadaOrNaw/Mini-Studio-16/blob/agent/v3-alpha-sd-streaming/LICENSE">MIT license and full attribution</a> · Build <span id="build-sha">development</span></p>
+    <p><a href="https://github.com/CanadaOrNaw/Mini-Studio-16">Source</a> · <a href="https://github.com/CanadaOrNaw/Mini-Studio-16/blob/main/LICENSE">MIT license and full attribution</a> · Build <span id="build-sha">development</span></p>
   </footer>
 </body>
 </html>

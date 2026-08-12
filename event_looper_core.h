@@ -5,9 +5,12 @@
 
 static const uint8_t EVENT_LOOP_TRACKS = 5;
 static const uint16_t EVENT_LOOP_MAX_BARS = 128;
-static const uint16_t EVENT_LOOP_STEPS_PER_BAR = 16;
+static const uint16_t EVENT_LOOP_TICKS_PER_BAR = 96; // MIDI-clock resolution
+static const uint8_t EVENT_LOOP_TICKS_PER_STEP = 6;
+static const uint16_t EVENT_LOOP_LEGACY_STEPS_PER_BAR = 16;
+static const uint16_t EVENT_LOOP_STEPS_PER_BAR = EVENT_LOOP_TICKS_PER_BAR;
 static const uint16_t EVENT_LOOP_MAX_STEPS =
-    EVENT_LOOP_MAX_BARS * EVENT_LOOP_STEPS_PER_BAR;
+    EVENT_LOOP_MAX_BARS * EVENT_LOOP_TICKS_PER_BAR;
 static const uint16_t EVENT_LOOP_CAPACITY = 2048;
 
 enum EventLoopType : uint8_t {
@@ -18,6 +21,7 @@ enum EventLoopType : uint8_t {
 };
 
 static const uint8_t EVENT_LOOP_FLAG_NOTE_OFF = 1u;
+static const uint8_t EVENT_LOOP_FLAG_ROLE_GAIN = 2u;
 
 enum EventLoopRole : uint8_t {
     EVENT_ROLE_DRUM = 0,
@@ -70,6 +74,13 @@ public:
             if (_events[index].track == track && _events[index].step >= length)
                 _events[index].step =
                     static_cast<uint16_t>(_events[index].step % length);
+        return true;
+    }
+
+    bool setAllBars(uint16_t bars) {
+        if (bars == 0 || bars > EVENT_LOOP_MAX_BARS) return false;
+        for (uint8_t track = 0; track < EVENT_LOOP_TRACKS; ++track)
+            if (!setBars(track, bars)) return false;
         return true;
     }
 
@@ -153,8 +164,11 @@ public:
 
 private:
     static bool validFlags(EventLoopType type, uint8_t flags) {
-        return type == EVENT_LOOP_NOTE ? (flags & ~EVENT_LOOP_FLAG_NOTE_OFF) == 0
-                                       : flags == 0;
+        if (type == EVENT_LOOP_CONTROL) return flags == 0;
+        const uint8_t allowed = type == EVENT_LOOP_NOTE
+            ? static_cast<uint8_t>(EVENT_LOOP_FLAG_NOTE_OFF | EVENT_LOOP_FLAG_ROLE_GAIN)
+            : EVENT_LOOP_FLAG_ROLE_GAIN;
+        return (flags & ~allowed) == 0;
     }
 
     EventLoopEvent _events[EVENT_LOOP_CAPACITY];

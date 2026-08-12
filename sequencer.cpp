@@ -2,6 +2,8 @@
 // CardputerGroovebox - sequencer.cpp
 // ============================================================
 #include "sequencer.h"
+#include "performance_state.h"
+#include "input.h"
 #include <Arduino.h>
 #include <string.h>
 #include "sampler_slots.h"
@@ -12,6 +14,8 @@
 #include "midi_output.h"
 #include "midi_clock_output.h"
 #include "song_chain.h"
+#include "swing_timing.h"
+#include "loop_engine.h"
 
 Pattern    g_patterns[NUM_PATTERNS];
 uint8_t    g_song[SONG_LENGTH];
@@ -30,6 +34,7 @@ uint8_t    g_playStep    = 0;
 uint8_t    g_playPattern = 0;
 uint8_t    g_songPos     = 0;
 uint16_t   g_bpm         = 128;
+uint8_t    g_swing       = 50;
 
 uint8_t    g_curPattern  = 0;
 uint8_t    g_curTrack    = 0;
@@ -41,9 +46,15 @@ extern bool g_needRedraw;   // owned by ui.cpp
 
 static uint32_t s_stepUs      = 0;
 static uint32_t s_lastStepUs  = 0;
+static uint32_t s_lastEventTickUs = 0;
 static bool     s_externalClock = false;
 static MidiClockOutputScheduler s_midiClock;
 static uint32_t s_stepPeriod() { return 60000000UL / g_bpm / 4; }   // 16th notes
+static uint32_t s_currentStepPeriod() {
+    const uint8_t soundingStep = g_playStep == 0 ? NUM_STEPS - 1 : g_playStep - 1;
+    return swingStepPeriod(s_stepPeriod(), g_swing, soundingStep);
+}
+static uint32_t s_eventTickPeriod() { return 60000000UL / g_bpm / 24; }
 
 void sequencerInit() {
     memset(g_patterns, 0, sizeof(g_patterns));
@@ -75,7 +86,7 @@ void sequencerInit() {
 }
 
 // ---------- triggering ----------
-static void triggerLane(uint8_t lane) {
+static void triggerLane(uint8_t lane, uint8_t velocity = 127) {
     if (lane >= NUM_DRUM_LANES) return;
     uint8_t grp = g_drumLanes[lane].chokeGroup;
     if (grp != 0) {
@@ -83,11 +94,30 @@ static void triggerLane(uint8_t lane) {
             if (i != lane && g_drumLanes[i].chokeGroup == grp)
                 g_drumLanes[i].choke();
     }
-    g_drumLanes[lane].trigger();
+    g_drumLanes[lane].trigger(velocity);
 }
 
 static void triggerStep(uint8_t step) {
+    if (!g_poLiveEffectActive)
+        g_poEffectProcessor.engage(g_poPatternEffects.get(g_playPattern, step));
     Pattern& p = g_patterns[g_playPattern];
+
+    if (g_hiChordPerformance.mode() == HICHORD_SEQUENCER ||
+        (g_hiChordBounceActive && g_hiChordBounceSource == HICHORD_BOUNCE_SEQUENCE)) {
+        const HiChordSequenceStep &chordStep = g_hiChordPerformance.sequenceStep(step);
+        if (chordStep.enabled) {
+            const ChordVoicing chord = g_chordEngine.build(g_chordSettings, chordStep.degree,
+                static_cast<ChordDirection>(chordStep.direction), chordStep.slashDegree);
+            g_synths[0].setVoices(3); g_synths[1].setVoices(3);
+            for (uint8_t noteIndex = 0; noteIndex < chord.count; ++noteIndex) {
+                const uint8_t midi = chord.notes[noteIndex];
+                const uint8_t track = noteIndex < chord.chordToneCount
+                    ? static_cast<uint8_t>(noteIndex / 3u) : 2u;
+                g_synths[track].noteOn(noteToFreq(static_cast<uint8_t>(midi % 12u + 1u),
+                    static_cast<uint8_t>(midi / 12u - 1u)), false, false, midi, 104);
+            }
+        }
+    }
 
     for (int s = 0; s < NUM_SYNTHS; s++) {
         if (g_synthMute[s]) continue;
@@ -119,6 +149,9 @@ static void triggerStep(uint8_t step) {
 }
 
 static void triggerEvent(const EventLoopEvent& event) {
+    const uint8_t roleVelocity = (event.flags & EVENT_LOOP_FLAG_ROLE_GAIN) != 0
+        ? g_medoPerformance.settings(static_cast<MedoRole>(event.track)).volume
+        : 127u;
     switch (event.type) {
         case EVENT_LOOP_NOTE: {
             if (event.target >= NUM_SYNTHS || event.value1 < 12 || event.value1 > 127)
@@ -130,14 +163,20 @@ static void triggerEvent(const EventLoopEvent& event) {
             else
                 g_synths[event.target].noteOn(noteToFreq(note, octave),
                                               event.value2 >= 100, false,
-                                              event.value1, event.value2);
+                                              event.value1, static_cast<uint8_t>(
+                                                  static_cast<uint16_t>(event.value2) *
+                                                  roleVelocity / 127u));
             break;
         }
         case EVENT_LOOP_DRUM:
-            triggerLane(event.target);
+            triggerLane(event.target, static_cast<uint8_t>(
+                static_cast<uint16_t>(event.value1) * roleVelocity / 127u));
             break;
         case EVENT_LOOP_SAMPLE:
-            streamingSamplerTrigger(event.target, event.value1);
+            streamingSamplerTrigger(event.target, event.value1, nullptr,
+                                    static_cast<uint8_t>(
+                                        static_cast<uint16_t>(event.value2) *
+                                        roleVelocity / 127u));
             break;
         case EVENT_LOOP_CONTROL:
             motionApplyRecordedControl(event.target, event.value1);
@@ -171,6 +210,7 @@ void sequencerStart(bool fromTop) {
     prepareStart(fromTop);
     const uint32_t now = micros();
     s_lastStepUs = now - s_stepPeriod();   // fire step immediately
+    s_lastEventTickUs = now - s_eventTickPeriod();
     s_midiClock.start(now);
     if (!midiInputIsDispatching()) {
         if (!fromTop) {
@@ -207,11 +247,30 @@ static void songAdvance() {
 
 static void advanceOneStep() {
     triggerStep(g_playStep);
-    g_eventLooper.forStep(g_eventLoopPosition, triggerEvent);
-    eventLooperAdvance();
     g_playStep++;
-    if (g_playStep >= NUM_STEPS) {
+    const uint8_t playLength = (g_hiChordPerformance.mode() == HICHORD_SEQUENCER ||
+        (g_hiChordBounceActive && g_hiChordBounceSource == HICHORD_BOUNCE_SEQUENCE))
+        ? g_hiChordSequenceLength : NUM_STEPS;
+    if (g_playStep >= playLength) {
         g_playStep = 0;
+        if (g_hiChordBounceActive && g_hiChordBounceTrack >= 0) {
+            const uint8_t track = static_cast<uint8_t>(g_hiChordBounceTrack);
+            const LoopStreamState state = loopEngineSnapshot().tracks[track].state;
+            // Track 1 has a free timeline and needs an explicit one-pattern
+            // stop. Later tracks own an exact Track-1 target and must be left
+            // running until LoopStreamCore reaches it; stopping here used to
+            // create a short take that finalizeRecording rejected.
+            if (track == 0 && state == LOOP_STREAM_RECORDING)
+                loopEngineStopRecording(track);
+            else if (state != LOOP_STREAM_RECORD_WAIT &&
+                     state != LOOP_STREAM_RECORDING &&
+                     state != LOOP_STREAM_FINALIZING) {
+                if (g_hiChordBounceSource == HICHORD_BOUNCE_DRONE)
+                    inputStopHiChordPerformanceNotes();
+                g_hiChordBounceActive = false;
+                g_hiChordBounceTrack = -1;
+            }
+        }
         if (g_songMode) songAdvance();
         else            g_playPattern = g_curPattern;  // pattern switch on bar
     }
@@ -221,10 +280,16 @@ static void advanceOneStep() {
 void sequencerTick() {
     if (!g_playing || s_externalClock) return;
     uint32_t now = micros();
+    while (now - s_lastEventTickUs >= s_eventTickPeriod()) {
+        s_lastEventTickUs += s_eventTickPeriod();
+        g_eventLooper.forStep(g_eventLoopPosition, triggerEvent);
+        eventLooperAdvance();
+    }
     uint8_t clockPulses = s_midiClock.pulsesDue(now, g_bpm);
     while (clockPulses--) midiOutputRealtime(0xF8);
-    if (now - s_lastStepUs < s_stepPeriod()) return;
-    s_lastStepUs += s_stepPeriod();                 // accumulate: no drift
+    const uint32_t stepPeriod = s_currentStepPeriod();
+    if (now - s_lastStepUs < stepPeriod) return;
+    s_lastStepUs += stepPeriod;                     // pair totals remain drift-free
     advanceOneStep();
 }
 
@@ -240,13 +305,19 @@ void sequencerExternalStep() {
     if (s_externalClock && g_playing) advanceOneStep();
 }
 
+void sequencerExternalEventTick() {
+    if (!s_externalClock || !g_playing) return;
+    g_eventLooper.forStep(g_eventLoopPosition, triggerEvent);
+    eventLooperAdvance();
+}
+
 void sequencerExternalSongPosition(uint16_t position) {
     g_playStep = static_cast<uint8_t>(position % NUM_STEPS);
     if (g_songMode) {
         g_songPos = static_cast<uint8_t>((position / NUM_STEPS) % SONG_LENGTH);
         if (g_song[g_songPos] != SONG_EMPTY) g_playPattern = g_song[g_songPos];
     }
-    eventLooperSetPosition(position);
+    eventLooperSetPosition(static_cast<uint16_t>(position * EVENT_LOOP_TICKS_PER_STEP));
     g_needRedraw = true;
 }
 
@@ -254,7 +325,7 @@ uint16_t sequencerEventRecordStep() {
     uint16_t previous = g_eventLoopPosition == 0
         ? EVENT_LOOP_MAX_STEPS - 1 : g_eventLoopPosition - 1;
     if (s_externalClock) return previous;
-    return (micros() - s_lastStepUs > s_stepPeriod() / 2)
+    return (micros() - s_lastEventTickUs > s_eventTickPeriod() / 2)
         ? g_eventLoopPosition : previous;
 }
 
@@ -267,8 +338,12 @@ static uint8_t quantizedStep() {
         return g_playStep == 0 ? NUM_STEPS - 1 : g_playStep - 1;
     uint32_t elapsed = micros() - s_lastStepUs;
     uint8_t  step    = g_playStep == 0 ? NUM_STEPS - 1 : g_playStep - 1;  // step just triggered
-    if (elapsed > s_stepPeriod() / 2) step = g_playStep;                   // round up
+    if (elapsed > s_currentStepPeriod() / 2) step = g_playStep;            // round up
     return step % NUM_STEPS;
+}
+
+uint8_t sequencerPatternRecordStep() {
+    return g_playing ? quantizedStep() : g_curStep;
 }
 
 void liveSynthNote(uint8_t track, uint8_t note, uint8_t octave, bool accent,
@@ -314,11 +389,11 @@ void liveSynthRelease(uint8_t track, uint8_t midiNote) {
     eventLooperRecordSynthRelease(sequencerEventRecordStep(), track, midiNote);
 }
 
-void liveDrumHit(uint8_t lane) {
-    triggerLane(lane);
+void liveDrumHit(uint8_t lane, uint8_t velocity) {
+    triggerLane(lane, velocity);
     if (!midiInputIsDispatching())
-        midiOutputNoteOn(9, static_cast<uint8_t>(36 + lane), 127);
-    eventLooperRecordDrum(sequencerEventRecordStep(), lane, 127);
+        midiOutputNoteOn(9, static_cast<uint8_t>(36 + lane), velocity);
+    eventLooperRecordDrum(sequencerEventRecordStep(), lane, velocity);
     if (g_recEnabled) {
         if (g_playing) {
             g_patterns[g_playPattern].drums[quantizedStep()] |= (1 << lane);
@@ -330,10 +405,10 @@ void liveDrumHit(uint8_t lane) {
     }
 }
 
-void liveSampleHit(uint8_t slot, uint8_t key) {
+void liveSampleHit(uint8_t slot, uint8_t key, uint8_t velocity) {
     if (slot >= SAMPLER_SLOT_COUNT || key >= SAMPLER_SLICE_COUNT ||
-        !streamingSamplerTrigger(slot, key)) return;
-    eventLooperRecordSample(sequencerEventRecordStep(), slot, key, 127);
+        !streamingSamplerTrigger(slot, key, nullptr, velocity)) return;
+    eventLooperRecordSample(sequencerEventRecordStep(), slot, key, velocity);
     if (!g_recEnabled) return;
     const uint8_t pattern = g_playing ? g_playPattern : g_curPattern;
     const uint8_t step = g_playing ? quantizedStep() : g_curStep;

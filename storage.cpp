@@ -13,6 +13,7 @@
 #include "event_looper.h"
 #include "motion.h"
 #include "synth_project.h"
+#include "performance_project.h"
 #include <SD.h>
 #include "sd_io_arbiter.h"
 #include <memory>
@@ -23,7 +24,7 @@
 uint8_t g_curProject = 0;
 
 #define GBX_MAGIC   0x31584247u   // "GBX1"
-#define GBX_VERSION 8             // v8: per-track synthesis engines and patches
+#define GBX_VERSION 9             // v9: HiChord/PO/MEDO performance state
 #define LEGACY_NUM_PATTERNS 8
 #define LEGACY_SONG_LENGTH  64
 
@@ -154,6 +155,11 @@ struct __attribute__((packed)) ProjectFileV8 {
     SaveSynthEngineState synthEngines[NUM_SYNTHS];
 };
 
+struct __attribute__((packed)) ProjectFileV9 {
+    ProjectFileV8 base;
+    SavePerformanceState performance;
+};
+
 union ProjectBuffer {
     ProjectFileV1 v1;
     ProjectFileV2 v2;
@@ -163,6 +169,7 @@ union ProjectBuffer {
     ProjectFileV6 v6;
     ProjectFileV7 v7;
     ProjectFileV8 v8;
+    ProjectFileV9 v9;
 };
 
 static_assert(sizeof(ProjectFileV1) == 1807, "GBX v1 layout changed");
@@ -175,6 +182,7 @@ static_assert(sizeof(ProjectFileV5) == 31808, "unexpected GBX v5 layout");
 static_assert(sizeof(ProjectFileV6) == 31816, "unexpected GBX v6 layout");
 static_assert(sizeof(ProjectFileV7) == 31823, "unexpected GBX v7 layout");
 static_assert(sizeof(ProjectFileV8) == 32117, "unexpected GBX v8 layout");
+static_assert(sizeof(ProjectFileV9) == 33805, "unexpected GBX v9 layout");
 
 // Project I/O is serialized on the main task and forbidden while recorders or
 // the streamed sampler own storage. Allocate the 31 KiB union only for the
@@ -238,14 +246,16 @@ static bool readProjectFile(const char* path, ProjectBuffer& loaded, uint16_t& v
                         version == 5 ? static_cast<void*>(&loaded.v5) :
                         version == 6 ? static_cast<void*>(&loaded.v6) :
                         version == 7 ? static_cast<void*>(&loaded.v7) :
-                                       static_cast<void*>(&loaded.v8);
+                        version == 8 ? static_cast<void*>(&loaded.v8) :
+                                       static_cast<void*>(&loaded.v9);
     const size_t expected = version == 1 ? sizeof(loaded.v1) :
                             version == 2 ? sizeof(loaded.v2) :
                             version == 3 ? sizeof(loaded.v3) :
                             version == 4 ? sizeof(loaded.v4) :
                             version == 5 ? sizeof(loaded.v5) :
                             version == 6 ? sizeof(loaded.v6) :
-                            version == 7 ? sizeof(loaded.v7) : sizeof(loaded.v8);
+                            version == 7 ? sizeof(loaded.v7) :
+                            version == 8 ? sizeof(loaded.v8) : sizeof(loaded.v9);
     const bool readOk = readChunked(f, static_cast<uint8_t*>(destination), expected);
     { SdIoGuard guard; f.close(); }
     return readOk;
@@ -270,10 +280,11 @@ bool storageSaveProject(uint8_t slot) {
         streamingSamplerBusy()) return false;
     ProjectBufferPtr buffer = allocateProjectBuffer();
     if (!buffer) return false;
-    ProjectFileV8& pf = buffer->v8;
+    ProjectFileV9& pf = buffer->v9;
     memset(&pf, 0, sizeof(pf));
 
-    ProjectFileV7& v7 = pf.base;
+    ProjectFileV8& v8 = pf.base;
+    ProjectFileV7& v7 = v8.base;
     ProjectFileV6& v6 = v7.base;
     ProjectFileV5& v5 = v6.base;
     ProjectFileV4& v4 = v5.base;
@@ -291,7 +302,7 @@ bool storageSaveProject(uint8_t slot) {
         base.synths[s] = { (uint8_t)v.oscMode, v.wtIndex,
                          v.fltCutoff, v.fltReso, v.fltEnvAmt,
                          v.ampDecRate, v.filtDecRate, v.volume };
-        synthProjectEncode(g_synths[s], pf.synthEngines[s]);
+        synthProjectEncode(g_synths[s], v8.synthEngines[s]);
     }
     for (int l = 0; l < NUM_DRUM_LANES; l++) {
         DrumLane& d = g_drumLanes[l];
@@ -371,6 +382,7 @@ bool storageSaveProject(uint8_t slot) {
         if (item.state == LOOP_STREAM_MUTED)
             v7.loopMix.mutedMask |= static_cast<uint8_t>(1u << track);
     }
+    performanceProjectEncode(pf.performance);
 
     char path[64]; slotPath(slot, path, sizeof(path));
     char tempPath[72], backupPath[72];
@@ -580,7 +592,7 @@ static bool stageSamplerV4(const ProjectFileV4& pf, SamplerStage& staged) {
     return true;
 }
 
-static bool validateEventsV5(const ProjectFileV5& pf) {
+static bool validateEventsV5(const ProjectFileV5& pf, bool highResolution) {
     if (pf.eventCount > EVENT_LOOP_CAPACITY) return false;
     for (uint8_t track = 0; track < EVENT_LOOP_TRACKS; ++track) {
         const uint16_t bars = pf.eventTracks[track].bars == 0
@@ -592,13 +604,18 @@ static bool validateEventsV5(const ProjectFileV5& pf) {
         const EventLoopEvent& event = pf.events[index];
         if (event.track >= EVENT_LOOP_TRACKS ||
             event.type < EVENT_LOOP_NOTE || event.type > EVENT_LOOP_CONTROL ||
-            (event.type == EVENT_LOOP_NOTE
-                 ? (event.flags & ~EVENT_LOOP_FLAG_NOTE_OFF) != 0
-                 : event.flags != 0))
+            (event.type == EVENT_LOOP_CONTROL
+                 ? event.flags != 0
+                 : event.type == EVENT_LOOP_NOTE
+                     ? (event.flags & ~(EVENT_LOOP_FLAG_NOTE_OFF |
+                                        EVENT_LOOP_FLAG_ROLE_GAIN)) != 0
+                     : (event.flags & ~EVENT_LOOP_FLAG_ROLE_GAIN) != 0))
             return false;
         const uint16_t bars = pf.eventTracks[event.track].bars == 0
             ? 128 : pf.eventTracks[event.track].bars;
-        if (event.step >= bars * EVENT_LOOP_STEPS_PER_BAR) return false;
+        const uint16_t units = highResolution ? EVENT_LOOP_TICKS_PER_BAR
+                                              : EVENT_LOOP_LEGACY_STEPS_PER_BAR;
+        if (event.step >= bars * units) return false;
         if ((event.type == EVENT_LOOP_NOTE &&
              (event.target >= NUM_SYNTHS || event.value1 < 12 || event.value1 > 127 ||
               event.value2 > 127)) ||
@@ -616,8 +633,8 @@ static bool validateEventsV5(const ProjectFileV5& pf) {
     return true;
 }
 
-static bool applyEventsV5(const ProjectFileV5& pf) {
-    if (!validateEventsV5(pf)) return false;
+static bool applyEventsV5(const ProjectFileV5& pf, bool highResolution) {
+    if (!validateEventsV5(pf, highResolution)) return false;
     g_eventLooper.clearAll();
     for (uint8_t track = 0; track < EVENT_LOOP_TRACKS; ++track) {
         const uint16_t bars = pf.eventTracks[track].bars == 0
@@ -626,8 +643,12 @@ static bool applyEventsV5(const ProjectFileV5& pf) {
         g_eventLooper.setArmed(track, (pf.eventTracks[track].flags & 1u) != 0);
         g_eventLooper.setMuted(track, (pf.eventTracks[track].flags & 2u) != 0);
     }
-    for (uint16_t index = 0; index < pf.eventCount; ++index)
-        if (!g_eventLooper.appendLoaded(pf.events[index])) return false;
+    for (uint16_t index = 0; index < pf.eventCount; ++index) {
+        EventLoopEvent event = pf.events[index];
+        if (!highResolution) event.step = static_cast<uint16_t>(
+            event.step * EVENT_LOOP_TICKS_PER_STEP);
+        if (!g_eventLooper.appendLoaded(event)) return false;
+    }
     return true;
 }
 
@@ -686,7 +707,8 @@ static bool stageProject(const ProjectBuffer& loaded, uint16_t version,
                          std::unique_ptr<SamplerStage>& samplerStage) {
     samplerStage.reset();
     if (version >= 3) {
-        const ProjectFileV3& baseFile = version == 8 ? loaded.v8.base.base.base.base.base :
+        const ProjectFileV3& baseFile = version == 9 ? loaded.v9.base.base.base.base.base.base :
+                                             version == 8 ? loaded.v8.base.base.base.base.base :
                                              version == 7 ? loaded.v7.base.base.base.base :
                                              version == 6 ? loaded.v6.base.base.base :
                                              version == 5 ? loaded.v5.base.base :
@@ -702,6 +724,7 @@ static bool stageProject(const ProjectBuffer& loaded, uint16_t version,
         samplerStage.reset(new (std::nothrow) SamplerStage);
         if (!samplerStage) return false;
         const ProjectFileV4& samplerFile =
+            version == 9 ? loaded.v9.base.base.base.base.base :
             version == 8 ? loaded.v8.base.base.base.base :
             version == 7 ? loaded.v7.base.base.base :
             version == 6 ? loaded.v6.base.base :
@@ -709,23 +732,28 @@ static bool stageProject(const ProjectBuffer& loaded, uint16_t version,
         if (!stageSamplerV4(samplerFile, *samplerStage)) return false;
     }
     if (version >= 5) {
-        const ProjectFileV5& eventFile = version == 8 ? loaded.v8.base.base.base :
+        const ProjectFileV5& eventFile = version == 9 ? loaded.v9.base.base.base.base :
+                                                version == 8 ? loaded.v8.base.base.base :
                                                 version == 7 ? loaded.v7.base.base :
                                                 version == 6 ? loaded.v6.base : loaded.v5;
-        if (!validateEventsV5(eventFile)) return false;
+        if (!validateEventsV5(eventFile, version == 9)) return false;
     }
     if (version >= 6) {
-        const ProjectFileV6& motionFile = version == 8 ? loaded.v8.base.base :
+        const ProjectFileV6& motionFile = version == 9 ? loaded.v9.base.base.base :
+                                                 version == 8 ? loaded.v8.base.base :
                                                  version == 7 ? loaded.v7.base : loaded.v6;
         if (!validateMotionV6(motionFile)) return false;
     }
     if (version >= 7) {
-        const SaveLoopMix& mix = version == 8 ? loaded.v8.base.loopMix : loaded.v7.loopMix;
+        const SaveLoopMix& mix = version == 9 ? loaded.v9.base.base.loopMix :
+                                 version == 8 ? loaded.v8.base.loopMix : loaded.v7.loopMix;
         if (!validateLoopMixV7(mix)) return false;
     }
-    if (version == 8)
+    if (version >= 8)
         for (uint8_t synth = 0; synth < NUM_SYNTHS; ++synth)
-            if (!synthProjectValidate(loaded.v8.synthEngines[synth])) return false;
+            if (!synthProjectValidate(version == 9 ? loaded.v9.base.synthEngines[synth] :
+                                                   loaded.v8.synthEngines[synth])) return false;
+    if (version == 9 && !performanceProjectValidate(loaded.v9.performance)) return false;
     return true;
 }
 
@@ -758,11 +786,13 @@ bool storageLoadProject(uint8_t slot) {
     g_eventLooper.clearAll();
     motionResetMappings();
     resetLoopMix();
+    performanceStateInit();
     memset(g_patterns, 0, sizeof(g_patterns));
     memset(g_song, SONG_EMPTY, sizeof(g_song));
 
-    if (version >= 3 && version <= 8) {
-        const ProjectFileV3& pf = version == 8 ? loaded.v8.base.base.base.base.base :
+    if (version >= 3 && version <= 9) {
+        const ProjectFileV3& pf = version == 9 ? loaded.v9.base.base.base.base.base.base :
+                                  version == 8 ? loaded.v8.base.base.base.base.base :
                                   version == 7 ? loaded.v7.base.base.base.base :
                                   version == 6 ? loaded.v6.base.base.base :
                                   version == 5 ? loaded.v5.base.base :
@@ -790,21 +820,26 @@ bool storageLoadProject(uint8_t slot) {
         }
         ok = true;
         if (version >= 5) {
-            const ProjectFileV5& eventFile = version == 8 ? loaded.v8.base.base.base :
+            const ProjectFileV5& eventFile = version == 9 ? loaded.v9.base.base.base.base :
+                                                    version == 8 ? loaded.v8.base.base.base :
                                                     version == 7 ? loaded.v7.base.base :
                                                     version == 6 ? loaded.v6.base : loaded.v5;
-            ok = applyEventsV5(eventFile);
+            ok = applyEventsV5(eventFile, version == 9);
         }
         if (ok && version >= 6) {
-            const ProjectFileV6& motionFile = version == 8 ? loaded.v8.base.base :
+            const ProjectFileV6& motionFile = version == 9 ? loaded.v9.base.base.base :
+                                                     version == 8 ? loaded.v8.base.base :
                                                      version == 7 ? loaded.v7.base : loaded.v6;
             ok = applyMotionV6(motionFile);
         }
         if (ok && version >= 7)
-            ok = applyLoopMixV7(version == 8 ? loaded.v8.base.loopMix : loaded.v7.loopMix);
-        if (ok && version == 8)
+            ok = applyLoopMixV7(version == 9 ? loaded.v9.base.base.loopMix :
+                                version == 8 ? loaded.v8.base.loopMix : loaded.v7.loopMix);
+        if (ok && version >= 8)
             for (uint8_t synth = 0; synth < NUM_SYNTHS; ++synth) {
-                if (!synthProjectDecode(loaded.v8.synthEngines[synth], g_synths[synth])) {
+                const SaveSynthEngineState &savedSynth = version == 9
+                    ? loaded.v9.base.synthEngines[synth] : loaded.v8.synthEngines[synth];
+                if (!synthProjectDecode(savedSynth, g_synths[synth])) {
                     ok = false;
                     break;
                 }
@@ -816,6 +851,7 @@ bool storageLoadProject(uint8_t slot) {
                 if (g_synths[synth].mgxPatch.wavetable >= g_numWavetables)
                     g_synths[synth].mgxPatch.wavetable = 0;
             }
+        if (ok && version == 9) ok = performanceProjectDecode(loaded.v9.performance);
     } else if (version == 2) {
         const ProjectFileV2& pf = loaded.v2;
         g_bpm = pf.bpm;

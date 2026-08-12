@@ -42,6 +42,15 @@ build_run sample_reference "$test_dir/test_sample_reference.cpp"
 build_run sample_stream -pthread "$test_dir/test_sample_stream_core.cpp"
 build_run event_looper "$test_dir/test_event_looper.cpp"
 build_run motion "$test_dir/test_motion_core.cpp"
+build_run chord "$test_dir/test_chord_engine.cpp" "$test_dir/../chord_engine.cpp"
+build_run hichord "$test_dir/test_hichord_performance.cpp" \
+    "$test_dir/../hichord_performance.cpp" "$test_dir/../chord_engine.cpp"
+build_run medo "$test_dir/test_medo_performance.cpp" "$test_dir/../medo_performance.cpp"
+build_run po_effects "$test_dir/test_po_effects.cpp" "$test_dir/../po_effects.cpp"
+build_run pitch "$test_dir/test_pitch_detector.cpp" "$test_dir/../pitch_detector.cpp"
+build_run master_effects "$test_dir/test_master_effects.cpp" "$test_dir/../master_effects.cpp"
+build_run vocoder "$test_dir/test_vocoder.cpp" "$test_dir/../vocoder.cpp"
+build_run swing "$test_dir/test_swing_timing.cpp"
 build_run ble_codec "$test_dir/test_ble_midi_codec.cpp"
 build_run usb_midi_host "$test_dir/test_usb_midi_host_descriptor.cpp" \
     "$test_dir/../usb_midi_host_descriptor.cpp"
@@ -53,9 +62,16 @@ build_run synth_project "$test_dir/test_synth_project.cpp" \
     "$test_dir/../synth_project.cpp" "${synth_sources[@]}"
 build_run synth_ui "$test_dir/test_synth_ui_model.cpp" \
     "$test_dir/../synth_ui_model.cpp"
+build_run performance_project "$test_dir/test_performance_project.cpp" \
+    "$test_dir/../performance_project.cpp" "$test_dir/../performance_state.cpp" \
+    "$test_dir/../chord_engine.cpp" "$test_dir/../hichord_performance.cpp" \
+    "$test_dir/../medo_performance.cpp" "$test_dir/../po_effects.cpp" \
+    "$test_dir/../master_effects.cpp" "$test_dir/../vocoder.cpp" \
+    "$test_dir/../synth_project.cpp" "${synth_sources[@]}"
 build_run audio_cap "$test_dir/test_audio_cap_protocol.cpp" \
     "$test_dir/../audio_cap_protocol.cpp"
 build_run audio_cap_bridge "$test_dir/test_audio_cap_bridge_core.cpp" \
     "$test_dir/../audio_cap_bridge_core.cpp" "$test_dir/../audio_cap_protocol.cpp"
+build_run performance_scheduler "$test_dir/test_performance_scheduler_core.cpp"
 
-echo "Sanitizers (${SANITIZER_SET:-undefined}): core, protocol, synth, streaming, event, motion, MIDI and Audio Cap tests passed"
+echo "Sanitizers (${SANITIZER_SET:-undefined}): core, protocol, three-in-one performance, synth, streaming, event, motion, MIDI and Audio Cap tests passed"

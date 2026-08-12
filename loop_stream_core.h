@@ -53,6 +53,7 @@ public:
             store(&track.underruns, 0);
             store(&track.volumeQ15, 32767);
             store(&track.mutedFlag, 0);
+            store(&track.lastOutput, 0);
         }
     }
 
@@ -235,6 +236,7 @@ public:
         for (uint8_t index = 0; index < LOOP_STREAM_TRACKS; ++index) {
             Track& track = _tracks[index];
             LoopStreamState state = static_cast<LoopStreamState>(load(&track.state));
+            int32_t trackOutput = 0;
             if (state == LOOP_STREAM_PLAY_WAIT &&
                 frameReached(now, load(&track.scheduledFrame))) {
                 // Apply the stored mute intent so a resync after an
@@ -257,9 +259,11 @@ public:
                 } else if (state == LOOP_STREAM_PLAYING) {
                     const int32_t scaled = static_cast<int32_t>(sample) *
                                            static_cast<int32_t>(load(&track.volumeQ15));
-                    contribution += scaled / 32767;
+                    trackOutput = scaled / 32767;
+                    contribution += trackOutput;
                 }
             }
+            store(&track.lastOutput, static_cast<uint32_t>(trackOutput));
 
             if (state == LOOP_STREAM_RECORDING && recordTrack() == index) {
                 if (!_recordRing.pushOne(dryInput)) add(&track.droppedFrames, 1);
@@ -280,6 +284,9 @@ public:
         return validTrack(index)
             ? static_cast<LoopStreamState>(load(&_tracks[index].state))
             : LOOP_STREAM_ERROR;
+    }
+    int32_t lastTrackOutput(uint8_t index) const {
+        return validTrack(index) ? static_cast<int32_t>(load(&_tracks[index].lastOutput)) : 0;
     }
 
     LoopStreamTrackSnapshot snapshot(uint8_t index) const {
@@ -308,6 +315,7 @@ private:
         alignas(4) uint32_t underruns;
         alignas(4) uint32_t volumeQ15;
         alignas(4) uint32_t mutedFlag;
+        alignas(4) uint32_t lastOutput;
     };
 
     Track _tracks[LOOP_STREAM_TRACKS];

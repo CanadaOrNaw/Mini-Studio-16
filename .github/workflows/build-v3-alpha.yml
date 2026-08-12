@@ -2,7 +2,7 @@ name: Build v3 alpha
 
 on:
   push:
-    branches: ["agent/v3-alpha-sd-streaming"]
+    branches: ["main", "agent/v3-alpha-sd-streaming", "agent/complete-three-in-one"]
     # P1-6 (reconciliation report): v* tags run the identical validation and
     # then publish a permanent, login-free GitHub Release; see the release
     # job at the bottom of this file.
@@ -176,7 +176,7 @@ jobs:
   # P1-6 (reconciliation report): Actions artifacts require a GitHub sign-in
   # and are deleted ~90 days after each run, which silently breaks the
   # beginner download path in START_HERE.md and on the site. A v* tag still
-  # publishes normally. Branch pushes also consult the checked-in
+  # publishes normally. Main-branch pushes also consult the checked-in
   # RELEASE_VERSION marker and publish only when that release does not yet
   # exist. Existing releases are never moved or overwritten; changing the
   # marker is therefore the explicit next-release action. Every release still
@@ -187,7 +187,7 @@ jobs:
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||
       (github.event_name == 'push' &&
-      github.ref == 'refs/heads/agent/v3-alpha-sd-streaming')
+      github.ref == 'refs/heads/main')
     needs: [host-tests, sanitizers, firmware]
     runs-on: ubuntu-latest
     permissions:
