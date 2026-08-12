@@ -176,7 +176,7 @@ jobs:
   # P1-6 (reconciliation report): Actions artifacts require a GitHub sign-in
   # and are deleted ~90 days after each run, which silently breaks the
   # beginner download path in START_HERE.md and on the site. A v* tag still
-  # publishes normally. Branch pushes also consult the checked-in
+  # publishes normally. Main-branch pushes also consult the checked-in
   # RELEASE_VERSION marker and publish only when that release does not yet
   # exist. Existing releases are never moved or overwritten; changing the
   # marker is therefore the explicit next-release action. Every release still

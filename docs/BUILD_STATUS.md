@@ -7,6 +7,44 @@ means the production firmware path exists, its hardware-independent behavior is
 host-tested, and both target profiles compile/link. “Hardware-verified” remains
 false until a physical Cardputer-ADV produces measurements.
 
+## Three-in-one completion checkpoint
+
+The behavior-level HiChord, PO-33, and MEDO completion is verified at branch
+head `f2d356c942233eaf825f86a06b3f08fddd51e403` (pull-request merge test tree
+`d7feb365e6f8de03255e2ea3a6128fb895f3749a`). This supersedes the earlier
+capacity-only software claim without altering the immutable alpha.1 release.
+
+- Full validation workflow:
+  [run 31598932662](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31598932662)
+- Pages/CAD/site workflow:
+  [run 31598932652](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31598932652)
+- Host suite, AddressSanitizer + UndefinedBehaviorSanitizer, all three pinned
+  firmware builds, both Cardputer resource gates, dual-image merge, package
+  manifest, generated-asset checks, and site build: **passed**
+- Normal image: 204,728 bytes static DRAM (72 bytes inside the unchanged
+  204,800-byte project gate); 985,985-byte flash estimate; application
+  SHA-256 `356db35efcbe9c51b77ab95f6a5264d8f23c2e282f55f7855c89dd1310f4c224`
+- USB-host image: 193,160 bytes static DRAM; 1,004,317-byte flash estimate;
+  application SHA-256
+  `49b54dd0bc1a48e759dbf385fefb0e01f88e2b9f9ad4bb352f4d640768ff7e26`
+- Combined dual-role image SHA-256
+  `8b89d6f04f262ad844bc1b08245d71b4e09f05477e74b78861697578798b8ffc`
+- ATOM Lite Audio Cap merged image SHA-256
+  `eab53ff27a135cc58844a2fa67ff2f10728a64b76f424d155f98d283ae85f1ca`
+- Artifact
+  [9142385169](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31598932662/artifacts/9142385169),
+  33,477,295 bytes; outer ZIP SHA-256
+  `4d02148026da278697685b224782f7d03f4c7fd6f5332fb6f23280244066627d`
+- Every entry in the downloaded `SHA256SUMS.txt` passed independently; the
+  starter SD ZIP also retained SHA-256
+  `3564b1d151e6b4f7ac622d1f2d33ce6f75f9166b7a80f616be54a2eae69af680`.
+
+The Normal RAM correction did not raise a budget or remove a feature. It
+packed bounded held-note/gate state, removed invalid per-layer fixed-loop
+request fields, and added a host/sanitizer test for the wrapping compact gate
+deadline. The original MG/303 golden hash remains `a202afdc`; FM4 offline
+hashes remain `ac9acded` and `96bd5991`.
+
 ## Preserved v3.0.0-alpha.1 checkpoint
 
 The following is the immutable prior release evidence. The completion branch
