@@ -84,9 +84,14 @@ class SiteBuildTests(unittest.TestCase):
             self.build(target)
             for doc in sorted((target / "downloads").glob("*.md")):
                 text = doc.read_text(encoding="utf-8")
+                self.assertNotIn("agent/v3-alpha-sd-streaming", text)
                 for match in link.finditer(text):
                     reference = match.group(1)
                     if urlsplit(reference).scheme:
+                        if reference.startswith(
+                            "https://github.com/CanadaOrNaw/Mini-Studio-16/blob/"
+                        ):
+                            self.assertIn("/blob/main/", reference)
                         continue
                     self.assertTrue((doc.parent / reference).exists(),
                                     f"{doc.name} -> {reference}")
@@ -98,6 +103,15 @@ class SiteBuildTests(unittest.TestCase):
         self.assertIn('aria-live="polite"', html)
         self.assertIn('fetch("assets/button-layout.json")', script)
         self.assertNotIn("innerHTML", script)
+
+    def test_release_marker_publishes_only_from_main(self):
+        workflow = (ROOT / ".github" / "workflows" /
+                    "build-v3-alpha.yml").read_text(encoding="utf-8")
+        release_block = workflow.split("\n  release:\n", 1)[1]
+        self.assertIn("github.ref == 'refs/heads/main'", release_block)
+        self.assertNotIn("refs/heads/agent/v3-alpha-sd-streaming", release_block)
+        version = (ROOT / "RELEASE_VERSION").read_text(encoding="utf-8").strip()
+        self.assertRegex(version, r"^v[0-9]+\.[0-9]+\.[0-9]+(?:[.-][0-9A-Za-z.-]+)?$")
 
     def test_builder_refuses_unrecognized_output_directory(self):
         with tempfile.TemporaryDirectory() as tmp:

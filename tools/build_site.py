@@ -46,10 +46,10 @@ def sha256(path: Path) -> str:
 # relative link to a file that is not shipped beside them (for example
 # START_HERE.md -> CARDPUTER_TESTING.md, or the build guide's
 # ../hardware/audio-cap/bom.json) would 404 on the published site. Rewrite
-# such links to absolute GitHub URLs at the pinned integration branch;
+# such links to absolute GitHub URLs at the shipped main branch;
 # links between docs that ship together in downloads/ stay relative.
 REPO_BLOB_BASE = ("https://github.com/CanadaOrNaw/Mini-Studio-16/blob/"
-                  "agent/v3-alpha-sd-streaming/")
+                  "main/")
 _MD_LINK = re.compile(r"(\]\()([^)\s#][^)#]*)((?:#[^)]*)?\))")
 
 

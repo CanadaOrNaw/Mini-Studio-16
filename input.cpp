@@ -47,7 +47,7 @@ static KeySnap s_prev;
 uint8_t g_recPadKc = KC_NONE;          // key that ends mic capture on release
 
 // pending short/long holds
-struct Hold { uint8_t kc; uint8_t act; uint32_t t0; bool fired; };
+struct Hold { uint32_t t0; uint8_t kc, act, fired; };
 static Hold    s_holds[8];
 static uint8_t s_nHolds = 0;
 
@@ -63,25 +63,31 @@ static uint8_t s_heldMidiNoteCount = 0;
 
 struct HeldChord {
     uint8_t key, degree, count, chordToneCount, bass;
-    uint8_t note[7], track[7], role[7];
-    uint8_t velocity;
-    bool medoArp;
-    bool medoRoleGain;
+    uint8_t note[7];
+    // MIDI velocity and bass notes occupy seven bits. Their high bits carry
+    // the MEDO arp/role-gain flags without growing each of seven held slots.
+    uint8_t velocityAndMedoArp;
     uint32_t nextArpUs, arpTick;
 };
 static HeldChord s_heldChords[7];
 static uint8_t s_heldChordCount = 0;
 struct PendingChordRelease {
-    uint8_t track, note, role;
-    bool audition;
-    uint32_t dueUs;
+    // Gates are at most 350 ms. A wrapping millisecond deadline is safe over
+    // that interval; the other fields fit in otherwise-unused high bits.
+    uint16_t dueMs;
+    uint8_t noteAndAudition;
+    uint8_t trackRole;
 };
 static PendingChordRelease s_chordReleases[21];
 static uint8_t s_chordReleaseCount = 0;
 struct HeldAutoDrum {
-    uint8_t key, lane, rate;
-    uint32_t nextUs, tick;
+    uint32_t nextUs;
+    uint8_t key, lane, rate, tick;
 };
+static_assert(sizeof(Hold) == 8, "key-hold SRAM layout changed");
+static_assert(sizeof(HeldChord) == 24, "held chord SRAM layout changed");
+static_assert(sizeof(PendingChordRelease) == 4, "release SRAM layout changed");
+static_assert(sizeof(HeldAutoDrum) == 8, "auto-drum SRAM layout changed");
 static HeldAutoDrum s_autoDrums[7];
 static uint8_t s_autoDrumCount = 0;
 static uint8_t s_sampleCopySlot = 0xFF;
@@ -90,11 +96,9 @@ static uint8_t s_selectedSampleSlice = 0;
 static uint8_t s_poEffectKey = KC_NONE;
 static uint32_t s_hiroStartUs = 0;
 static uint16_t s_hiroScore = 0;
-static HiChordHiroGrade s_hiroLastGrade = HICHORD_HIRO_MISS;
 static uint8_t s_earDegrees[4] = {};
 static uint8_t s_earDirections[4] = {};
 static uint8_t s_earCount = 1, s_earPosition = 0;
-static uint16_t s_earStreak = 0, s_earBestStreak = 0;
 static uint32_t s_earRandom = 1;
 static uint32_t s_earAuditionStartUs = 0;
 static uint8_t s_earAuditionNext = 0, s_earAuditionEnd = 0;
@@ -102,6 +106,47 @@ static bool s_earAuditionRootOnly = false;
 static uint8_t s_previousLoopState[LOOP_STREAM_TRACKS] = {};
 
 uint16_t inputChordHiroScore() { return s_hiroScore; }
+
+static uint8_t heldVelocity(const HeldChord &held) {
+    return static_cast<uint8_t>(held.velocityAndMedoArp & 0x7Fu);
+}
+static bool heldMedoArp(const HeldChord &held) {
+    return (held.velocityAndMedoArp & 0x80u) != 0;
+}
+static bool heldMedoRoleGain(const HeldChord &held) {
+    return (held.bass & 0x80u) != 0;
+}
+static uint8_t heldRole(const HeldChord &held, uint8_t index) {
+    return heldMedoRoleGain(held) ? static_cast<uint8_t>(EVENT_ROLE_CHORD) :
+        static_cast<uint8_t>(index < held.chordToneCount
+            ? EVENT_ROLE_CHORD : EVENT_ROLE_BASS);
+}
+static uint8_t heldTrack(const HeldChord &held, uint8_t index) {
+    return index < held.chordToneCount ? static_cast<uint8_t>(index / 3u) : 2u;
+}
+static uint8_t pendingTrack(const PendingChordRelease &pending) {
+    return static_cast<uint8_t>(pending.trackRole & 0x03u);
+}
+static uint8_t pendingRole(const PendingChordRelease &pending) {
+    return static_cast<uint8_t>(pending.trackRole >> 2);
+}
+static uint8_t pendingNote(const PendingChordRelease &pending) {
+    return static_cast<uint8_t>(pending.noteAndAudition & 0x7Fu);
+}
+static bool pendingAudition(const PendingChordRelease &pending) {
+    return (pending.noteAndAudition & 0x80u) != 0;
+}
+static PendingChordRelease makePendingRelease(uint8_t track, uint8_t note,
+                                               uint8_t role, bool audition,
+                                               uint32_t dueUs) {
+    PendingChordRelease pending = {};
+    pending.dueMs = static_cast<uint16_t>(dueUs / 1000u);
+    pending.noteAndAudition = static_cast<uint8_t>((note & 0x7Fu) |
+        (audition ? 0x80u : 0u));
+    pending.trackRole = static_cast<uint8_t>((track & 0x03u) |
+        ((role & 0x1Fu) << 2));
+    return pending;
+}
 
 static int8_t chordKeyDegree(uint8_t key) {
     static const uint8_t keys[7] = {KC_FN, KC_SHIFT, 'a', 's', 'd', 'f', 'g'};
@@ -125,12 +170,12 @@ static ChordDirection heldChordDirection(const KeySnap &keys) {
 
 static void fireChordMidi(HeldChord &held, uint8_t index) {
     if (index >= held.count) return;
-    const uint8_t midi = held.note[index], track = held.track[index];
-    eventLooperSetRecordRoleOverride(held.role[index]);
-    eventLooperSetRecordRoleGain(held.medoRoleGain);
+    const uint8_t midi = held.note[index], track = heldTrack(held, index);
+    eventLooperSetRecordRoleOverride(heldRole(held, index));
+    eventLooperSetRecordRoleGain(heldMedoRoleGain(held));
     liveSynthNote(track, static_cast<uint8_t>(midi % 12u + 1u),
                   static_cast<uint8_t>(midi / 12u - 1u), false, index > 0,
-                  held.velocity);
+                  heldVelocity(held));
     eventLooperSetRecordRoleOverride(-1);
     eventLooperSetRecordRoleGain(false);
 }
@@ -140,28 +185,31 @@ static void scheduleChordRelease(const HeldChord &held, uint8_t index,
     if (index >= held.count) return;
     for (uint8_t i = 0; i < s_chordReleaseCount; ++i) {
         PendingChordRelease &pending = s_chordReleases[i];
-        if (pending.track == held.track[index] && pending.note == held.note[index]) {
-            pending.dueUs = dueUs;
-            pending.role = held.role[index];
-            pending.audition = false;
+        if (pendingTrack(pending) == heldTrack(held, index) &&
+            pendingNote(pending) == held.note[index]) {
+            pending = makePendingRelease(heldTrack(held, index), held.note[index],
+                                         heldRole(held, index), false, dueUs);
             return;
         }
     }
     if (s_chordReleaseCount < sizeof(s_chordReleases) / sizeof(s_chordReleases[0]))
-        s_chordReleases[s_chordReleaseCount++] = {
-            held.track[index], held.note[index], held.role[index], false, dueUs};
+        s_chordReleases[s_chordReleaseCount++] = makePendingRelease(
+            heldTrack(held, index), held.note[index], heldRole(held, index), false, dueUs);
 }
 
 static void processChordReleases(uint32_t nowUs) {
+    const uint16_t nowMs = static_cast<uint16_t>(nowUs / 1000u);
     for (uint8_t i = 0; i < s_chordReleaseCount;) {
         const PendingChordRelease pending = s_chordReleases[i];
-        if (static_cast<int32_t>(nowUs - pending.dueUs) < 0) { ++i; continue; }
-        if (pending.audition) {
-            g_synths[pending.track].noteOff(pending.note);
-            midiOutputNoteOff(pending.track, pending.note);
+        if (static_cast<int16_t>(nowMs - pending.dueMs) < 0) { ++i; continue; }
+        const uint8_t track = pendingTrack(pending);
+        const uint8_t note = pendingNote(pending);
+        if (pendingAudition(pending)) {
+            g_synths[track].noteOff(note);
+            midiOutputNoteOff(track, note);
         } else {
-            eventLooperSetRecordRoleOverride(pending.role);
-            liveSynthRelease(pending.track, pending.note);
+            eventLooperSetRecordRoleOverride(pendingRole(pending));
+            liveSynthRelease(track, note);
             eventLooperSetRecordRoleOverride(-1);
         }
         s_chordReleases[i] = s_chordReleases[--s_chordReleaseCount];
@@ -172,8 +220,8 @@ void inputStopHiChordPerformanceNotes() {
     for (uint8_t chord = 0; chord < s_heldChordCount; ++chord) {
         HeldChord &held = s_heldChords[chord];
         for (uint8_t note = 0; note < held.count; ++note) {
-            eventLooperSetRecordRoleOverride(held.role[note]);
-            liveSynthRelease(held.track[note], held.note[note]);
+            eventLooperSetRecordRoleOverride(heldRole(held, note));
+            liveSynthRelease(heldTrack(held, note), held.note[note]);
         }
     }
     eventLooperSetRecordRoleOverride(-1);
@@ -235,7 +283,6 @@ static bool requestLoopRecord(uint8_t track) {
 static void startChordHiro() {
     g_hiChordPracticePosition = 0;
     s_hiroScore = 0;
-    s_hiroLastGrade = HICHORD_HIRO_MISS;
     const uint32_t beat = 60000000UL / (g_bpm ? g_bpm : 120u);
     s_hiroStartUs = micros() + beat; // one-beat ready count
     uiStatus("CHORD HIRO: GET READY");
@@ -253,7 +300,6 @@ static void updateChordHiro(uint32_t nowUs) {
         const uint32_t lateUs = static_cast<uint32_t>(
             hiChordHiroWindowMs(difficulty)) * 1000u;
         if (static_cast<int32_t>(nowUs - (due + lateUs)) <= 0) break;
-        s_hiroLastGrade = HICHORD_HIRO_MISS;
         ++g_hiChordPracticePosition;
     }
     if (g_hiChordPracticePosition >= song.length) {
@@ -272,9 +318,11 @@ static void stopEarAudition() {
     s_earAuditionStartUs = 0;
     for (uint8_t index = 0; index < s_chordReleaseCount;) {
         const PendingChordRelease pending = s_chordReleases[index];
-        if (!pending.audition) { ++index; continue; }
-        g_synths[pending.track].noteOff(pending.note);
-        midiOutputNoteOff(pending.track, pending.note);
+        if (!pendingAudition(pending)) { ++index; continue; }
+        const uint8_t track = pendingTrack(pending);
+        const uint8_t note = pendingNote(pending);
+        g_synths[track].noteOff(note);
+        midiOutputNoteOff(track, note);
         s_chordReleases[index] = s_chordReleases[--s_chordReleaseCount];
     }
 }
@@ -327,8 +375,8 @@ static void updateEarAudition(uint32_t nowUs) {
         midiOutputNoteOn(track, midi, 96);
         if (s_chordReleaseCount < sizeof(s_chordReleases) /
                                       sizeof(s_chordReleases[0]))
-            s_chordReleases[s_chordReleaseCount++] = {
-                track, midi, EVENT_ROLE_CHORD, true, nowUs + 350000u};
+            s_chordReleases[s_chordReleaseCount++] = makePendingRelease(
+                track, midi, EVENT_ROLE_CHORD, true, nowUs + 350000u);
     }
     if (s_earAuditionNext >= s_earAuditionEnd) s_earAuditionStartUs = 0;
 }
@@ -401,8 +449,7 @@ static void playChord(uint8_t key, const KeySnap &keys, uint8_t velocity = 104,
             heldChordDirection(keys) ==
                 static_cast<ChordDirection>(s_earDirections[s_earPosition]);
         if (degreeCorrect && directionCorrect) {
-            ++g_hiChordEarScore; ++s_earStreak;
-            if (s_earStreak > s_earBestStreak) s_earBestStreak = s_earStreak;
+            ++g_hiChordEarScore;
             ++s_earPosition;
             if (s_earPosition >= s_earCount) {
                 uiStatus("ROUND CORRECT!");
@@ -412,7 +459,6 @@ static void playChord(uint8_t key, const KeySnap &keys, uint8_t velocity = 104,
                 uiStatus("CORRECT - NEXT");
             }
         } else {
-            s_earStreak = 0;
             uiStatus(directionCorrect ? "TRY ANOTHER CHORD" : "WRONG DIRECTION");
         }
     }
@@ -426,13 +472,13 @@ static void playChord(uint8_t key, const KeySnap &keys, uint8_t velocity = 104,
                 static_cast<uint32_t>(g_hiChordPracticePosition) * beat;
             const int32_t errorMs = static_cast<int32_t>(micros() - due) / 1000;
             const uint8_t difficulty = min<uint8_t>(3, g_hiChordPracticeSong / 4u);
-            s_hiroLastGrade = hiChordHiroGrade(
+            const HiChordHiroGrade grade = hiChordHiroGrade(
                 song.degrees[g_hiChordPracticePosition], static_cast<uint8_t>(degree),
                 errorMs, difficulty);
-            if (s_hiroLastGrade != HICHORD_HIRO_MISS)
-                s_hiroScore = static_cast<uint16_t>(s_hiroScore + s_hiroLastGrade * 25u);
+            if (grade != HICHORD_HIRO_MISS)
+                s_hiroScore = static_cast<uint16_t>(s_hiroScore + grade * 25u);
             ++g_hiChordPracticePosition;
-            uiStatus(hiChordHiroGradeName(s_hiroLastGrade));
+            uiStatus(hiChordHiroGradeName(grade));
             if (g_hiChordPracticePosition >= song.length) s_hiroStartUs = 0;
         }
     }
@@ -456,15 +502,13 @@ static void playChord(uint8_t key, const KeySnap &keys, uint8_t velocity = 104,
     HeldChord &held = s_heldChords[s_heldChordCount++];
     held.key = key; held.degree = static_cast<uint8_t>(degree);
     held.count = voicing.count; held.chordToneCount = voicing.chordToneCount;
-    held.bass = voicing.bass; held.velocity = velocity; held.medoArp = medoArp;
-    held.medoRoleGain = roleOverride >= 0;
+    held.bass = static_cast<uint8_t>((voicing.bass & 0x7Fu) |
+        (roleOverride >= 0 ? 0x80u : 0u));
+    held.velocityAndMedoArp = static_cast<uint8_t>((velocity & 0x7Fu) |
+        (medoArp ? 0x80u : 0u));
     held.arpTick = 0; held.nextArpUs = micros();
     for (uint8_t i = 0; i < voicing.count; ++i) {
         held.note[i] = voicing.notes[i];
-        held.track[i] = i < voicing.chordToneCount ? static_cast<uint8_t>(i / 3u) : 2u;
-        held.role[i] = roleOverride >= 0 ? static_cast<uint8_t>(roleOverride) :
-            static_cast<uint8_t>(i < voicing.chordToneCount
-                ? EVENT_ROLE_CHORD : EVENT_ROLE_BASS);
     }
     if (g_recEnabled || g_hiChordPerformance.mode() == HICHORD_SEQUENCER) {
         const HiChordSequenceStep sequence = {static_cast<uint8_t>(degree),
@@ -502,10 +546,10 @@ static void releaseChord(uint8_t key) {
     for (uint8_t index = 0; index < s_heldChordCount; ++index) {
         HeldChord &held = s_heldChords[index];
         if (held.key != key) continue;
-        if (held.medoArp || g_hiChordPerformance.mode() != HICHORD_DRONE)
+        if (heldMedoArp(held) || g_hiChordPerformance.mode() != HICHORD_DRONE)
             for (uint8_t i = 0; i < held.count; ++i) {
-                eventLooperSetRecordRoleOverride(held.role[i]);
-                liveSynthRelease(held.track[i], held.note[i]);
+                eventLooperSetRecordRoleOverride(heldRole(held, i));
+                liveSynthRelease(heldTrack(held, i), held.note[i]);
             }
         eventLooperSetRecordRoleOverride(-1);
         held = s_heldChords[--s_heldChordCount];
@@ -531,7 +575,7 @@ static void updateHeldChords() {
         }
         if (static_cast<int32_t>(now - held.nextArpUs) < 0) continue;
         const HiChordMode mode = g_hiChordPerformance.mode();
-        if (held.medoArp) {
+        if (heldMedoArp(held)) {
             const uint32_t interval = g_medoPerformance.arpIntervalUs(g_bpm);
             if (interval == 0) continue;
             const uint8_t note = g_medoPerformance.arpNoteIndex(
@@ -565,7 +609,7 @@ static void updateHeldChords() {
                     }
                 ChordVoicing voicing = {};
                 voicing.count = held.count; voicing.chordToneCount = held.chordToneCount;
-                voicing.bass = held.bass;
+                voicing.bass = static_cast<uint8_t>(held.bass & 0x7Fu);
                 for (uint8_t note = 0; note < held.count; ++note) voicing.notes[note] = held.note[note];
                 uint8_t selected[2] = {};
                 const uint8_t selectedCount = g_hiChordPerformance.arpNotes(
@@ -1599,7 +1643,6 @@ void inputInit() {
     s_poEffectKey = KC_NONE;
     s_hiroStartUs = 0; s_hiroScore = 0;
     s_earAuditionStartUs = 0; s_earAuditionNext = s_earAuditionEnd = 0;
-    s_earStreak = s_earBestStreak = 0;
     s_earRandom = micros() | 1u;
     for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track)
         s_previousLoopState[track] = static_cast<uint8_t>(LOOP_STREAM_EMPTY);
@@ -1729,7 +1772,7 @@ void inputUpdate() {
                 s_rptNext = nowMs + RPT_DELAY_MS; s_rptCount = 0;
             }
         } else if (s_nHolds < 8) {
-            s_holds[s_nHolds++] = { kc, act, nowMs, false };
+            s_holds[s_nHolds++] = { nowMs, kc, act, false };
         }
     }
 

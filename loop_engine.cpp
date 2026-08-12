@@ -42,8 +42,11 @@ File s_recordFile;
 uint32_t s_recordFileFrames = 0;
 alignas(4) uint32_t s_recordFileTrack = LOOP_NO_TRACK;
 alignas(4) uint32_t s_recordRequests = 0;
-alignas(4) uint32_t s_recordTargetFrames[LOOP_STREAM_TRACKS] = {};
-alignas(4) uint32_t s_recordCountInFrames[LOOP_STREAM_TRACKS] = {};
+// Only Track 1 can establish a fixed bar/count-in length. Tracks 2..6 always
+// inherit its timeline, so per-track parameter arrays represented no valid
+// operation and unnecessarily consumed deterministic SRAM.
+alignas(4) uint32_t s_trackOneTargetFrames = 0;
+alignas(4) uint32_t s_trackOneCountInFrames = 0;
 alignas(4) uint32_t s_clearRequests = 0;
 alignas(4) uint32_t s_clearOutstanding = 0;
 portMUX_TYPE s_metricsMux = portMUX_INITIALIZER_UNLOCKED;
@@ -277,10 +280,10 @@ bool startRecording(uint8_t track) {
         { SdIoGuard guard; if (SD.exists(temp)) SD.remove(temp); }
         return false;
     }
-    const uint32_t requestedTarget = __atomic_exchange_n(
-        &s_recordTargetFrames[track], 0u, __ATOMIC_ACQ_REL);
-    const uint32_t requestedCountIn = __atomic_exchange_n(
-        &s_recordCountInFrames[track], 0u, __ATOMIC_ACQ_REL);
+    const uint32_t requestedTarget = track == 0 ? __atomic_exchange_n(
+        &s_trackOneTargetFrames, 0u, __ATOMIC_ACQ_REL) : 0u;
+    const uint32_t requestedCountIn = track == 0 ? __atomic_exchange_n(
+        &s_trackOneCountInFrames, 0u, __ATOMIC_ACQ_REL) : 0u;
     const uint32_t timeline = s_core.timelineFrames();
     const uint32_t scheduled = track == 0
         ? s_core.absoluteFrame() + requestedCountIn :
@@ -463,10 +466,8 @@ void loopEngineInit(bool sdMounted) {
     s_core.reset();
     __atomic_store_n(&s_recordFileTrack, LOOP_NO_TRACK, __ATOMIC_RELEASE);
     __atomic_store_n(&s_recordRequests, 0u, __ATOMIC_RELEASE);
-    for (uint8_t track = 0; track < LOOP_STREAM_TRACKS; ++track) {
-        __atomic_store_n(&s_recordTargetFrames[track], 0u, __ATOMIC_RELEASE);
-        __atomic_store_n(&s_recordCountInFrames[track], 0u, __ATOMIC_RELEASE);
-    }
+    __atomic_store_n(&s_trackOneTargetFrames, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_trackOneCountInFrames, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_clearRequests, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_clearOutstanding, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&s_paused, 0u, __ATOMIC_RELEASE);
@@ -508,8 +509,10 @@ bool loopEngineRequestRecord(uint8_t track, uint32_t targetFrames,
     if (track > 0 && s_core.timelineFrames() == 0) return false;
     if (track > 0 && (targetFrames != 0 || countInFrames != 0)) return false;
     if (track == 0 && targetFrames > kMaximumLoopFrames) return false;
-    __atomic_store_n(&s_recordTargetFrames[track], targetFrames, __ATOMIC_RELEASE);
-    __atomic_store_n(&s_recordCountInFrames[track], countInFrames, __ATOMIC_RELEASE);
+    if (track == 0) {
+        __atomic_store_n(&s_trackOneTargetFrames, targetFrames, __ATOMIC_RELEASE);
+        __atomic_store_n(&s_trackOneCountInFrames, countInFrames, __ATOMIC_RELEASE);
+    }
     __atomic_fetch_or(&s_recordRequests, 1u << track, __ATOMIC_ACQ_REL);
     return true;
 }
