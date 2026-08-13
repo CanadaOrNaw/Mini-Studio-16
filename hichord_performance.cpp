@@ -1,6 +1,21 @@
 #include "hichord_performance.h"
 #include <string.h>
 
+namespace {
+// A2-P2 (alpha.2 reconciliation): `(tick * 1103515245 + 12345) % count` is a
+// single LCG step, so consecutive ticks stay correlated and the "random"
+// arp degenerated to a period-4 sequence. A 32-bit integer finalizer
+// (Murmur3's) decorrelates adjacent ticks while remaining a pure function
+// of the tick, so playback stays deterministic and reproducible.
+uint32_t scrambleTick(uint32_t tick) {
+    uint32_t h = tick + 0x9E3779B9u;
+    h ^= h >> 16; h *= 0x85EBCA6Bu;
+    h ^= h >> 13; h *= 0xC2B2AE35u;
+    h ^= h >> 16;
+    return h;
+}
+}  // namespace
+
 HiChordPerformance::HiChordPerformance() { reset(); }
 void HiChordPerformance::reset() {
     mode_ = HICHORD_PLAY; memset(sequence_, 0, sizeof(sequence_));
@@ -45,7 +60,7 @@ uint8_t HiChordPerformance::arpNotes(const ChordVoicing &chord,
             const uint8_t span = count > 1 ? static_cast<uint8_t>(count * 2 - 2) : 1;
             index = tick % span; index = index < count ? count - 1 - index : index - count + 1; break;
         }
-        case ARP_RANDOM: index = (tick * 1103515245u + 12345u) % count; break;
+        case ARP_RANDOM: index = scrambleTick(tick) % count; break;
         case ARP_FINGERPICK: break;
         case ARP_UP: default: break;
     }

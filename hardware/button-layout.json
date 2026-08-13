@@ -9,140 +9,612 @@
   },
   "rows": [
     [
-      {"id":"grave","face":"`","tap":"SYNTH 1","hold":"MUTE 1"},
-      {"id":"1","face":"1","tap":"SYNTH 2","hold":"MUTE 2"},
-      {"id":"2","face":"2","tap":"SYNTH 3","hold":"MUTE 3"},
-      {"id":"3","face":"3","tap":"DRUMS","hold":"MUTE DR"},
-      {"id":"4","face":"4","tap":"PAT 1","hold":"CLONE 1"},
-      {"id":"5","face":"5","tap":"PAT 2","hold":"CLONE 2"},
-      {"id":"6","face":"6","tap":"PAT 3","hold":"CLONE 3"},
-      {"id":"7","face":"7","tap":"PAT 4","hold":"CLONE 4"},
-      {"id":"8","face":"8","tap":"PAT 5","hold":"CLONE 5"},
-      {"id":"9","face":"9","tap":"PAT 6","hold":"CLONE 6"},
-      {"id":"0","face":"0","tap":"PAT 7","hold":"CLONE 7"},
-      {"id":"minus","face":"-","tap":"PAT 8","hold":"CLONE 8"},
-      {"id":"equals","face":"=","tap":"LOAD INFO","hold":"LOAD"},
-      {"id":"delete","face":"DEL","tap":"SAVE INFO","hold":"SAVE"}
+      {
+        "id": "grave",
+        "face": "`",
+        "tap": "SYNTH 1",
+        "hold": "MUTE 1"
+      },
+      {
+        "id": "1",
+        "face": "1",
+        "tap": "SYNTH 2",
+        "hold": "MUTE 2"
+      },
+      {
+        "id": "2",
+        "face": "2",
+        "tap": "SYNTH 3",
+        "hold": "MUTE 3"
+      },
+      {
+        "id": "3",
+        "face": "3",
+        "tap": "DRUMS",
+        "hold": "MUTE DR"
+      },
+      {
+        "id": "4",
+        "face": "4",
+        "tap": "PAT 1",
+        "hold": "CLONE 1"
+      },
+      {
+        "id": "5",
+        "face": "5",
+        "tap": "PAT 2",
+        "hold": "CLONE 2"
+      },
+      {
+        "id": "6",
+        "face": "6",
+        "tap": "PAT 3",
+        "hold": "CLONE 3"
+      },
+      {
+        "id": "7",
+        "face": "7",
+        "tap": "PAT 4",
+        "hold": "CLONE 4"
+      },
+      {
+        "id": "8",
+        "face": "8",
+        "tap": "PAT 5",
+        "hold": "CLONE 5"
+      },
+      {
+        "id": "9",
+        "face": "9",
+        "tap": "PAT 6",
+        "hold": "CLONE 6"
+      },
+      {
+        "id": "0",
+        "face": "0",
+        "tap": "PAT 7",
+        "hold": "CLONE 7"
+      },
+      {
+        "id": "minus",
+        "face": "-",
+        "tap": "PAT 8",
+        "hold": "CLONE 8"
+      },
+      {
+        "id": "equals",
+        "face": "=",
+        "tap": "LOAD INFO",
+        "hold": "LOAD"
+      },
+      {
+        "id": "delete",
+        "face": "DEL",
+        "tap": "SAVE INFO",
+        "hold": "SAVE"
+      }
     ],
     [
-      {"id":"tab","face":"TAB","tap":"BANK / MODE"},
-      {"id":"q","face":"Q","music":"C♯"},
-      {"id":"w","face":"W","music":"D♯"},
-      {"id":"e","face":"E"},
-      {"id":"r","face":"R","music":"F♯"},
-      {"id":"t","face":"T","music":"G♯"},
-      {"id":"y","face":"Y","music":"A♯"},
-      {"id":"u","face":"U"},
-      {"id":"i","face":"I","music":"C♯+"},
-      {"id":"o","face":"O","music":"D♯+"},
-      {"id":"p","face":"P"},
-      {"id":"left-bracket","face":"[","music":"F♯+"},
-      {"id":"right-bracket","face":"]","music":"G♯+"},
-      {"id":"backslash","face":"\\","music":"A♯+"}
+      {
+        "id": "tab",
+        "face": "TAB",
+        "tap": "BANK / MODE"
+      },
+      {
+        "id": "q",
+        "face": "Q",
+        "music": "C\u266f"
+      },
+      {
+        "id": "w",
+        "face": "W",
+        "music": "D\u266f"
+      },
+      {
+        "id": "e",
+        "face": "E"
+      },
+      {
+        "id": "r",
+        "face": "R",
+        "music": "F\u266f"
+      },
+      {
+        "id": "t",
+        "face": "T",
+        "music": "G\u266f"
+      },
+      {
+        "id": "y",
+        "face": "Y",
+        "music": "A\u266f"
+      },
+      {
+        "id": "u",
+        "face": "U"
+      },
+      {
+        "id": "i",
+        "face": "I",
+        "music": "C\u266f+"
+      },
+      {
+        "id": "o",
+        "face": "O",
+        "music": "D\u266f+"
+      },
+      {
+        "id": "p",
+        "face": "P"
+      },
+      {
+        "id": "left-bracket",
+        "face": "[",
+        "music": "F\u266f+"
+      },
+      {
+        "id": "right-bracket",
+        "face": "]",
+        "music": "G\u266f+"
+      },
+      {
+        "id": "backslash",
+        "face": "\\",
+        "music": "A\u266f+"
+      }
     ],
     [
-      {"id":"fn","face":"FN","music":"C / PAD 1"},
-      {"id":"shift","face":"SHIFT","music":"D / PAD 2"},
-      {"id":"a","face":"A","music":"E / PAD 3"},
-      {"id":"s","face":"S","music":"F / PAD 4"},
-      {"id":"d","face":"D","music":"G / PAD 5"},
-      {"id":"f","face":"F","music":"A / PAD 6"},
-      {"id":"g","face":"G","music":"B / PAD 7"},
-      {"id":"h","face":"H","music":"C+ / PAD 8"},
-      {"id":"j","face":"J","music":"D+"},
-      {"id":"k","face":"K","music":"E+"},
-      {"id":"l","face":"L","music":"F+"},
-      {"id":"semicolon","face":";","music":"G+"},
-      {"id":"quote","face":"'","music":"A+"},
-      {"id":"enter","face":"ENTER","music":"B+"}
+      {
+        "id": "fn",
+        "face": "FN",
+        "music": "C / PAD 1"
+      },
+      {
+        "id": "shift",
+        "face": "SHIFT",
+        "music": "D / PAD 2"
+      },
+      {
+        "id": "a",
+        "face": "A",
+        "music": "E / PAD 3"
+      },
+      {
+        "id": "s",
+        "face": "S",
+        "music": "F / PAD 4"
+      },
+      {
+        "id": "d",
+        "face": "D",
+        "music": "G / PAD 5"
+      },
+      {
+        "id": "f",
+        "face": "F",
+        "music": "A / PAD 6"
+      },
+      {
+        "id": "g",
+        "face": "G",
+        "music": "B / PAD 7"
+      },
+      {
+        "id": "h",
+        "face": "H",
+        "music": "C+ / PAD 8"
+      },
+      {
+        "id": "j",
+        "face": "J",
+        "music": "D+"
+      },
+      {
+        "id": "k",
+        "face": "K",
+        "music": "E+"
+      },
+      {
+        "id": "l",
+        "face": "L",
+        "music": "F+"
+      },
+      {
+        "id": "semicolon",
+        "face": ";",
+        "music": "G+"
+      },
+      {
+        "id": "quote",
+        "face": "'",
+        "music": "A+"
+      },
+      {
+        "id": "enter",
+        "face": "ENTER",
+        "music": "B+"
+      }
     ],
     [
-      {"id":"control","face":"CTRL","tap":"NEXT PAGE","hold":"PATTERN"},
-      {"id":"option","face":"OPT","tap":"BPM −","hold":"OCT / PRJ −"},
-      {"id":"alt","face":"ALT","tap":"BPM +","hold":"OCT / PRJ +"},
-      {"id":"z","face":"Z","tap":"CLEAR","hold":"CLEAR PAT"},
-      {"id":"x","face":"X","tap":"←"},
-      {"id":"c","face":"C","tap":"↓"},
-      {"id":"v","face":"V","tap":"↑"},
-      {"id":"b","face":"B","tap":"→"},
-      {"id":"n","face":"N","tap":"SONG / ACTION","hold":"BUS / STEM"},
-      {"id":"m","face":"M","tap":"ACC / FINE"},
-      {"id":"comma","face":",","tap":"SLIDE / CLEAR"},
-      {"id":"period","face":".","tap":"AUX / PREVIEW","hold":"MIC / MASTER","record":true},
-      {"id":"slash","face":"/","tap":"REC / ACTION","record":true},
-      {"id":"space","face":"SPACE","tap":"PLAY / STOP","hold":"FROM TOP"}
+      {
+        "id": "control",
+        "face": "CTRL",
+        "tap": "NEXT PAGE",
+        "hold": "PATTERN"
+      },
+      {
+        "id": "option",
+        "face": "OPT",
+        "tap": "BPM \u2212",
+        "hold": "OCT / PRJ \u2212"
+      },
+      {
+        "id": "alt",
+        "face": "ALT",
+        "tap": "BPM +",
+        "hold": "OCT / PRJ +"
+      },
+      {
+        "id": "z",
+        "face": "Z",
+        "tap": "CLEAR",
+        "hold": "CLEAR PAT"
+      },
+      {
+        "id": "x",
+        "face": "X",
+        "tap": "\u2190"
+      },
+      {
+        "id": "c",
+        "face": "C",
+        "tap": "\u2193"
+      },
+      {
+        "id": "v",
+        "face": "V",
+        "tap": "\u2191"
+      },
+      {
+        "id": "b",
+        "face": "B",
+        "tap": "\u2192"
+      },
+      {
+        "id": "n",
+        "face": "N",
+        "tap": "SONG / ACTION",
+        "hold": "BUS / STEM"
+      },
+      {
+        "id": "m",
+        "face": "M",
+        "tap": "ACC / FINE"
+      },
+      {
+        "id": "comma",
+        "face": ",",
+        "tap": "SLIDE / CLEAR"
+      },
+      {
+        "id": "period",
+        "face": ".",
+        "tap": "AUX / PREVIEW",
+        "hold": "MIC / MASTER",
+        "record": true
+      },
+      {
+        "id": "slash",
+        "face": "/",
+        "tap": "REC / ACTION",
+        "record": true
+      },
+      {
+        "id": "space",
+        "face": "SPACE",
+        "tap": "PLAY / STOP",
+        "hold": "FROM TOP"
+      }
     ]
   ],
   "contexts": {
     "global": {
-      "title":"Global",
-      "summary":"Track, pattern, transport, project and page controls are always close at hand.",
-      "keys":["grave","1","2","3","4","5","6","7","8","9","0","minus","equals","delete","control","option","alt","x","c","v","b","space"]
+      "title": "Global",
+      "summary": "Track, pattern, transport, project and page controls are always close at hand.",
+      "keys": [
+        "grave",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "0",
+        "minus",
+        "equals",
+        "delete",
+        "control",
+        "option",
+        "alt",
+        "x",
+        "c",
+        "v",
+        "b",
+        "space"
+      ]
     },
     "pattern": {
-      "title":"Pattern",
-      "summary":"Play the keyboard or drum pads, record into 16 steps, clear cells and switch the A/B pattern bank.",
-      "keys":["tab","fn","shift","a","s","d","f","g","h","j","k","l","semicolon","quote","enter","q","w","r","t","y","i","o","left-bracket","right-bracket","backslash","z","comma","slash","m"]
+      "title": "Pattern",
+      "summary": "Play the keyboard or drum pads, record into 16 steps, clear cells and switch the A/B pattern bank.",
+      "keys": [
+        "tab",
+        "fn",
+        "shift",
+        "a",
+        "s",
+        "d",
+        "f",
+        "g",
+        "h",
+        "j",
+        "k",
+        "l",
+        "semicolon",
+        "quote",
+        "enter",
+        "q",
+        "w",
+        "r",
+        "t",
+        "y",
+        "i",
+        "o",
+        "left-bracket",
+        "right-bracket",
+        "backslash",
+        "z",
+        "comma",
+        "slash",
+        "m"
+      ]
     },
     "sound": {
-      "title":"Sound",
-      "summary":"Select MG/303, MGX or FM4; cycle compact parameter banks and edit rows with the arrows.",
-      "keys":["tab","x","c","v","b","m","fn","shift","a","s","d","f","g","h"]
+      "title": "Sound",
+      "summary": "Select MG/303, MGX or FM4; cycle compact parameter banks and edit rows with the arrows.",
+      "keys": [
+        "tab",
+        "x",
+        "c",
+        "v",
+        "b",
+        "m",
+        "fn",
+        "shift",
+        "a",
+        "s",
+        "d",
+        "f",
+        "g",
+        "h"
+      ]
     },
     "fx": {
-      "title":"Master FX",
-      "summary":"Select and edit reverb, delay, chorus, flanger, tremolo, vibrato or filter without leaving the instrument.",
-      "keys":["tab","x","c","v","b","slash"]
+      "title": "Master FX",
+      "summary": "Select and edit reverb, delay, chorus, flanger, tremolo, vibrato or filter without leaving the instrument.",
+      "keys": [
+        "tab",
+        "x",
+        "c",
+        "v",
+        "b",
+        "slash"
+      ]
     },
     "vocoder": {
-      "title":"Vocoder",
-      "summary":"Use Loop 1, mic or Audio Cap line as an eight-band vocoder modulator and edit formant/envelope controls.",
-      "keys":["x","c","v","b","slash"]
+      "title": "Vocoder",
+      "summary": "Use Loop 1 or the Audio Cap line as an eight-band vocoder modulator and edit formant/envelope controls. The onboard-mic modulator is a full-duplex hardware gate.",
+      "keys": [
+        "x",
+        "c",
+        "v",
+        "b",
+        "slash"
+      ]
     },
     "chord": {
-      "title":"Chord / HiChord",
-      "summary":"Play I–VII across 15 real modes: strum/arp/repeat/lead/drone, grooves, variable sequence+bounce, timed practice, ear rounds, tuner and mixer.",
-      "keys":["fn","shift","a","s","d","f","g","x","c","v","b","tab","m","4","5","6","7","period"]
+      "title": "Chord / HiChord",
+      "summary": "Play I\u2013VII across 15 real modes: strum/arp/repeat/lead/drone, grooves, variable sequence+bounce, timed practice, ear rounds, tuner and mixer.",
+      "keys": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "a",
+        "b",
+        "c",
+        "d",
+        "f",
+        "fn",
+        "g",
+        "m",
+        "period",
+        "s",
+        "shift",
+        "space",
+        "tab",
+        "v",
+        "x"
+      ]
     },
     "sample": {
-      "title":"Sample",
-      "summary":"Browse or assign 16 slots, perform melodic/sliced sounds, trim or PCM-copy slices, edit locks, and capture mic or master bus.",
-      "keys":["tab","x","c","v","b","n","m","comma","period","slash","fn","shift","a","s","d","f","g","h","j","k","l","semicolon","quote","enter","q","w"]
+      "title": "Sample",
+      "summary": "Browse or assign 16 slots, perform melodic/sliced sounds, trim or PCM-copy slices, edit locks, and capture mic or master bus.",
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "comma",
+        "d",
+        "delete",
+        "enter",
+        "equals",
+        "f",
+        "fn",
+        "g",
+        "h",
+        "j",
+        "k",
+        "l",
+        "m",
+        "n",
+        "period",
+        "q",
+        "quote",
+        "s",
+        "semicolon",
+        "shift",
+        "slash",
+        "tab",
+        "v",
+        "w",
+        "x"
+      ]
     },
     "ko": {
-      "title":"KO / PO-33",
-      "summary":"Punch 15 momentary effects, record per-step effects, change swing and clear effect locks.",
-      "keys":["4","5","6","7","8","9","0","minus","tab","x","c","v","b","n","z","slash","period"]
+      "title": "KO / PO-33",
+      "summary": "Punch 15 momentary effects, record per-step effects, change swing and clear effect locks.",
+      "keys": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "0",
+        "minus",
+        "tab",
+        "x",
+        "c",
+        "v",
+        "b",
+        "n",
+        "z",
+        "slash",
+        "period"
+      ]
     },
     "loops": {
-      "title":"Loops",
-      "summary":"Record six synchronized SD-backed loops; Track 1 is free or 1–8 bars with count-in; level, mute, solo, pause, clear and metronome controls.",
-      "keys":["4","5","6","7","8","9","tab","x","c","v","b","n","comma","z","period","slash"]
+      "title": "Loops",
+      "summary": "Record six synchronized SD-backed loops; Track 1 is free or 1\u20138 bars with count-in; level, mute, solo, pause, clear and metronome controls.",
+      "keys": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "b",
+        "c",
+        "comma",
+        "m",
+        "n",
+        "period",
+        "slash",
+        "tab",
+        "v",
+        "x",
+        "z"
+      ]
     },
     "event": {
-      "title":"Event",
-      "summary":"Arm, mute and size five role-based event tracks from 1 to 128 bars.",
-      "keys":["4","5","6","7","8","x","c","v","b","z","period","slash"]
+      "title": "Event",
+      "summary": "Arm, mute and size five role-based event tracks from 1 to 128 bars.",
+      "keys": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "x",
+        "c",
+        "v",
+        "b",
+        "z",
+        "period",
+        "slash"
+      ]
     },
     "medo": {
-      "title":"MEDO",
-      "summary":"Perform/overdub Drum, Bass, Chord, Lead and Sample roles with shared 1–128 bars, dynamic role mix, quantize, scales, real arp and gestures.",
-      "keys":["fn","shift","a","s","d","f","g","h","j","k","l","semicolon","quote","enter","q","w","x","c","v","b","m","z","slash"]
+      "title": "MEDO",
+      "summary": "Perform/overdub Drum, Bass, Chord, Lead and Sample roles with shared 1\u2013128 bars, dynamic role mix, quantize, scales, real arp and gestures.",
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "enter",
+        "f",
+        "fn",
+        "g",
+        "h",
+        "j",
+        "k",
+        "l",
+        "m",
+        "q",
+        "quote",
+        "s",
+        "semicolon",
+        "shift",
+        "slash",
+        "tab",
+        "v",
+        "w",
+        "x",
+        "z"
+      ]
     },
     "motion": {
-      "title":"Motion",
-      "summary":"Map tilt, acceleration, gyro, shake, slap or wiggle to synth parameters, MIDI and event automation.",
-      "keys":["x","c","v","b","z","period"]
+      "title": "Motion",
+      "summary": "Map tilt, acceleration, gyro, shake or slap to synth parameters, MIDI and event automation.",
+      "keys": [
+        "x",
+        "c",
+        "v",
+        "b",
+        "z",
+        "period"
+      ]
     },
     "song": {
-      "title":"Song + record",
-      "summary":"Arrange a 128-entry chain, set the loop start, choose projects, and capture master WAV or five stems.",
-      "keys":["4","5","6","7","8","9","0","minus","option","alt","z","n","period","space"]
+      "title": "Song + record",
+      "summary": "Arrange a 128-entry chain, set the loop start, choose projects, and capture master WAV or five stems.",
+      "keys": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "0",
+        "minus",
+        "option",
+        "alt",
+        "z",
+        "n",
+        "period",
+        "space"
+      ]
     },
     "diag": {
-      "title":"SD test",
-      "summary":"Start the on-device sequential and round-robin SD diagnostic before trusting a card for long audio.",
-      "keys":["slash"]
+      "title": "SD test",
+      "summary": "Start the on-device sequential and round-robin SD diagnostic before trusting a card for long audio.",
+      "keys": [
+        "slash"
+      ]
     }
   }
 }

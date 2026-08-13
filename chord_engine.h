@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include <stdint.h>
 
 // Hardware-independent HiChord-compatible harmony core. All state is fixed-size
@@ -66,3 +67,13 @@ private:
     uint8_t previous_[6];
     uint8_t previousCount_;
 };
+
+// A2-P2: safe split of a MIDI note into the inherited (note, octave) pair.
+// `octave = midi / 12 - 1` underflows to 255 for midi < 12, which makes
+// noteToFreq() return an effectively infinite frequency. Every caller that
+// feeds chord notes to the voice API goes through this.
+inline void chordSplitMidi(uint8_t midi, uint8_t &note, uint8_t &octave) {
+    if (midi < 12) midi = 12;
+    note = static_cast<uint8_t>(midi % 12u + 1u);
+    octave = static_cast<uint8_t>(midi / 12u - 1u);
+}

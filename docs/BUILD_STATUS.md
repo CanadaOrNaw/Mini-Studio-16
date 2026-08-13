@@ -1,18 +1,52 @@
 # Mini Studio 16 pre-hardware build status
 
-Completion branch: `agent/complete-three-in-one`
+Release branch: `main`
 
 This is the precise verification boundary for the current alpha. “Implemented”
 means the production firmware path exists, its hardware-independent behavior is
 host-tested, and both target profiles compile/link. “Hardware-verified” remains
 false until a physical Cardputer-ADV produces measurements.
 
+## Independent review of v3.0.0-alpha.2 (read this first)
+
+`v3.0.0-alpha.2` shipped without independent review and a four-part audit of
+the `f594ee6..f1e0a3b` delta found seven P1-class defects, the worst of which
+made **every saved v9 project unloadable on hardware**:
+`performanceProjectValidate()` built an 8,236-byte `MasterEffects` on the
+8,192-byte Arduino loopTask stack (measured 8,528-byte frame with
+`-fstack-usage`). Host CI could not see it because host stacks are 8 MB and
+no host test executes `storage.cpp`. Six more followed: a two-keypress
+permanent loop-engine lockout, a vocoder source selection that muted the whole
+instrument, an "eight-band" vocoder that was seven bands, new voice-reset
+calls bypassing the cross-core deferral contract, a soft-float pitch detector
+blocking two live tasks for an estimated 0.4–0.8 s, and a CHORD page whose
+direction gesture rewrote its own mode.
+
+All seven are fixed in the current tree along with the P2/P3 tail; every fix
+carries an `A2-` comment at the site and a regression test. The audit report
+is `claude/v3-alpha2-reconciliation-report.md` in the project workspace.
+
+**Recommendation while alpha.2 remains the newest published release: flash
+`v3.0.0-alpha.1`, which is the last independently audited release, or build
+from `main`.** The next tag supersedes both.
+
+The general lesson is recorded here deliberately: a green suite on this
+repository means "the assertions we wrote still hold", and the alpha.2
+assertions were weak enough that all seven P1s passed through them — one test
+even encoded the vocoder mute bug as expected behaviour. Test strength, not
+test colour, is the signal.
+
 ## Three-in-one completion checkpoint
 
-The behavior-level HiChord, PO-33, and MEDO completion is verified at branch
-head `f2d356c942233eaf825f86a06b3f08fddd51e403` (pull-request merge test tree
-`d7feb365e6f8de03255e2ea3a6128fb895f3749a`). This supersedes the earlier
-capacity-only software claim without altering the immutable alpha.1 release.
+The behavior-level HiChord, PO-33, and MEDO **capacity and core behavior** is
+verified at branch head `f2d356c942233eaf825f86a06b3f08fddd51e403`
+(pull-request merge test tree `d7feb365e6f8de03255e2ea3a6128fb895f3749a`).
+The sizes and hashes below describe that tree, which is five commits behind
+the `main` head that produced the alpha.2 artifacts — they are retained as
+history, not as a description of the current release. Note also that the
+pure-core tests referenced here do not cover `input.cpp`/`ui.cpp`, where the
+15 HiChord modes and every page interaction actually live; those files are
+syntax-checked only, which is why the review above found what it did.
 
 - Full validation workflow:
   [run 31598932662](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/runs/31598932662)
@@ -21,9 +55,14 @@ capacity-only software claim without altering the immutable alpha.1 release.
 - Host suite, AddressSanitizer + UndefinedBehaviorSanitizer, all three pinned
   firmware builds, both Cardputer resource gates, dual-image merge, package
   manifest, generated-asset checks, and site build: **passed**
-- Normal image: 204,728 bytes static DRAM (72 bytes inside the unchanged
-  204,800-byte project gate); 985,985-byte flash estimate; application
-  SHA-256 `356db35efcbe9c51b77ab95f6a5264d8f23c2e282f55f7855c89dd1310f4c224`
+- Normal image: 204,728 bytes static DRAM — **72 bytes, 0.035%, inside the
+  204,800-byte gate.** This is a release risk, not a neutral measurement:
+  any new global buffer breaks CI. The alpha.3 tree reclaims roughly 4 KiB
+  by heap-allocating the PO punch-effect history (which also lets it hold a
+  real 16th note instead of aliasing); the 8 KiB `MasterEffects` delay line
+  is the next candidate if more headroom is needed. Flash estimate
+  985,985 bytes; application SHA-256
+  `356db35efcbe9c51b77ab95f6a5264d8f23c2e282f55f7855c89dd1310f4c224`
 - USB-host image: 193,160 bytes static DRAM; 1,004,317-byte flash estimate;
   application SHA-256
   `49b54dd0bc1a48e759dbf385fefb0e01f88e2b9f9ad4bb352f4d640768ff7e26`
@@ -198,10 +237,23 @@ downloads (272,341 bytes total), including the regenerated snap-fit cap lid.
   recovery state.
 - Sampler tests cover quota normalization, trim/slicing, locks, pitch, EOF,
   underrun, sound/slice copy, and four-voice stealing.
-- Three-in-one tests cover every chord type/scale/map, arp schedules, 56
-  grooves, pitch detection, PO effect determinism and locks, MEDO roles/scales/
-  quantizers/gestures, master effects, vocoder modulation, swing, presets, GBX
-  v9 round trips, malformed state, protocol fuzzing and CLI generation.
+- Three-in-one tests cover all 28 chord types through `intervals()`, arp
+  schedules for all six patterns over a full cycle (including that RANDOM is
+  neither periodic nor a shifted UP), all 56 grooves asserted mutually
+  distinct, pitch detection accuracy and rejection cases, PO effect
+  determinism plus measured playback rates and tempo-derived step length,
+  MEDO roles/scales/quantizers/gestures/arp directions, master effects,
+  vocoder band ordering and every vocoder control's audibility, swing,
+  presets, `SavePerformanceState` round trips with an exhaustive
+  validator/decoder parity sweep, malformed state, protocol fuzzing and CLI
+  generation.
+  Known coverage limits, stated plainly: only `SCALE_MAJOR` is built
+  end-to-end (the other nine scales are covered by name/table checks);
+  `storage.cpp` is syntax-checked but never executed, so GBX *file* I/O,
+  v1–v8 migration and the `.bak` fallback have no host coverage — an
+  in-memory SD stub is the outstanding work there; and `input.cpp`/`ui.cpp`
+  are syntax-checked only, so page interactions are verified by reading, not
+  by running.
 - Event tests cover five tracks, 128 bars, ordering, bounds, and capacity.
   Live and replayed note releases are recorded explicitly so ADSR engines do
   not leave sustained voices stuck.

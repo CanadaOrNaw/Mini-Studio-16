@@ -148,6 +148,36 @@ class MiniStudioCliTests(unittest.TestCase):
         args = cli.parser().parse_args(["medo-set", "arp_enabled", "1"])
         self.assertEqual(cli.command_words(args), ["medo", "set", "arp_enabled", 1])
 
+    def test_chord_inversion_and_octave_shift_have_cli_paths(self):
+        # A2-P3: both ship in the firmware and are documented in
+        # CONTROL_PROTOCOL.md; they previously had no CLI subcommand at all.
+        args = cli.parser().parse_args(["chord-inversion", "3", "5"])
+        self.assertEqual(cli.command_words(args), ["chord", "inversion", 3, 5])
+        args = cli.parser().parse_args(["chord-octave-shift", "7", "0"])
+        self.assertEqual(cli.command_words(args), ["chord", "octave_shift", 7, 0])
+        for bad in (["chord-inversion", "3", "6"], ["chord-inversion", "0", "1"],
+                    ["chord-octave-shift", "1", "5"]):
+            with self.assertRaises(SystemExit):
+                cli.parser().parse_args(bad)
+
+    def test_documented_protocol_commands_all_have_cli_paths(self):
+        # Guard against future drift: every `chord|po|medo|loop ...` row in
+        # the protocol table should be reachable from the CLI.
+        import pathlib
+        import re
+        doc = (pathlib.Path(__file__).resolve().parents[1] /
+               "docs" / "CONTROL_PROTOCOL.md").read_text(encoding="utf-8")
+        documented = set()
+        for row in re.finditer(r"^\|\s*`([^`]+)`\s*\|", doc, re.MULTILINE):
+            words = row.group(1).split()
+            if len(words) >= 2 and words[0] in ("chord", "po", "medo"):
+                documented.add((words[0], words[1].split("\\")[0]))
+        source = (pathlib.Path(__file__).resolve().parents[1] /
+                  "tools" / "ministudio_cli.py").read_text(encoding="utf-8")
+        for group, action in sorted(documented):
+            self.assertIn(f'"{group}", "{action}"', source,
+                          f"protocol row `{group} {action}` has no CLI path")
+
     def test_audio_cap_commands(self):
         args = cli.parser().parse_args(["cap-status"])
         self.assertEqual(cli.command_words(args), ["cap", "status"])

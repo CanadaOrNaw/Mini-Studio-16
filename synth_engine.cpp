@@ -314,6 +314,7 @@ void SynthTrack::init() {
     rr = 0;
     liveMask = 0;
     pendingEngine = 0xFF;
+    pendingVoiceOp = 0;
 }
 
 void SynthTrack::setEngine(SynthEngine selected) {
@@ -451,6 +452,33 @@ void SynthTrack::hardStop() {
         fmVoices[index].init();
     }
     liveMask = 0;
+}
+
+void SynthTrack::requestHardStop() {
+    // A2-P1-5: callable from any task; the audio task performs the actual
+    // re-initialisation between blocks (see applyPendingVoiceReset).
+    __atomic_or_fetch(&pendingVoiceOp, 1u, __ATOMIC_ACQ_REL);
+}
+
+void SynthTrack::requestVoices(uint8_t count) {
+    if (count < 1) count = 1;
+    if (count > MAX_POLY) count = MAX_POLY;
+    uint8_t expected = __atomic_load_n(&pendingVoiceOp, __ATOMIC_ACQUIRE);
+    uint8_t desired;
+    do {
+        desired = static_cast<uint8_t>((expected & 1u) | (count << 1));
+    } while (!__atomic_compare_exchange_n(&pendingVoiceOp, &expected, desired,
+                                          false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
+}
+
+void SynthTrack::applyPendingVoiceReset() {
+    // Runs on the audio task only, before the block's first render().
+    const uint8_t pending =
+        __atomic_exchange_n(&pendingVoiceOp, static_cast<uint8_t>(0u), __ATOMIC_ACQ_REL);
+    if (!pending) return;
+    const uint8_t count = static_cast<uint8_t>(pending >> 1);
+    if (count) setVoices(count);
+    if (pending & 1u) hardStop();
 }
 
 void SynthTrack::sustainLegacy() {

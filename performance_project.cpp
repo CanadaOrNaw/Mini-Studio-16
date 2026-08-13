@@ -93,7 +93,15 @@ bool performanceProjectValidate(const SavePerformanceState &in) {
         (in.hiChordPracticePosition >> 4) > 3 ||
         in.hiChordEarLevel > 3 || in.medoScale >= MEDO_SCALE_COUNT ||
         (in.medoArpDirection & 0x7Fu) >= MEDO_ARP_COUNT ||
-        (in.medoArpRate != 1 && in.medoArpRate != 2 && in.medoArpRate != 4 && in.medoArpRate != 8))
+        (in.medoArpRate != 1 && in.medoArpRate != 2 && in.medoArpRate != 4 && in.medoArpRate != 8) ||
+        // A2-P2 (alpha.2 reconciliation): the validator used to skip
+        // medoSharedBars while the decoder rejected anything over 128. The
+        // whole point of staging is "validate everything before touching
+        // live state" — this hole let a corrupt file pass the pre-flight
+        // gate and then fail decode AFTER the loader had already cleared
+        // patterns, sampler slots and performance state, destroying the
+        // user's unsaved session with nothing loaded.
+        in.medoSharedBars > 128)
         return false;
     for (uint8_t i = 0; i < 16; ++i) {
         const HiChordSequenceStep &step = in.chordSequence[i];
@@ -105,10 +113,15 @@ bool performanceProjectValidate(const SavePerformanceState &in) {
     for (uint8_t role = 0; role < MEDO_ROLE_COUNT; ++role)
         if (in.medoTracks[role].volume > 127 || in.medoTracks[role].octave < -4 ||
             in.medoTracks[role].octave > 4 || in.medoTracks[role].quantize > MEDO_GROOVE) return false;
-    MasterEffects validation;
-    if (!validation.applySettings(in.masterEffects)) return false;
-    Vocoder8Band vocoderValidation;
-    if (!vocoderValidation.applySettings(in.vocoder)) return false;
+    // A2-P1-1 (alpha.2 reconciliation): these used to be stack-allocated
+    // MasterEffects/Vocoder8Band temporaries, purely to reuse their range
+    // checks. MasterEffects is 8,236 bytes and this function runs only on
+    // the 8,192-byte Arduino loopTask, so the frame (measured 8,528 bytes
+    // with -fstack-usage) overflowed the stack before doing any work —
+    // every saved v9 project was unloadable on hardware while saving
+    // appeared to succeed. The checks are pure, so they are static now.
+    if (!MasterEffects::validate(in.masterEffects)) return false;
+    if (!Vocoder8Band::validate(in.vocoder)) return false;
     for (uint8_t preset = 0; preset < 4; ++preset) {
         const SavePerformancePreset &item = in.presets[preset];
         if (item.valid > 1) return false;

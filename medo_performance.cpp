@@ -1,5 +1,20 @@
 #include "medo_performance.h"
 
+namespace {
+// A2-P2 (alpha.2 reconciliation): `(tick * 1103515245 + 12345) % count` is a
+// single LCG step, so consecutive ticks stay correlated and the "random"
+// arp degenerated to a period-4 sequence. A 32-bit integer finalizer
+// (Murmur3's) decorrelates adjacent ticks while remaining a pure function
+// of the tick, so playback stays deterministic and reproducible.
+uint32_t scrambleTick(uint32_t tick) {
+    uint32_t h = tick + 0x9E3779B9u;
+    h ^= h >> 16; h *= 0x85EBCA6Bu;
+    h ^= h >> 13; h *= 0xC2B2AE35u;
+    h ^= h >> 16;
+    return h;
+}
+}  // namespace
+
 MedoPerformance::MedoPerformance() { reset(); }
 
 void MedoPerformance::reset() {
@@ -41,7 +56,8 @@ uint8_t MedoPerformance::arpNoteIndex(uint8_t noteCount, uint32_t tick) const {
             return index < noteCount ? index : static_cast<uint8_t>(span - index);
         }
         case MEDO_ARP_RANDOM:
-            return static_cast<uint8_t>((tick * 1103515245u + 12345u) % noteCount);
+            // A2-P2: see hichord_performance.cpp — same LCG-at-tick defect.
+            return static_cast<uint8_t>(scrambleTick(tick) % noteCount);
         case MEDO_ARP_UP:
         default:
             return static_cast<uint8_t>(tick % noteCount);

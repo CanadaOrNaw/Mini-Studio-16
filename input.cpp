@@ -143,8 +143,9 @@ static void fireChordMidi(HeldChord &held, uint8_t index) {
     const uint8_t midi = held.note[index], track = heldTrack(held, index);
     eventLooperSetRecordRoleOverride(heldRole(held, index));
     eventLooperSetRecordRoleGain(heldMedoRoleGain(held));
-    liveSynthNote(track, static_cast<uint8_t>(midi % 12u + 1u),
-                  static_cast<uint8_t>(midi / 12u - 1u), false, index > 0,
+    uint8_t splitNote = 0, splitOctave = 0;
+    chordSplitMidi(midi, splitNote, splitOctave);          // A2-P2
+    liveSynthNote(track, splitNote, splitOctave, false, index > 0,
                   heldVelocity(held));
     eventLooperSetRecordRoleOverride(-1);
     eventLooperSetRecordRoleGain(false);
@@ -194,21 +195,44 @@ void inputStopHiChordPerformanceNotes() {
         }
     }
     eventLooperSetRecordRoleOverride(-1);
-    for (uint8_t track = 0; track < NUM_SYNTHS; ++track) g_synths[track].hardStop();
+    for (uint8_t track = 0; track < NUM_SYNTHS; ++track) g_synths[track].requestHardStop();
     s_heldChordCount = 0;
     s_chordReleaseCount = 0;
     s_autoDrumCount = 0;
 }
 
 static void applyHiChordDrumKit(uint8_t kit) {
+    // A2-P3 (alpha.2 reconciliation): kits 0 and 1 used to produce
+    // byte-identical lane state, so the documented "seven kits" was really
+    // five distinct programmings plus a no-op. Each kit index now has its
+    // own engine/tune/decay character, and the loop covers every drum lane
+    // instead of stopping one short of NUM_DRUM_LANES.
+    //
+    //   0 CLASSIC   808, neutral
+    //   1 TIGHT     808, short decay, slightly up-tuned
+    //   2 HOUSE     909, neutral
+    //   3 ROOM      808, long decay
+    //   4 SNAP      808, very short decay
+    //   5 DEEP      909, sub-tuned kick, long decay
+    //   6 USER      preserves whatever the user programmed on the DRUM page
+    static const struct { bool is909; float tune; float decay; } kits[6] = {
+        {false,  0.0f, 1.00f},
+        {false,  1.5f, 0.70f},
+        {true,   0.0f, 1.00f},
+        {false,  0.0f, 1.40f},
+        {false,  0.0f, 0.55f},
+        {true,  -5.0f, 1.25f},
+    };
     g_hiChordDrumKit = kit % HiChordDrumGrooves::KIT_COUNT;
     if (g_hiChordDrumKit == 6) return; // user kit preserves lane assignments
-    for (uint8_t lane = 0; lane < 7; ++lane) {
+    const auto &preset = kits[g_hiChordDrumKit];
+    for (uint8_t lane = 0; lane < NUM_DRUM_LANES; ++lane) {
         DrumLane &drum = g_drumLanes[lane];
-        drum.engine = (g_hiChordDrumKit == 2 || g_hiChordDrumKit == 5) ? ENG_909 : ENG_808;
+        drum.engine = preset.is909 ? ENG_909 : ENG_808;
         drum.type = static_cast<uint8_t>(lane % DT_COUNT);
-        drum.tune = g_hiChordDrumKit == 5 && lane == 0 ? -5.0f : 0.0f;
-        drum.decay = g_hiChordDrumKit == 3 ? 1.4f : g_hiChordDrumKit == 4 ? 0.75f : 1.0f;
+        // Only the kick carries the kit's tuning offset; the rest stay flat.
+        drum.tune = lane == 0 ? preset.tune : 0.0f;
+        drum.decay = preset.decay;
     }
 }
 
@@ -333,14 +357,14 @@ static void updateEarAudition(uint32_t nowUs) {
     const ChordVoicing chord = g_chordEngine.build(
         g_chordSettings, s_earDegrees[targetIndex], direction);
     const uint8_t noteCount = s_earAuditionRootOnly ? 1 : chord.count;
-    g_synths[0].setVoices(3); g_synths[1].setVoices(3);
+    g_synths[0].requestVoices(3); g_synths[1].requestVoices(3);
     for (uint8_t noteIndex = 0; noteIndex < noteCount; ++noteIndex) {
         const uint8_t midi = chord.notes[noteIndex];
         const uint8_t track = static_cast<uint8_t>(noteIndex / 3u);
-        g_synths[track].noteOnLive(
-            noteToFreq(static_cast<uint8_t>(midi % 12u + 1u),
-                       static_cast<uint8_t>(midi / 12u - 1u)),
-            false, false, midi, 96);
+        uint8_t earNote = 0, earOctave = 0;
+        chordSplitMidi(midi, earNote, earOctave);          // A2-P2
+        g_synths[track].noteOnLive(noteToFreq(earNote, earOctave),
+                                   false, false, midi, 96);
         midiOutputNoteOn(track, midi, 96);
         if (s_chordReleaseCount < sizeof(s_chordReleases) /
                                       sizeof(s_chordReleases[0]))
@@ -487,7 +511,7 @@ static void playChord(uint8_t key, const KeySnap &keys, uint8_t velocity = 104,
             g_curStep = static_cast<uint8_t>((g_curStep + 1u) %
                                              g_hiChordSequenceLength);
     }
-    g_synths[0].setVoices(3); g_synths[1].setVoices(3);
+    g_synths[0].requestVoices(3); g_synths[1].requestVoices(3);
     if (medoArp) {
         held.nextArpUs = micros();
     } else if (mode == HICHORD_STRUM) {
@@ -921,6 +945,15 @@ static void arrow(uint8_t act, const KeySnap& now) {
             }
             break;
         case PAGE_CHORD:
+            // A2-P1-7 (alpha.2 reconciliation): the chord DIRECTION gesture
+            // and the parameter arrows are the same four physical keys
+            // (x/c/v/b = LEFT/DOWN/UP/RIGHT), and those keys auto-repeat.
+            // Holding `b` to voice a dominant-7th therefore spun the chord
+            // MODE through all 15 HiChord modes, each transition stopping
+            // notes and arming a loop bounce. While a chord degree key is
+            // held the arrows belong to the performance gesture, not to
+            // parameter editing.
+            if (s_heldChordCount) break;
             if (dy) g_chordParameter = static_cast<uint8_t>((g_chordParameter + 8 + dy) % 8);
             if (dx) {
                 switch (g_chordParameter) {
@@ -996,6 +1029,9 @@ static void arrow(uint8_t act, const KeySnap& now) {
                 (g_poEffectSelection + PO_FX_COUNT + (dy ? dy : dx)) % PO_FX_COUNT);
             break;
         case PAGE_MEDO:
+            // A2-P1-7: same conflict as PAGE_CHORD when the MEDO Chord role
+            // is using the direction keys as a performance gesture.
+            if (s_heldChordCount) break;
             if (dy) g_medoParameter = static_cast<uint8_t>((g_medoParameter + 7 + dy) % 7);
             if (dx) {
                 const MedoRole role = g_medoPerformance.role();
@@ -1235,17 +1271,30 @@ static void doShort(uint8_t act) {
     }
     if (g_curPage == PAGE_SAMPLE && act == ACT_SAVE) {
         bool copied = false;
-        if (s_sampleCopySlot < SAMPLER_SLOT_COUNT && s_sampleCopySlice != 0xFF &&
-            g_samplerSlotBank.slot(g_streamSampleSlot).mode == SAMPLER_SLOT_SLICED)
+        if (s_sampleCopySlot >= SAMPLER_SLOT_COUNT) {
+            uiStatus("NOTHING COPIED");
+            return;
+        }
+        if (s_sampleCopySlice != 0xFF) {
+            // A2-P2 (alpha.2 reconciliation): a slice on the clipboard used
+            // to fall through to copySlot() when the destination was not
+            // sliced, silently replacing the destination's filename, trim,
+            // parameters and all 16 slices — while the status line still
+            // said "SLICE COPY QUEUED". Refuse instead of destroying it.
+            if (g_samplerSlotBank.slot(g_streamSampleSlot).mode != SAMPLER_SLOT_SLICED) {
+                uiStatus("DEST NOT SLICED");
+                return;
+            }
             copied = s_sampleCopySlot == g_streamSampleSlot
                 ? g_samplerSlotBank.copySlice(s_sampleCopySlot, s_sampleCopySlice,
                                               g_streamSampleSlot, s_selectedSampleSlice)
                 : streamingSamplerCopySlice(s_sampleCopySlot, s_sampleCopySlice,
                                             g_streamSampleSlot, s_selectedSampleSlice);
-        else if (s_sampleCopySlot < SAMPLER_SLOT_COUNT)
-            copied = g_samplerSlotBank.copySlot(s_sampleCopySlot, g_streamSampleSlot);
-        uiStatus(copied ? (s_sampleCopySlice == 0xFF ? "PASTED" : "SLICE COPY QUEUED")
-                        : "PASTE FAILED");
+            uiStatus(copied ? "SLICE COPY QUEUED" : "PASTE FAILED");
+            return;
+        }
+        copied = g_samplerSlotBank.copySlot(s_sampleCopySlot, g_streamSampleSlot);
+        uiStatus(copied ? "PASTED" : "PASTE FAILED");
         return;
     }
     // track select
@@ -1321,6 +1370,11 @@ static void doShort(uint8_t act) {
             g_needRedraw = true; break;
 
         case ACT_PAGE:
+            // A2-P2: leaving a performance page must not strand held chords
+            // (their key-up is handled generically now, but latched Drone
+            // and arp/repeat state belong to the page being left).
+            if (g_curPage == PAGE_CHORD || g_curPage == PAGE_MEDO)
+                inputStopHiChordPerformanceNotes();
             g_curPage = (Page)(((int)g_curPage + 1) % PAGE_COUNT);
             if (g_curPage == PAGE_SAMPLE) uiScanSampleDir();
             g_needRedraw = true; break;
@@ -1762,9 +1816,15 @@ void inputUpdate() {
                 g_needRedraw = true;
             }
             releaseMidiNote(s_prev.codes[index]);
-            if (g_curPage == PAGE_CHORD ||
-                (g_curPage == PAGE_MEDO && g_medoPerformance.role() == MEDO_CHORD))
-                releaseChord(s_prev.codes[index]);
+            // A2-P2 (alpha.2 reconciliation): this used to be gated on the
+            // CURRENT page, but the page can change while a chord key is
+            // held (CTRL is a short action). Leaving PAGE_CHORD mid-hold
+            // then stranded the entry in s_heldChords forever: its notes
+            // were never released, arp/repeat kept firing on a page the
+            // user had left, and after seven such strandings the chord page
+            // went permanently silent. releaseChord() is a no-op for keys
+            // that are not held chords, so it is safe to call always.
+            releaseChord(s_prev.codes[index]);
         }
 
     // -- released --

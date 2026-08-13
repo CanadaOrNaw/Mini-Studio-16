@@ -1,6 +1,6 @@
 # Mini Studio 16 implementation and verification plan
 
-Branch: `agent/complete-three-in-one`
+Branch: `main`
 
 The earlier plan tracked headline capacities but did not trace the actual
 HiChord, PO-33, and MEDO workflows. That made its former "all software-only
@@ -20,7 +20,7 @@ Official behavior references:
 | --- | --- | --- |
 | HiChord seven diatonic chord buttons | Ten scales, 28 chord types, three joystick maps, chord lock, per-button octave/inversion, slash/root bass, voice leading | Every scale/type/map is generated and bounds-tested; UI and project round trip |
 | HiChord Play/Strum/Lead/Drone/Arp/Repeat | Fixed-size scheduler with 120/80/40 ms strum, monophonic Lead, latched Drone, six real arp patterns/three layers, all nine rates and bounded repeat gates | Deterministic pattern/rate/strum tests and no render-path allocation |
-| HiChord mic sample/drums/drum loops/auto-drum/sequencer | Pitch-detected three-second mic capture that enters Lead; seven kits/56 grooves; directional auto-drum rates; selectable 4/8/12/16-step chord sequence and three auto-bounce sources | State/rate/project tests; loop bounce produces exact Track-1 length |
+| HiChord mic sample/drums/drum loops/auto-drum/sequencer | Pitch-detected three-second mic capture that enters Lead; six programmed kits plus a user slot/56 grooves; directional auto-drum rates; selectable 4/8/12/16-step chord sequence and three auto-bounce sources | State/rate/project tests; loop bounce produces exact Track-1 length |
 | HiChord Chord Hiro/Ear Trainer/Tuner/Mixer | Sixteen practice songs with documented ±200/150/100/50 ms graded timing; audible one/four-chord ear rounds and modified-chord directions; pitch detector and six-loop mixer | Timing/dataset/state/pitch tests and UI reachability |
 | HiChord six discrete ~20-second loops | Six SD streams; Track 1 free or 1–8 bars with four-beat count-in; exact layer boundary/length, auto-advance, mute/solo/volume/pause/metronome and bounce | Stream/timeline/fixed-length tests plus mixer/bounce integration |
 | HiChord vocoder/presets/effects | Mic or Loop-1 modulator, bounded vocoder/effects, four user performance presets | Offline audio and project round-trip tests |

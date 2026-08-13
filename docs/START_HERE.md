@@ -35,8 +35,7 @@ The easy way — no account needed:
 The developer way — only if you want the newest unreleased build:
 
 1. Open [Build v3 alpha](https://github.com/CanadaOrNaw/Mini-Studio-16/actions/workflows/build-v3-alpha.yml).
-2. Open the newest green run for the branch named in the open completion PR
-   (currently `agent/complete-three-in-one`).
+2. Open the newest green run for the `main` branch.
 3. At the bottom, download the artifact named
    `microgroove-v3-alpha-cardputer-adv`. **This path always requires a free
    GitHub account sign-in, and each run's artifact is deleted about 90 days

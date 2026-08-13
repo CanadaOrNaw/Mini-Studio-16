@@ -2,7 +2,7 @@ name: Build and deploy Pages
 
 on:
   push:
-    branches: ["main", "agent/v3-alpha-sd-streaming", "agent/complete-three-in-one"]
+    branches: ["main", "agent/**"]
     paths:
       - "site/**"
       - "hardware/**"
@@ -57,8 +57,7 @@ jobs:
         id: pages-config
         if: >-
           github.event_name != 'pull_request' ||
-          github.head_ref == 'agent/v3-alpha-sd-streaming' ||
-          github.head_ref == 'agent/complete-three-in-one'
+          startsWith(github.head_ref, 'agent/')
         # Forks and fresh repositories can validate/download the complete site
         # artifact before an owner enables Pages in Settings. Once enabled,
         # this step succeeds and the deploy job becomes eligible.

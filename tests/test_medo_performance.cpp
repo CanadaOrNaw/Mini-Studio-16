@@ -20,7 +20,35 @@ int main() {
     assert(m.setArpRate(8));
     assert(!m.arpEnabled()); m.setArpEnabled(true); assert(m.arpEnabled());
     assert(m.arpIntervalUs(120) == 62500);
-    assert(m.arpNoteIndex(4, 0) == m.arpNoteIndex(4, 0));
+    // A2 test gap: `arpNoteIndex(4,0) == arpNoteIndex(4,0)` is a tautology,
+    // and it was the ONLY coverage of MEDO_ARP_RANDOM — exactly where the
+    // period-4 defect lived. Assert determinism, in-range output, and that
+    // it is neither periodic at the chord length nor a shifted MEDO_ARP_UP.
+    {
+        uint8_t randomSeq[32];
+        for (uint32_t tick = 0; tick < 32; ++tick) {
+            randomSeq[tick] = m.arpNoteIndex(4, tick);
+            assert(randomSeq[tick] < 4);
+            assert(m.arpNoteIndex(4, tick) == randomSeq[tick]);   // deterministic
+        }
+        bool periodic = true;
+        for (uint32_t tick = 0; tick + 4 < 32; ++tick)
+            if (randomSeq[tick] != randomSeq[tick + 4]) periodic = false;
+        assert(!periodic);
+        for (uint8_t offset = 0; offset < 4; ++offset) {
+            bool matchesUp = true;
+            for (uint32_t tick = 0; tick + offset < 32; ++tick)
+                if (randomSeq[tick + offset] != (tick % 4)) matchesUp = false;
+            assert(!matchesUp);
+        }
+        uint8_t histogram[4] = {0, 0, 0, 0};
+        for (uint32_t tick = 0; tick < 32; ++tick) ++histogram[randomSeq[tick]];
+        for (uint8_t i = 0; i < 4; ++i) assert(histogram[i] > 0);  // uses the chord
+    }
+    // A2 test gap: MEDO_ARP_DOWN was never exercised at all.
+    assert(m.setArpDirection(MEDO_ARP_DOWN));
+    for (uint32_t tick = 0; tick < 8; ++tick)
+        assert(m.arpNoteIndex(4, tick) == 3 - (tick % 4));
     assert(m.setArpDirection(MEDO_ARP_UP_DOWN));
     const uint8_t expected[] = {0,1,2,3,2,1,0};
     for (uint8_t tick = 0; tick < 7; ++tick)

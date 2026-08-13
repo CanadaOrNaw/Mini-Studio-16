@@ -21,6 +21,10 @@ struct AudioCapSnapshot {
 
 void audioCapInit();
 void audioCapProcessAudioBlock(int16_t* masterPcm, size_t frames);
+// Most recent line-input frame for vocoder modulation. Returns false when no
+// cap is attached (or it has produced no audio yet), which tells the caller
+// to leave the dry bus alone rather than vocode against silence.
+bool audioCapLineModulator(size_t frame, int16_t& sample);
 AudioCapSnapshot audioCapSnapshot();
 void audioCapRequestPair();
 void audioCapRequestDisconnect();
