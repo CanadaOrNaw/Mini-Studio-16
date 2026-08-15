@@ -161,8 +161,10 @@ bool audioEngineBeginExclusiveMutation(uint32_t timeoutMs) {
         if (__atomic_load_n(&s_mutationActive, __ATOMIC_ACQUIRE)) return true;
         vTaskDelay(1);
     }
+    // Fail closed. Do not infer ownership from a late `active` observation
+    // after withdrawing the request: the audio task may already be resuming.
     __atomic_store_n(&s_mutationRequested, static_cast<uint8_t>(0u), __ATOMIC_RELEASE);
-    return __atomic_load_n(&s_mutationActive, __ATOMIC_ACQUIRE) != 0;
+    return false;
 }
 
 void audioEngineEndExclusiveMutation() {
