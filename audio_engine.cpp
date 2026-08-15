@@ -46,6 +46,14 @@ static void audioTask(void*) {
         // applied here, at the block boundary, so setEngine's voice re-init
         // can never interleave with the per-sample render() calls below.
         for (int s = 0; s < NUM_SYNTHS; s++) g_synths[s].applyPendingEngine();
+        // A2-P1-5: voice hard-stops requested by the input task (HiChord
+        // Lead/Drone chord changes) are applied here for the same reason.
+        for (int s = 0; s < NUM_SYNTHS; s++) g_synths[s].applyPendingVoiceReset();
+        // A2-P3: consume effect/vocoder settings once per block. The vocoder's
+        // coefficient update runs 1 powf + 8 sinf and must never land inside
+        // the per-sample loop below.
+        g_masterEffects.syncSettings();
+        g_vocoder.syncSettings();
         const VocoderSettings vocoder = g_vocoder.settings();
 
         for (int i = 0; i < AUDIO_BUF_LEN; i++) {
@@ -66,11 +74,28 @@ static void audioTask(void*) {
                                  sampleBus;
             const int16_t dryPcm = toPcm(dryMix);
             const int32_t loopPcm = loopEngineProcessFrame(dryPcm);
-            const int16_t modulator = vocoder.source == VOCODER_LOOP1
-                ? static_cast<int16_t>(loopEngineLastTrackPcm(0)) : 0;
+            // A2-P1-3 (alpha.2 reconciliation): the modulator used to be
+            // hardcoded to 0 for anything but Loop 1, and the vocoder output
+            // then REPLACED the dry bus — so selecting the mic or line source
+            // silenced all three synths, eight drum lanes and the sampler.
+            // A source that cannot currently supply audio now reports itself
+            // unavailable and the dry bus passes through untouched.
+            int16_t modulator = 0;
+            bool haveModulator = false;
+            if (vocoder.source == VOCODER_LOOP1) {
+                modulator = static_cast<int16_t>(loopEngineLastTrackPcm(0));
+                haveModulator = true;
+            } else if (vocoder.source == VOCODER_LINE) {
+                haveModulator = audioCapLineModulator(static_cast<size_t>(i), modulator);
+            }
+            // VOCODER_MIC needs simultaneous mic capture while the speaker
+            // renders. The inherited high-level path switches between mic and
+            // speaker rather than running both, so live mic modulation stays a
+            // hardware gate (docs/CARDPUTER_TESTING.md section 11); until then
+            // it behaves as "no modulator" and never mutes the instrument.
             const int16_t carrier = g_vocoder.process(toPcm(dryMix), modulator);
-            const float carrierMix = vocoder.enabled
-                ? static_cast<float>(carrier) / 12000.0f : dryMix;
+            const float carrierMix = (vocoder.enabled && haveModulator)
+                ? static_cast<float>(carrier) / 32768.0f : dryMix;
             float mix = carrierMix + static_cast<float>(loopPcm) / 12000.0f;
 
             // soft clip

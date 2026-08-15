@@ -57,6 +57,9 @@ uint32_t s_maxWriteUs = 0;
 uint32_t s_errors = 0;
 alignas(4) uint32_t s_paused = 0;
 alignas(4) uint32_t s_metronome = 0;
+// Audio-task-owned cache for the metronome/count-in click (A2-P3).
+uint16_t s_clickBpm = 0;
+uint32_t s_clickBeatFrames = 0;
 alignas(4) uint32_t s_soloTrack = LOOP_NO_TRACK;
 uint8_t s_preSoloMutedMask = 0;
 
@@ -487,9 +490,19 @@ void loopEngineInit(bool sdMounted) {
 int32_t loopEngineProcessFrame(int16_t dryInput) {
     if (!s_sdMounted || __atomic_load_n(&s_paused, __ATOMIC_ACQUIRE)) return 0;
     int32_t output = s_core.processFrame(dryInput);
-    if (__atomic_load_n(&s_metronome, __ATOMIC_ACQUIRE)) {
-        const uint32_t beatFrames = static_cast<uint32_t>(SAMPLE_RATE) * 60u /
-                                    (g_bpm ? g_bpm : 120u);
+    // A2-P3: the click is audible while the metronome is on, and also during
+    // a count-in — the advertised "four-beat count-in" previously gave no
+    // audible cue unless the user had separately enabled the metronome.
+    // beatFrames is loop-invariant, so it is cached rather than recomputed
+    // (three integer divisions) on every sample.
+    const bool counting = s_core.trackState(0) == LOOP_STREAM_RECORD_WAIT;
+    if (counting || __atomic_load_n(&s_metronome, __ATOMIC_ACQUIRE)) {
+        const uint16_t bpm = g_bpm ? g_bpm : 120u;
+        if (bpm != s_clickBpm) {
+            s_clickBpm = bpm;
+            s_clickBeatFrames = static_cast<uint32_t>(SAMPLE_RATE) * 60u / bpm;
+        }
+        const uint32_t beatFrames = s_clickBeatFrames;
         const uint32_t phase = beatFrames ? s_core.absoluteFrame() % beatFrames : 0;
         if (phase < 96) output += static_cast<int32_t>(5000 * (96 - phase) / 96);
     }
@@ -499,6 +512,12 @@ int32_t loopEngineLastTrackPcm(uint8_t track) { return s_core.lastTrackOutput(tr
 
 bool loopEngineRequestRecord(uint8_t track, uint32_t targetFrames,
                              uint32_t countInFrames) {
+    // A2-P1-2 (alpha.2 reconciliation): arming while the transport is paused
+    // used to be accepted, but processFrame() — and therefore the frame
+    // clock — is suspended while paused, so the take's scheduled start could
+    // never arrive. It then reported "recording", which blocked resume,
+    // clear and (for layers) stop: a two-keypress permanent lockout.
+    if (__atomic_load_n(&s_paused, __ATOMIC_ACQUIRE)) return false;
     if (!s_sdMounted || track >= LOOP_STREAM_TRACKS || loopEngineIsRecording() ||
         masterRecorderIsBusy() || stemRecorderIsBusy() || sdDiagnosticsIsRunning() ||
         micRecActive() || streamingSamplerIsRecording() ||
@@ -521,9 +540,16 @@ bool loopEngineStopRecording(uint8_t track) {
     if (track > 0 && track < LOOP_STREAM_TRACKS) {
         const LoopStreamState state = s_core.trackState(track);
         // Layers 2..6 are exact Track-1-length takes. An early button press
-        // means "finish this layer" at the already scheduled boundary; an
-        // immediate finalize would create a short file and reject it.
-        if (state == LOOP_STREAM_RECORD_WAIT || state == LOOP_STREAM_RECORDING)
+        // on a take that is actually running means "finish this layer" at
+        // the already scheduled boundary; an immediate finalize would create
+        // a short file and reject it.
+        //
+        // A2-P1-2: but a take still in RECORD_WAIT has captured nothing, so
+        // cancelling it is always safe — and if the transport is paused the
+        // boundary will never arrive at all, so deferring would strand the
+        // engine. Both cases fall through to a real stop request.
+        if (state == LOOP_STREAM_RECORDING &&
+            !__atomic_load_n(&s_paused, __ATOMIC_ACQUIRE))
             return true;
     }
     return s_core.requestStopRecording(track);

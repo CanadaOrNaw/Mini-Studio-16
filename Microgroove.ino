@@ -114,6 +114,11 @@ void setup() {
     }
     loopEngineInit(s_sdOk);
     streamingSamplerInit(s_sdOk);
+    // A2-P2: the PO punch-effect history is heap-allocated so it is not
+    // charged against the tight static-DRAM budget and can be long enough to
+    // hold a real 16th note. A failed allocation degrades to pass-through.
+    if (!g_poEffectProcessor.begin())
+        Serial.println("BOOT_WARN po_effects=no_history");
     performanceStateInit();
     sequencerInit();
     midiInputInit();

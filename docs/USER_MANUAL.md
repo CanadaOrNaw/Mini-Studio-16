@@ -98,11 +98,16 @@ tremolo, vibrato, and filter. `v/c` selects a row, `x/b` edits, and `/`
 toggles the selected effect. Mix is per effect; feedback, rate, and filter are
 shared. The audio task receives settings through a block-safe snapshot.
 
-VOCODER is an eight-band carrier/modulator processor. Loop 1 is a working
-modulator without extra hardware. The onboard mic and Audio Cap line choices
-are present and persisted, but live full-duplex validation is deliberately a
-hardware test. Use arrows to edit enabled/source/formant/Q/envelopes/noise/gate
-and `/` to toggle it.
+VOCODER is an eight-band carrier/modulator processor. Its eight band centres
+stay distinct and ordered at every formant setting. Loop 1 is a working
+modulator without extra hardware. Audio Cap line is implemented and needs the
+cap attached to validate. The onboard-mic modulator needs simultaneous mic
+capture and speaker output; the inherited audio path switches between the two
+rather than running both, so live mic vocoding is a hardware gate (see the
+full-duplex section of the Cardputer test guide) and currently supplies no
+modulator. Selecting a source that cannot supply audio leaves the dry bus
+untouched — enabling the vocoder never silences the instrument. Use arrows to
+edit enabled/source/formant/Q/envelopes/noise/gate and `/` to toggle it.
 
 ## CHORD page (HiChord workflow)
 
@@ -125,7 +130,7 @@ rate. The sequence length is selectable at 4/8/12/16 steps. Leaving a playing
 chord sequence, Drum Loop, or Drone arms the first empty audio loop and
 bounces it at the exact loop boundary.
 
-Drum mode selects seven kits; Drum Loops expose seven styles × eight
+Drum mode selects six programmed kits plus a USER slot that preserves whatever you programmed on the DRUM page; Drum Loops expose seven styles × eight
 variations (56 grooves), while Auto Drum uses held direction keys for quarter,
 eighth, sixteenth, thirty-second, triplet and swing triggers. Tuner uses a
 held AUX mic capture and displays Hz, MIDI note, and cents. Mic Sample records
@@ -258,7 +263,10 @@ changing a role volume also changes existing playback rather than baking the
 old level into every event.
 
 Click/Press/Slide are represented by keys and pressure/modifier controls;
-Slap/Tilt/Shake/Wiggle/Move come from the BMI270 motion layer. All eight have
+Slap/Tilt/Shake/Wiggle/Move come from the BMI270 motion layer. These are MEDO
+gesture *outputs*; the MOTION page's mappable source list is a separate,
+shorter set (tilt X/Y, acceleration, gyro, shake, slap) — Wiggle is not a
+mappable MOTION source. All eight have
 defined MIDI messages, and decimated controls can be recorded into event
 automation. Physical gesture thresholds remain part of Cardputer calibration.
 

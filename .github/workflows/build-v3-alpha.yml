@@ -2,7 +2,7 @@ name: Build v3 alpha
 
 on:
   push:
-    branches: ["main", "agent/v3-alpha-sd-streaming", "agent/complete-three-in-one"]
+    branches: ["main", "agent/**"]
     # P1-6 (reconciliation report): v* tags run the identical validation and
     # then publish a permanent, login-free GitHub Release; see the release
     # job at the bottom of this file.

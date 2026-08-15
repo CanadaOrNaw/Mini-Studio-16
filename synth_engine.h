@@ -138,6 +138,13 @@ struct SynthTrack {
     // never interleave with an in-flight render() on the other core.
     // 0xFF = no request pending. Accessed only through __atomic builtins.
     uint8_t pendingEngine;
+    // A2-P1-5 (alpha.2 reconciliation): hardStop() and setVoices() perform
+    // the same multi-word voice re-initialisation that pendingEngine exists
+    // to defer, but the HiChord Lead/Drone paths call them from the input
+    // task on every chord change. Requests are parked here and consumed by
+    // the audio task in applyPendingVoiceReset(). Bit 0 = hard stop
+    // requested; bits 1..7 = requested voice count (0 = unchanged).
+    uint8_t pendingVoiceOp;
 
     void init();
 
@@ -151,6 +158,11 @@ struct SynthTrack {
     // requested engine immediately instead of lagging one audio block.
     void requestEngine(SynthEngine selected);
     void applyPendingEngine();
+    // Cross-task-safe equivalents of hardStop()/setVoices(): request from any
+    // task, applied by the audio task at the next block boundary.
+    void requestHardStop();
+    void requestVoices(uint8_t count);
+    void applyPendingVoiceReset();
     SynthEngine displayEngine() const;
     void setVoices(uint8_t count);
     void noteOn(float frequency, bool accent, bool slide);

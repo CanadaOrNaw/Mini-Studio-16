@@ -35,7 +35,13 @@ static const char *kTypeNames[CHORD_TYPE_COUNT] = {
 };
 
 static uint8_t clampMidi(int value) {
-    if (value < 0) return 0;
+    // A2-P2 (alpha.2 reconciliation): the floor is MIDI 12 (C0), not 0. The
+    // inherited voice API takes a (note, octave) pair and callers derive it
+    // as `midi / 12 - 1`, which underflows to octave 255 for anything below
+    // 12 and asks the oscillator for 2^251 Hz. A low chord octave plus a
+    // -2 octave shift plus a -2 inversion reaches that range with entirely
+    // in-range documented inputs. Everything below C0 is sub-audible anyway.
+    if (value < 12) return 12;
     if (value > 127) return 127;
     return static_cast<uint8_t>(value);
 }

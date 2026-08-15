@@ -1,6 +1,7 @@
 #include "audio_cap.h"
 
 #include "audio_cap_bridge_core.h"
+#include "config.h"
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -23,6 +24,13 @@ portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 volatile uint8_t s_commands = 0;
 volatile uint8_t s_monitor = 0;
 volatile bool s_present = false;
+// A2-P1-3: one render block of line input, kept so the vocoder can use the
+// Audio Cap line as a modulator. Sized to the audio block; a short read
+// leaves the tail as the previous block's samples, which is harmless for an
+// envelope follower.
+constexpr size_t kLineHistoryFrames = AUDIO_BUF_LEN;
+int16_t s_lineHistory[kLineHistoryFrames] = {};
+alignas(4) uint32_t s_lineFrames = 0;
 volatile uint32_t s_transfers = 0;
 volatile uint32_t s_transferErrors = 0;
 AudioCapBridgeStats s_statsBaseline = {};
@@ -102,13 +110,26 @@ void audioCapInit() {
 
 void audioCapProcessAudioBlock(int16_t* masterPcm, size_t frames) {
     if (!masterPcm || frames == 0) return;
-    if (!s_present) return;
+    if (!s_present) {
+        // A2-P1-3: with no cap attached the line modulator must read as
+        // silence *and* report unavailable, so the vocoder falls back to the
+        // dry bus instead of muting the instrument.
+        __atomic_store_n(&s_lineFrames, 0u, __ATOMIC_RELEASE);
+        return;
+    }
     s_core.pushPlayback(masterPcm, frames);
     int16_t line[256];
     size_t offset = 0;
     while (offset < frames) {
         const size_t chunk = frames - offset > 256 ? 256 : frames - offset;
         s_core.popCapture(line, chunk);
+        // Keep this block's line input for the next render block so the
+        // vocoder can use it as a modulator (one block of latency, which is
+        // inaudible for formant tracking).
+        for (size_t index = 0; index < chunk; ++index) {
+            const size_t slot = offset + index;
+            if (slot < kLineHistoryFrames) s_lineHistory[slot] = line[index];
+        }
         const int32_t monitor = s_monitor;
         for (size_t index = 0; index < chunk; ++index) {
             int32_t mixed = masterPcm[offset + index] +
@@ -119,6 +140,15 @@ void audioCapProcessAudioBlock(int16_t* masterPcm, size_t frames) {
         }
         offset += chunk;
     }
+    const uint32_t stored = frames > kLineHistoryFrames
+        ? kLineHistoryFrames : static_cast<uint32_t>(frames);
+    __atomic_store_n(&s_lineFrames, stored, __ATOMIC_RELEASE);
+}
+
+bool audioCapLineModulator(size_t frame, int16_t& sample) {
+    if (__atomic_load_n(&s_lineFrames, __ATOMIC_ACQUIRE) == 0) return false;
+    sample = frame < kLineHistoryFrames ? s_lineHistory[frame] : 0;
+    return true;
 }
 
 AudioCapSnapshot audioCapSnapshot() {

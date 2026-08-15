@@ -197,7 +197,8 @@ center/eight directional maps. Check inversions, octave shifts, chord locks,
 root/slash bass and voice leading. Then step through all 15 modes: Play,
 Strum, Lead, Drone, Arp (all six patterns and three layers), Repeat, Mic
 Sample, Drum, Drum Loops, Auto Drum, Sequencer/bounce, Chord Hiro, Ear
-Trainer, Tuner and Mixer. Verify seven kits, every 56-groove selection,
+Trainer, Tuner and Mixer. Verify the six programmed kits sound distinct from
+one another and that the USER slot preserves DRUM-page edits, every 56-groove selection,
 pitch-detected three-second sampling, four presets, seven master effects,
 Loop-1 vocoder, mixer solo/mute/volume/pause/metronome and exact loop bounce.
 For mic vocoder, record whether the onboard codec can remain full duplex.
@@ -265,7 +266,21 @@ Verify:
 - an injected/real stall increments underrun and the track returns only at the
   next boundary, never late/off-phase;
 - recording while six tracks play produces no ring drops or corrupt WAV;
-- clearing L1 clears the shared timeline/all tracks as documented.
+- clearing L1 clears the shared timeline/all tracks as documented;
+- **fixed-bar Track 1 and count-in** (A2 additions, previously untested):
+  hold `m` + arrows on LOOPS to set 1–8 bars, arm L1, and confirm the
+  four-beat count-in is audible *without* separately enabling the
+  metronome, that recording starts exactly on beat 1 after it, and that
+  the finished file's frame count matches `bars × 4 × (60/BPM) × 22050`
+  to the sample. Confirm the guard rail: at a tempo where the requested
+  bar count would exceed 20 s (8 bars below ~96 BPM) arming is refused
+  with a message rather than silently truncating;
+- **pause/resume interlock** (A2-P1-2 regression): with the transport
+  paused (`n`), confirm arming any track is refused rather than accepted;
+  then record a layer normally, pause, and confirm resume, stop and clear
+  all still work. The pre-fix build wedged the whole loop engine here with
+  no escape but a reboot — this step is specifically checking that a
+  paused engine can never be left un-resumable.
 
 ## 5. Streamed sampler
 
@@ -293,7 +308,9 @@ synth/drum/sample parts, mute/unmute, save/reboot, and confirm musical tick
 alignment. Fill toward the bounded 2,048-event capacity and verify graceful
 rejection rather than corruption.
 
-On MOTION, exercise tilt X/Y, acceleration, gyro, shake, slap, and wiggle. Calibrate
+On MOTION, exercise the five mappable sources: tilt X/Y, acceleration, gyro,
+shake and slap. (Wiggle is a MEDO gesture message, not a mappable MOTION
+source — exercise it on the MEDO page.) Calibrate
 neutral position, useful range, noise, cooldown, and false triggers. Record
 motion automation into an armed event track and confirm repeatable playback.
 Verify outgoing mapping CCs on channel 16, controllers 16–19.

@@ -166,6 +166,10 @@ def command_words(args: argparse.Namespace) -> List[object]:
         return ["chord", "lock", args.degree, args.chord_type]
     if args.command == "chord-unlock":
         return ["chord", "unlock", args.degree]
+    if args.command == "chord-inversion":
+        return ["chord", "inversion", args.degree, args.value]
+    if args.command == "chord-octave-shift":
+        return ["chord", "octave_shift", args.degree, args.value]
     if args.command == "po-effect":
         return ["po", "effect", args.effect]
     if args.command == "po-lock":
@@ -296,6 +300,19 @@ def parser() -> argparse.ArgumentParser:
     chord_lock.add_argument("chord_type", type=int, choices=range(0, 28))
     chord_unlock = sub.add_parser("chord-unlock")
     chord_unlock.add_argument("degree", type=int, choices=range(1, 8))
+    # A2-P3: these two shipped in the firmware and in CONTROL_PROTOCOL.md but
+    # had no CLI path, so a hardware-day agent following the docs could not
+    # drive them. Wire values match the protocol table exactly.
+    chord_inversion = sub.add_parser(
+        "chord-inversion", help="set inversion -2..+3 as wire value 0..5")
+    chord_inversion.add_argument("degree", type=int, choices=range(1, 8))
+    chord_inversion.add_argument("value", type=int, choices=range(0, 6),
+                                 metavar="0..5")
+    chord_octave_shift = sub.add_parser(
+        "chord-octave-shift", help="set per-degree octave -2..+2 as wire value 0..4")
+    chord_octave_shift.add_argument("degree", type=int, choices=range(1, 8))
+    chord_octave_shift.add_argument("value", type=int, choices=range(0, 5),
+                                    metavar="0..4")
     po_effect = sub.add_parser("po-effect", help="engage PO punch effect 0..15")
     po_effect.add_argument("effect", type=int, choices=range(0, 16))
     po_lock = sub.add_parser("po-lock", help="write a PO effect to a pattern step")

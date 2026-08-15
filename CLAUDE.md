@@ -8,8 +8,9 @@ onboarding for Claude Code/Codex-style agents. `AGENTS.md` points here.)
 
 ## Ground rules
 
-- The integration branch is `agent/v3-alpha-sd-streaming`. `main` still
-  mirrors upstream Microgroove until the maintainer flips it.
+- `main` is the integration branch and the release branch. Feature work
+  happens on `agent/*` branches and merges to `main` via PR; CI publishes a
+  release when `RELEASE_VERSION` names a tag that does not exist yet.
 - Never claim hardware behavior from compile success. Pre-hardware claims
   come from the host suite; on-device claims need saved serial evidence
   (`docs/CARDPUTER_TESTING.md` defines the evidence format).

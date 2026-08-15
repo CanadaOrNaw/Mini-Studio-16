@@ -25,7 +25,16 @@ public:
     bool setRate(uint8_t value);
     bool setFilter(uint8_t value);
     MasterEffectsSettings settings() const;
+    // A2-P1-1 (alpha.2 reconciliation): range checking MUST NOT require an
+    // instance. performanceProjectValidate() used to construct a temporary
+    // MasterEffects purely to call applySettings(), putting 8,236 bytes on
+    // the 8,192-byte Arduino loopTask stack and making every saved v9
+    // project unloadable on hardware. The check is pure, so it is static.
+    static bool validate(const MasterEffectsSettings &settings);
     bool applySettings(const MasterEffectsSettings &settings);
+    // Consume a pending settings change. Call once per audio block, before
+    // the per-sample loop, so the seqlock read never lands mid-block.
+    void syncSettings();
     int16_t process(int16_t input);
 private:
     int16_t delay_[4096];

@@ -1,6 +1,7 @@
 #include "serial_control.h"
 
 #include "control_protocol.h"
+#include "input.h"
 #include "master_recorder.h"
 #include "sd_diagnostics.h"
 #include "sequencer.h"
@@ -669,12 +670,14 @@ void dispatch(const ControlRequest& request) {
             const ChordVoicing chord = g_chordEngine.build(g_chordSettings,
                 static_cast<uint8_t>(request.arg1 - 1u),
                 static_cast<ChordDirection>(request.arg2));
-            g_synths[0].setVoices(3); g_synths[1].setVoices(3);
+            g_synths[0].requestVoices(3); g_synths[1].requestVoices(3);
             for (uint8_t i = 0; i < chord.count; ++i) {
                 const uint8_t midi = chord.notes[i];
                 const uint8_t track = i < chord.chordToneCount ? static_cast<uint8_t>(i / 3u) : 2u;
-                g_synths[track].noteOnLive(noteToFreq(static_cast<uint8_t>(midi % 12u + 1u),
-                    static_cast<uint8_t>(midi / 12u - 1u)), false, false, midi, 104);
+                uint8_t splitNote = 0, splitOctave = 0;
+                chordSplitMidi(midi, splitNote, splitOctave);   // A2-P2
+                g_synths[track].noteOnLive(noteToFreq(splitNote, splitOctave),
+                                           false, false, midi, 104);
                 midiOutputNoteOn(track, midi, 104);
                 s_serialChordNotes[s_serialChordCount] = midi;
                 s_serialChordTracks[s_serialChordCount++] = track;
@@ -698,8 +701,14 @@ void dispatch(const ControlRequest& request) {
                 g_chordSettings.scale = static_cast<ChordScale>(value);
             else if (!strcmp(request.text, "map") && value <= CHORD_MAP_CHROMATIC)
                 g_chordSettings.map = static_cast<ChordMap>(value);
-            else if (!strcmp(request.text, "mode") && value < HICHORD_MODE_COUNT)
+            else if (!strcmp(request.text, "mode") && value < HICHORD_MODE_COUNT) {
+                // A2-P3 (alpha.2 reconciliation): the UI mode change stops
+                // held/latched notes before switching; the serial path did
+                // not, so leaving Drone or Arpeggio over serial left voices
+                // sounding with no way to silence them.
+                inputStopHiChordPerformanceNotes();
                 g_hiChordPerformance.setMode(static_cast<HiChordMode>(value));
+            }
             else if (!strcmp(request.text, "octave") && value >= 2 && value <= 6)
                 g_chordSettings.octave = static_cast<int8_t>(value);
             else if (!strcmp(request.text, "bass") && value <= CHORD_BASS_SLASH)

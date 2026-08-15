@@ -47,6 +47,7 @@ extern bool g_needRedraw;   // owned by ui.cpp
 static uint32_t s_stepUs      = 0;
 static uint32_t s_lastStepUs  = 0;
 static uint32_t s_lastEventTickUs = 0;
+static uint16_t s_poStepBpm = 0;   // last tempo pushed to the PO punch effects
 static bool     s_externalClock = false;
 static MidiClockOutputScheduler s_midiClock;
 static uint32_t s_stepPeriod() { return 60000000UL / g_bpm / 4; }   // 16th notes
@@ -108,13 +109,15 @@ static void triggerStep(uint8_t step) {
         if (chordStep.enabled) {
             const ChordVoicing chord = g_chordEngine.build(g_chordSettings, chordStep.degree,
                 static_cast<ChordDirection>(chordStep.direction), chordStep.slashDegree);
-            g_synths[0].setVoices(3); g_synths[1].setVoices(3);
+            g_synths[0].requestVoices(3); g_synths[1].requestVoices(3);
             for (uint8_t noteIndex = 0; noteIndex < chord.count; ++noteIndex) {
                 const uint8_t midi = chord.notes[noteIndex];
                 const uint8_t track = noteIndex < chord.chordToneCount
                     ? static_cast<uint8_t>(noteIndex / 3u) : 2u;
-                g_synths[track].noteOn(noteToFreq(static_cast<uint8_t>(midi % 12u + 1u),
-                    static_cast<uint8_t>(midi / 12u - 1u)), false, false, midi, 104);
+                uint8_t splitNote = 0, splitOctave = 0;
+                chordSplitMidi(midi, splitNote, splitOctave);   // A2-P2
+                g_synths[track].noteOn(noteToFreq(splitNote, splitOctave),
+                                       false, false, midi, 104);
             }
         }
     }
@@ -280,7 +283,24 @@ static void advanceOneStep() {
 void sequencerTick() {
     if (!g_playing || s_externalClock) return;
     uint32_t now = micros();
+    // A2-P2 (alpha.2 reconciliation): PoEffectProcessor::setStepFrames() had
+    // no production caller at all, so every step-locked punch effect ran at
+    // a hardcoded 120 BPM step that also aliased against the history buffer.
+    // Keep it in step with the live tempo (cheap: only on tempo change).
+    if (g_bpm != s_poStepBpm) {
+        s_poStepBpm = g_bpm;
+        g_poEffectProcessor.setStepFrames(poEffectStepFramesForBpm(g_bpm, SAMPLE_RATE));
+    }
+    // A2-P2: bound the event-tick catch-up. After any main-loop stall (a
+    // project save, a directory scan) this loop used to fire the entire
+    // backlog at once — every queued tick triggering all its events — while
+    // the pattern sequencer below advances at most one step, permanently
+    // desynchronising the two timelines. Past four ticks of backlog the
+    // event clock re-anchors to now, which slips in the same way the step
+    // clock does.
+    uint8_t eventCatchUp = 0;
     while (now - s_lastEventTickUs >= s_eventTickPeriod()) {
+        if (++eventCatchUp > 4) { s_lastEventTickUs = now; break; }
         s_lastEventTickUs += s_eventTickPeriod();
         g_eventLooper.forStep(g_eventLoopPosition, triggerEvent);
         eventLooperAdvance();

@@ -107,8 +107,13 @@ bool SamplerSlotBank::copySlot(uint8_t source, uint8_t destination) {
     const uint64_t nextQuota = static_cast<uint64_t>(_quotaUsedFrames) - oldQuota +
                                _slots[source].quotaFrames;
     if (nextQuota > SAMPLER_QUOTA_FRAMES) return false;
+    // A2-P3 (alpha.2 reconciliation): read the source through its own
+    // seqlock. The sampler worker writes rootMidi after a pitch-detected mic
+    // capture, so a plain struct read here could tear.
+    SamplerSlot copy;
+    if (!snapshotSlot(source, copy)) return false;
     beginEdit(destination);
-    _slots[destination] = _slots[source];
+    _slots[destination] = copy;
     _quotaUsedFrames = static_cast<uint32_t>(nextQuota);
     endEdit(destination);
     return true;

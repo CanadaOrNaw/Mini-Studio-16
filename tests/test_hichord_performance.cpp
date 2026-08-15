@@ -41,11 +41,92 @@ int main() {
     assert(p.setSequenceStep(15, step));
     assert(p.sequenceStep(15).degree == 6);
     assert(!p.setSequenceStep(16, step));
-    for (uint8_t style = 0; style < 7; ++style) for (uint8_t variation = 0; variation < 8; ++variation) {
-        uint32_t hash = 0;
-        for (uint8_t voice = 0; voice < 7; ++voice) for (uint8_t st = 0; st < 16; ++st)
-            hash = hash * 33u + HiChordDrumGrooves::hit(style, variation, voice, st);
-        assert(hash != 0);
+    // A2 test gap: this used to compute a hash and assert only `hash != 0`,
+    // which passes if a single one of the 112 cells is set. Assert that all
+    // 56 grooves are genuinely DISTINCT — that is the actual README claim.
+    {
+        uint32_t hashes[56];
+        uint8_t count = 0;
+        for (uint8_t style = 0; style < 7; ++style)
+            for (uint8_t variation = 0; variation < 8; ++variation) {
+                uint32_t hash = 2166136261u;
+                uint8_t hits = 0;
+                for (uint8_t voice = 0; voice < 7; ++voice)
+                    for (uint8_t st = 0; st < 16; ++st) {
+                        const uint8_t hit = HiChordDrumGrooves::hit(style, variation, voice, st);
+                        hash = (hash ^ hit) * 16777619u;
+                        hits = static_cast<uint8_t>(hits + (hit ? 1 : 0));
+                    }
+                assert(hits >= 4);            // a groove has to actually play
+                hashes[count++] = hash;
+            }
+        assert(count == 56);
+        for (uint8_t i = 0; i < count; ++i)
+            for (uint8_t j = static_cast<uint8_t>(i + 1); j < count; ++j)
+                assert(hashes[i] != hashes[j]);
+    }
+
+    // A2 test gap: ARP_RANDOM, ARP_UP_DOWN and ARP_DOWN_UP were never
+    // called at all. Walk a full cycle of every pattern and assert it stays
+    // in range, and that each pattern produces a distinct sequence.
+    {
+        ChordSettings full = ChordEngine::defaults();
+        full.voiceLeading = false;
+        ChordEngine engine;
+        const ChordVoicing quad = engine.build(full, 1);   // a 4-note chord
+        assert(quad.count >= 3);
+        uint32_t patternHash[ARP_PATTERN_COUNT];
+        for (uint8_t pattern = 0; pattern < ARP_PATTERN_COUNT; ++pattern) {
+            uint32_t hash = 2166136261u;
+            uint8_t distinctNotes = 0;
+            bool seen[128] = {false};
+            for (uint32_t tick = 0; tick < 64; ++tick) {
+                uint8_t out[2] = {0, 0};
+                const uint8_t produced =
+                    p.arpNotes(quad, static_cast<HiChordArpPattern>(pattern), tick, out);
+                assert(produced >= 1 && produced <= 2);
+                for (uint8_t n = 0; n < produced; ++n) {
+                    bool belongs = false;
+                    for (uint8_t c = 0; c < quad.count; ++c)
+                        if (quad.notes[c] == out[n]) belongs = true;
+                    assert(belongs);          // never invents a note
+                    if (!seen[out[n]]) { seen[out[n]] = true; ++distinctNotes; }
+                    hash = (hash ^ out[n]) * 16777619u;
+                }
+            }
+            // Every pattern must actually move around the chord.
+            assert(distinctNotes >= 2);
+            patternHash[pattern] = hash;
+        }
+        for (uint8_t i = 0; i < ARP_PATTERN_COUNT; ++i)
+            for (uint8_t j = static_cast<uint8_t>(i + 1); j < ARP_PATTERN_COUNT; ++j)
+                assert(patternHash[i] != patternHash[j]);
+
+        // A2-P2 regression: ARP_RANDOM was an LCG evaluated AT the tick, so
+        // it decayed to a period-4 sequence — literally ARP_UP shifted by
+        // one. It must be deterministic per tick but not periodic at the
+        // chord length, and must not equal ARP_UP at any offset.
+        uint8_t randomSeq[32], upSeq[32];
+        for (uint32_t tick = 0; tick < 32; ++tick) {
+            uint8_t out[2] = {0, 0};
+            p.arpNotes(quad, ARP_RANDOM, tick, out); randomSeq[tick] = out[0];
+            p.arpNotes(quad, ARP_UP, tick, out);     upSeq[tick] = out[0];
+        }
+        for (uint32_t tick = 0; tick < 32; ++tick) {   // deterministic
+            uint8_t out[2] = {0, 0};
+            p.arpNotes(quad, ARP_RANDOM, tick, out);
+            assert(out[0] == randomSeq[tick]);
+        }
+        bool periodic = true;
+        for (uint32_t tick = 0; tick + quad.count < 32; ++tick)
+            if (randomSeq[tick] != randomSeq[tick + quad.count]) periodic = false;
+        assert(!periodic);
+        for (uint8_t offset = 0; offset < quad.count; ++offset) {
+            bool matchesUp = true;
+            for (uint32_t tick = 0; tick + offset < 32; ++tick)
+                if (randomSeq[tick + offset] != upSeq[tick]) matchesUp = false;
+            assert(!matchesUp);
+        }
     }
     assert(hiChordPracticeSongCount() == 16);
     for (uint8_t i = 0; i < 16; ++i) assert(hiChordPracticeSong(i).length > 0);
