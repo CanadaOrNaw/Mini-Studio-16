@@ -298,7 +298,7 @@ MIT permission text — this fork, Microgroove, and Cardputer-Adv-Tracker:
 
 > Copyright (c) 2026 CanadaOrNaw
 > Copyright (c) 2026 lebiro.studio (Microgroove, upstream)
-> Portions Copyright (c) 2026 qwertyuu (Cardputer-Adv-Tracker)
+> Copyright (c) 2026 qwertyuu (Cardputer-Adv-Tracker, portions)
 
 Microgroove credits parts of its synth voice, 808 drum synthesis, and audio-task
 architecture to
