@@ -21,6 +21,8 @@ jobs:
           python-version: "3.12"
       - name: Apply audited patch
         run: python tools/_apply_storage_audit_hardening.py
+      - name: Mark shared Arduino stub globals as intentionally unused
+        run: sed -i 's/static SerialStub Serial;/static SerialStub Serial __attribute__((unused));/' tests/stubs/Arduino.h
       - name: Run full host suite
         run: bash tests/run_host_tests.sh
       - name: Run ASan and UBSan
