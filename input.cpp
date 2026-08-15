@@ -27,6 +27,7 @@
 #include "synth_ui_model.h"
 #include "performance_state.h"
 #include "performance_scheduler_core.h"
+#include "input_page_core.h"
 #include "input.h"
 
 #define LONG_PRESS_MS 450
@@ -1373,7 +1374,7 @@ static void doShort(uint8_t act) {
             // A2-P2: leaving a performance page must not strand held chords
             // (their key-up is handled generically now, but latched Drone
             // and arp/repeat state belong to the page being left).
-            if (g_curPage == PAGE_CHORD || g_curPage == PAGE_MEDO)
+            if (inputPageNeedsPerformanceStop(g_curPage))
                 inputStopHiChordPerformanceNotes();
             g_curPage = (Page)(((int)g_curPage + 1) % PAGE_COUNT);
             if (g_curPage == PAGE_SAMPLE) uiScanSampleDir();
@@ -1509,6 +1510,8 @@ static void doLong(uint8_t act) {
             uiStatus(storageSaveProject(g_curProject) ? "SAVED" : "SAVE FAILED");
             break;
         case ACT_PAGE:
+            if (inputPageNeedsPerformanceStop(g_curPage))
+                inputStopHiChordPerformanceNotes();
             g_curPage = PAGE_PATTERN; g_needRedraw = true; break;
         case ACT_PLAY:
             sequencerStart(true); g_needRedraw = true; break;

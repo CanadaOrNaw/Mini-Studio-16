@@ -16,5 +16,10 @@ struct AudioDspSnapshot {
 };
 
 void audioEngineStart();   // creates the render task on core 0
+// Project loading performs several multi-word resets that cannot race core-0
+// rendering. Begin waits for an acknowledged audio block boundary; End lets
+// rendering resume. A timeout fails closed instead of mutating live DSP state.
+bool audioEngineBeginExclusiveMutation(uint32_t timeoutMs);
+void audioEngineEndExclusiveMutation();
 AudioDspSnapshot audioEngineDspSnapshot();
 void audioEngineResetDspStats();

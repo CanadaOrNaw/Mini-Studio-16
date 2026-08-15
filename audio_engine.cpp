@@ -22,6 +22,8 @@ static int16_t s_bufA[AUDIO_BUF_LEN];
 static int16_t s_bufB[AUDIO_BUF_LEN];
 static StemPcmFrame s_stemBuf[AUDIO_BUF_LEN];
 static TaskHandle_t s_task = nullptr;
+alignas(4) static uint8_t s_mutationRequested = 0;
+alignas(4) static uint8_t s_mutationActive = 0;
 static portMUX_TYPE s_dspMux = portMUX_INITIALIZER_UNLOCKED;
 static AudioDspSnapshot s_dsp = {
     0, 0, 0, 0,
@@ -39,6 +41,17 @@ static void audioTask(void*) {
     int cur = 0;
 
     while (true) {
+        // Exclusive project mutation handshake. The storage/main task sets the
+        // request and waits for `active`, so it can never suspend us halfway
+        // through a render. We acknowledge only here, between complete blocks.
+        if (__atomic_load_n(&s_mutationRequested, __ATOMIC_ACQUIRE)) {
+            __atomic_store_n(&s_mutationActive, static_cast<uint8_t>(1u), __ATOMIC_RELEASE);
+            while (__atomic_load_n(&s_mutationRequested, __ATOMIC_ACQUIRE))
+                vTaskDelay(1);
+            __atomic_store_n(&s_mutationActive, static_cast<uint8_t>(0u), __ATOMIC_RELEASE);
+            continue;
+        }
+
         int16_t* buf = buffers[cur];
         const uint32_t renderStartedUs = micros();
 
@@ -136,7 +149,25 @@ static void audioTask(void*) {
 }
 
 void audioEngineStart() {
+    __atomic_store_n(&s_mutationRequested, static_cast<uint8_t>(0u), __ATOMIC_RELEASE);
+    __atomic_store_n(&s_mutationActive, static_cast<uint8_t>(0u), __ATOMIC_RELEASE);
     xTaskCreatePinnedToCore(audioTask, "audio", 8192, nullptr, 1, &s_task, 0);
+}
+
+bool audioEngineBeginExclusiveMutation(uint32_t timeoutMs) {
+    if (!s_task) return true;
+    __atomic_store_n(&s_mutationRequested, static_cast<uint8_t>(1u), __ATOMIC_RELEASE);
+    for (uint32_t waited = 0; waited < timeoutMs; ++waited) {
+        if (__atomic_load_n(&s_mutationActive, __ATOMIC_ACQUIRE)) return true;
+        vTaskDelay(1);
+    }
+    __atomic_store_n(&s_mutationRequested, static_cast<uint8_t>(0u), __ATOMIC_RELEASE);
+    return __atomic_load_n(&s_mutationActive, __ATOMIC_ACQUIRE) != 0;
+}
+
+void audioEngineEndExclusiveMutation() {
+    if (!s_task) return;
+    __atomic_store_n(&s_mutationRequested, static_cast<uint8_t>(0u), __ATOMIC_RELEASE);
 }
 
 AudioDspSnapshot audioEngineDspSnapshot() {

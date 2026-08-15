@@ -14,6 +14,8 @@
 #include "motion.h"
 #include "synth_project.h"
 #include "performance_project.h"
+#include "audio_engine.h"
+#include "project_publish.h"
 #include <SD.h>
 #include "sd_io_arbiter.h"
 #include <memory>
@@ -22,6 +24,20 @@
 #include <string.h>
 
 uint8_t g_curProject = 0;
+
+// A primary is considered known-good only after this boot successfully loads
+// it or publishes it. If load had to fall back to .bak, the primary must not
+// be rotated over that backup on the next save.
+static uint8_t s_knownGoodPrimaryMask = 0;
+static bool projectPrimaryKnownGood(uint8_t slot) {
+    return slot < NUM_PROJECT_SLOTS && (s_knownGoodPrimaryMask & (1u << slot)) != 0;
+}
+static void projectSetPrimaryKnownGood(uint8_t slot, bool good) {
+    if (slot >= NUM_PROJECT_SLOTS) return;
+    const uint8_t bit = static_cast<uint8_t>(1u << slot);
+    if (good) s_knownGoodPrimaryMask |= bit;
+    else s_knownGoodPrimaryMask &= static_cast<uint8_t>(~bit);
+}
 
 #define GBX_MAGIC   0x31584247u   // "GBX1"
 #define GBX_VERSION 9             // v9: HiChord/PO/MEDO performance state
@@ -385,9 +401,10 @@ bool storageSaveProject(uint8_t slot) {
     performanceProjectEncode(pf.performance);
 
     char path[64]; slotPath(slot, path, sizeof(path));
-    char tempPath[72], backupPath[72];
+    char tempPath[72], backupPath[72], previousBackupPath[80];
     snprintf(tempPath, sizeof(tempPath), "%s.tmp", path);
     snprintf(backupPath, sizeof(backupPath), "%s.bak", path);
+    snprintf(previousBackupPath, sizeof(previousBackupPath), "%s.bak.prev", path);
     File f;
     { SdIoGuard guard; SD.remove(tempPath); f = SD.open(tempPath, FILE_WRITE); }
     if (!f) return false;
@@ -395,24 +412,25 @@ bool storageSaveProject(uint8_t slot) {
     { SdIoGuard guard; f.flush(); f.close(); }
     if (!writeOk) { SdIoGuard guard; SD.remove(tempPath); return false; }
 
+    bool published = false;
     {
         SdIoGuard guard;
-        SD.remove(backupPath);
-        if (SD.exists(path) && !SD.rename(path, backupPath)) {
-            SD.remove(tempPath);
-            return false;
-        }
-        if (!SD.rename(tempPath, path)) {
-            if (SD.exists(backupPath)) SD.rename(backupPath, path);
-            return false;
-        }
+        published = projectPublishTempFile(
+            SD, path, tempPath, backupPath, previousBackupPath,
+            projectPrimaryKnownGood(slot));
+        if (!published) SD.remove(tempPath);
     }
-    return true;
+    if (published) projectSetPrimaryKnownGood(slot, true);
+    return published;
 }
 
 // shared param/lane/song apply used by both format loaders
 static void applySynth(int s, const SaveSynth& in, uint8_t voices) {
     SynthTrack& t = g_synths[s];
+    // storageLoadProject holds the audio mutation gate here. Stop all legacy
+    // and expanded voices before replacing a patch so same-engine loads cannot
+    // leave a latched MGX/FM4 voice running with the new project's settings.
+    t.hardStop();
     t.forEach([&](SynthVoice& v) {
         v.oscMode     = static_cast<OscMode>(
             in.oscMode < OSC_COUNT ? in.oscMode : static_cast<uint8_t>(OSC_SAW));
@@ -766,10 +784,13 @@ bool storageLoadProject(uint8_t slot) {
     ProjectBuffer& loaded = *buffer;
     uint16_t version = 0;
     std::unique_ptr<SamplerStage> samplerStage;
+    bool loadedFromBackup = false;
     if (!readProjectFile(path, loaded, version) ||
         !stageProject(loaded, version, samplerStage)) {
         // Missing, truncated, structurally corrupt, and semantically corrupt
         // primaries all fall back to the last atomically published project.
+        projectSetPrimaryKnownGood(slot, false);
+        loadedFromBackup = true;
         char backupPath[72];
         snprintf(backupPath, sizeof(backupPath), "%s.bak", path);
         if (!readProjectFile(backupPath, loaded, version) ||
@@ -777,7 +798,14 @@ bool storageLoadProject(uint8_t slot) {
     }
 
     bool wasPlaying = g_playing;
-    g_playing = false;   // pause audio triggering while we swap data
+    g_playing = false;   // pause sequencer triggering while we swap data
+    // The audio task still renders while g_playing is false. Acquire an
+    // acknowledged block-boundary gate before touching SynthTrack patches,
+    // voices, master-effects delay state, or vocoder filter state.
+    if (!audioEngineBeginExclusiveMutation(500)) {
+        g_playing = wasPlaying;
+        return false;
+    }
     bool ok = false;
 
     samplerClearAll();
@@ -894,6 +922,8 @@ bool storageLoadProject(uint8_t slot) {
     for (int i = 0; i < SONG_LENGTH; ++i)
         if (g_song[i] != SONG_EMPTY && g_song[i] >= NUM_PATTERNS) g_song[i] = SONG_EMPTY;
 
+    audioEngineEndExclusiveMutation();
+    if (ok) projectSetPrimaryKnownGood(slot, !loadedFromBackup);
     g_playing = wasPlaying && ok;
     return ok;
 }

@@ -87,7 +87,7 @@ int main() {
         uint8_t *bytes = reinterpret_cast<uint8_t *>(&saved);
         for (size_t offset = 0; offset < sizeof(SavePerformanceState); ++offset) {
             const uint8_t original = bytes[offset];
-            for (unsigned value = 0; value < 256u; value += 17u) {
+            for (unsigned value = 0; value < 256u; ++value) {
                 bytes[offset] = static_cast<uint8_t>(value);
                 if (!performanceProjectValidate(saved)) continue;
                 performanceStateInit();
