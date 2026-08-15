@@ -1,0 +1,37 @@
+name: Apply storage audit hardening
+
+on:
+  push:
+    branches: ["agent/storage-audit-hardening"]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-push:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/storage-audit-hardening
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Apply audited patch
+        run: python tools/_apply_storage_audit_hardening.py
+      - name: Run full host suite
+        run: bash tests/run_host_tests.sh
+      - name: Run ASan and UBSan
+        env:
+          SANITIZER_SET: address,undefined
+        run: bash tests/run_sanitizers.sh
+      - name: Commit tested result and remove bootstrap machinery
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm tools/_apply_storage_audit_hardening.py .github/workflows/_apply-storage-audit-hardening.yml
+          git add -A
+          git commit -m "Harden project persistence and project-load concurrency"
+          git push origin HEAD:agent/storage-audit-hardening
