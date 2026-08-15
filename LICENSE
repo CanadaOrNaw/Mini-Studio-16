@@ -1,11 +1,10 @@
 MIT License
 
-Copyright (c) 2026 lebiro.studio
+Copyright (c) 2026 CanadaOrNaw
 
-Portions of this software (synth voice, 808 drum synthesis, audio task
-architecture) are derived from Cardputer-Adv-Tracker,
-Copyright (c) qwertyuu, also licensed under the MIT License:
-https://github.com/qwertyuu/Cardputer-Adv-Tracker
+Copyright (c) 2026 lebiro.studio (Microgroove, upstream)
+
+Portions Copyright (c) 2026 qwertyuu (Cardputer-Adv-Tracker)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
