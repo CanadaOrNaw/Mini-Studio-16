@@ -293,16 +293,19 @@ synth, drum, sequencing, sampling, UI, hardware, and project-storage foundation
 used here. If that foundation is useful, visit the upstream project and
 [support its creator](https://ko-fi.com/makarov87).
 
-The upstream copyright and full MIT permission notice are retained unchanged in
-[`LICENSE`](LICENSE):
+[`LICENSE`](LICENSE) stacks every holder's copyright line under the verbatim
+MIT permission text — this fork, Microgroove, and Cardputer-Adv-Tracker:
 
-> Copyright (c) 2026 lebiro.studio
+> Copyright (c) 2026 CanadaOrNaw
+> Copyright (c) 2026 lebiro.studio (Microgroove, upstream)
+> Portions Copyright (c) 2026 qwertyuu (Cardputer-Adv-Tracker)
 
 Microgroove credits parts of its synth voice, 808 drum synthesis, and audio-task
 architecture to
 [Cardputer-Adv-Tracker](https://github.com/qwertyuu/Cardputer-Adv-Tracker) by
-**qwertyuu**, also MIT licensed. That attribution remains in `LICENSE`. The
-factory sample pack is identified upstream as CC0 by lebiro.studio.
+**qwertyuu**, also MIT licensed. That attribution remains in `LICENSE` and
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). The factory sample pack is
+identified upstream as CC0 by lebiro.studio.
 
 SD-card research was informed by
 [bmorcelli/Launcher](https://github.com/bmorcelli/Launcher), whose Cardputer SD
