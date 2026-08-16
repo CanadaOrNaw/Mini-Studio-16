@@ -62,7 +62,7 @@ struct SerialStub {
     template <typename... Args>
     void printf(const char*, Args...) {}
 };
-static SerialStub Serial;
+static SerialStub Serial __attribute__((unused));
 
 class String {
 public:

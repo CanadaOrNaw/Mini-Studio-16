@@ -79,7 +79,7 @@ defines the `evidence/` + `results.json` conventions. Numeric gates:
 | Sequencer/events/motion | `sequencer.*`, `song_chain.h`, `event_looper*`, `motion*` |
 | MIDI | `midi_*`, `ble_midi*`, `usb_midi*`, `boot_selector*` |
 | Serial control | `serial_control.cpp`, `control_protocol.*`, `serial_line_buffer.h` |
-| Storage/projects | `storage.cpp` (GBX v1–v8), `synth_project.*`, `sd_io_arbiter.*` |
+| Storage/projects | `storage.cpp` (GBX v1–v9), `synth_project.*`, `sd_io_arbiter.*` |
 | Audio Cap | `audio_cap*`, `audio_cap_firmware/`, `hardware/audio-cap/`, `docs/AUDIO_EXPANSION.md`, `docs/AUDIO_CAP_BUILD_GUIDE.md` |
 | Printables | `hardware/`, `tools/generate_hardware_assets.py`, `tests/test_hardware_assets.py` |
 | Site | `site/`, `tools/build_site.py`, `tools/check_live_site.py`, `.github/workflows/pages.yml` |

@@ -26,9 +26,9 @@ All seven are fixed in the current tree along with the P2/P3 tail; every fix
 carries an `A2-` comment at the site and a regression test. The audit report
 is `claude/v3-alpha2-reconciliation-report.md` in the project workspace.
 
-**Recommendation while alpha.2 remains the newest published release: flash
-`v3.0.0-alpha.1`, which is the last independently audited release, or build
-from `main`.** The next tag supersedes both.
+**`v3.0.0-alpha.3` supersedes the known-bad alpha.2 release.** Its source is
+the independently reviewed/fixed tree described above; later `main` commits
+may contain documentation or additional audited hardening.
 
 The general lesson is recorded here deliberately: a green suite on this
 repository means "the assertions we wrote still hold", and the alpha.2
@@ -247,13 +247,15 @@ downloads (272,341 bytes total), including the regenerated snap-fit cap lid.
   presets, `SavePerformanceState` round trips with an exhaustive
   validator/decoder parity sweep, malformed state, protocol fuzzing and CLI
   generation.
-  Known coverage limits, stated plainly: only `SCALE_MAJOR` is built
-  end-to-end (the other nine scales are covered by name/table checks);
-  `storage.cpp` is syntax-checked but never executed, so GBX *file* I/O,
-  v1–v8 migration and the `.bak` fallback have no host coverage — an
-  in-memory SD stub is the outstanding work there; and `input.cpp`/`ui.cpp`
-  are syntax-checked only, so page interactions are verified by reading, not
-  by running.
+  Storage is now executed through the production `storage.cpp` path against a
+  stateful in-memory SD implementation: v1-v9 project loads, v9 save/load,
+  legacy-engine migration, `.bak` fallback, save-after-fallback preservation,
+  failed-publish rollback, and the audio block-boundary mutation gate all have
+  host regressions. Known coverage limits, stated plainly: only `SCALE_MAJOR`
+  is built end-to-end (the other nine scales are covered by name/table checks);
+  and most `input.cpp`/`ui.cpp` interactions remain syntax-checked/read rather
+  than executed, although the CHORD/MEDO page-exit rule now has a pure host
+  contract test. Physical FatFS timing and UI feel remain hardware gates.
 - Event tests cover five tracks, 128 bars, ordering, bounds, and capacity.
   Live and replayed note releases are recorded explicitly so ADSR engines do
   not leave sustained voices stuck.

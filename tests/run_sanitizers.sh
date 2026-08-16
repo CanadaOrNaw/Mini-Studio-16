@@ -68,10 +68,21 @@ build_run performance_project "$test_dir/test_performance_project.cpp" \
     "$test_dir/../medo_performance.cpp" "$test_dir/../po_effects.cpp" \
     "$test_dir/../master_effects.cpp" "$test_dir/../vocoder.cpp" \
     "$test_dir/../synth_project.cpp" "${synth_sources[@]}"
+build_run project_publish -I"$test_dir/stubs" -I"$test_dir/.." \
+    "$test_dir/test_project_publish.cpp"
+build_run input_page "$test_dir/test_input_page_core.cpp"
+build_run storage_project -I"$test_dir/stubs" -I"$test_dir/.." \
+    "$test_dir/test_storage_project.cpp" "$test_dir/../storage.cpp" \
+    "$test_dir/../sampler_slots.cpp" "$test_dir/../sd_io_arbiter.cpp" \
+    "$test_dir/../performance_project.cpp" "$test_dir/../performance_state.cpp" \
+    "$test_dir/../chord_engine.cpp" "$test_dir/../hichord_performance.cpp" \
+    "$test_dir/../medo_performance.cpp" "$test_dir/../po_effects.cpp" \
+    "$test_dir/../master_effects.cpp" "$test_dir/../vocoder.cpp" \
+    "$test_dir/../synth_project.cpp" "${synth_sources[@]}"
 build_run audio_cap "$test_dir/test_audio_cap_protocol.cpp" \
     "$test_dir/../audio_cap_protocol.cpp"
 build_run audio_cap_bridge "$test_dir/test_audio_cap_bridge_core.cpp" \
     "$test_dir/../audio_cap_bridge_core.cpp" "$test_dir/../audio_cap_protocol.cpp"
 build_run performance_scheduler "$test_dir/test_performance_scheduler_core.cpp"
 
-echo "Sanitizers (${SANITIZER_SET:-undefined}): core, protocol, three-in-one performance, synth, streaming, event, motion, MIDI and Audio Cap tests passed"
+echo "Sanitizers (${SANITIZER_SET:-undefined}): core, protocol, persistence, three-in-one performance, synth, streaming, event, motion, MIDI and Audio Cap tests passed"

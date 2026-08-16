@@ -154,6 +154,30 @@ g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
 "$build_dir/test_performance_project"
 
 g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  -I"$test_dir/stubs" -I"$test_dir/.." \
+  "$test_dir/test_project_publish.cpp" -o "$build_dir/test_project_publish"
+
+"$build_dir/test_project_publish"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  "$test_dir/test_input_page_core.cpp" -o "$build_dir/test_input_page_core"
+
+"$build_dir/test_input_page_core"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
+  -I"$test_dir/stubs" -I"$test_dir/.." \
+  "$test_dir/test_storage_project.cpp" "$test_dir/../storage.cpp" \
+  "$test_dir/../sampler_slots.cpp" "$test_dir/../sd_io_arbiter.cpp" \
+  "$test_dir/../performance_project.cpp" "$test_dir/../performance_state.cpp" \
+  "$test_dir/../chord_engine.cpp" "$test_dir/../hichord_performance.cpp" \
+  "$test_dir/../medo_performance.cpp" "$test_dir/../po_effects.cpp" \
+  "$test_dir/../master_effects.cpp" "$test_dir/../vocoder.cpp" \
+  "$test_dir/../synth_project.cpp" "${synth_sources[@]}" \
+  -o "$build_dir/test_storage_project"
+
+"$build_dir/test_storage_project"
+
+g++ -pipe -std=gnu++11 -O2 -Wall -Wextra -Werror \
   "$test_dir/test_master_effects.cpp" "$test_dir/../master_effects.cpp" \
   -o "$build_dir/test_master_effects"
 
@@ -240,7 +264,7 @@ g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
   "$test_dir/../storage.cpp"
 
-echo "storage: GBX v1/v2/v3/v4/v5/v6/v7/v8/v9 layout and syntax checks passed"
+echo "storage: GBX v1-v9 production save/load executed with in-memory SD; syntax umbrella passed"
 
 g++ -pipe -std=gnu++11 -Wall -Wextra -Werror -fsyntax-only \
   -I"$test_dir/stubs" -I"$test_dir/.." \
